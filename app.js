@@ -28,12 +28,12 @@ const optionToTimezoneStr = (option = 0) => {
   }
 }
 
-const connection = mysql.createConnection({
-  host: process.env.MYSQLHOST,
-  user: process.env.MYSQLUSER,
-  database: process.env.MYSQLUSER,
-  password: process.env.MYSQLPW
-})
+//const connection = mysql.createConnection({
+//  host: process.env.MYSQLHOST,
+//  user: process.env.MYSQLUSER,
+//  database: process.env.MYSQLUSER,
+//  password: process.env.MYSQLPW
+//})
 
 function start() {
   // Create an express app
@@ -51,9 +51,8 @@ function start() {
    */
   app.post('/interactions', async function (req, res) {
     // Interaction type and data
-    const { type, id:message_id, channel_id, data, guild_id } = req.body;
+    const { type, id:interaction_id, token, data, guild_id } = req.body;
 
-    console.log(req.body)
     /**
      * Handle verification requests
      */
@@ -70,19 +69,13 @@ function start() {
 
       if (name === 'now') {
         const timestamp = msToTimestamp(Date.now())
-        res.send({
-          type: InteractionResponseType.PONG,
-
-        })
-        return DiscordRequest(`/channels/${channel_id}/messages`, {
+        return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
           method: 'POST',
           body: {
-            content: `<t:${timestamp}:F>`,
-            flags: 1 << 6,
-            message_reference: {
-              channel_id,
-              guild_id,
-              message_id
+            type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              content: `<t:${timestamp}:F> \<t:${timestamp}:F>`,
+              flags: 1 << 6
             }
           }
         })
@@ -94,12 +87,16 @@ function start() {
         const parsedDate = chrono.parseDate(date.value, { instance: new Date(), timezone: strTimezone })
         const timestamp = msToTimestamp(Date.now())
         const doubleParse = msToTimestamp(Date.parse(parsedDate))
-        return res.send({
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: {
-            content: `<t:${doubleParse}:F>`
+        return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+          method: 'POST',
+          body: {
+            type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              content: `<t:${doubleParse}:F> \<t:${doubleParse}:F>`,
+              flags: 1 << 6
+            }
           }
-        })
+       })
       }
 
       if (name === "roles") {
@@ -115,13 +112,22 @@ function start() {
 
       if (name === "players") {
         const [role] = options
-        const playersResp = await DiscordRequest(`/guilds/${guild_id}/members?limit=1000`, { method: 'GET' })
-        const players = await playersResp.json()
+        const [playersResp, playersResp2] = await Promise.all([
+          DiscordRequest(`/guilds/${guild_id}/members?limit=1000`, { method: 'GET' }),
+          DiscordRequest(`/guilds/${guild_id}/members?limit=1000&after=1000`, { method: 'GET' })
+        ])
+        const [players1, players2] = await Promise.all([playersResp.json(), playersResp2.json()])
+        const players = players1//.concat(players2)
         const rolePlayers = players.filter((player) => player.roles.includes(role.value))
-        return res.send({
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: {
-            content: `Players: \r${rolePlayers.map(({ user, nick }) => `<@${user.id}>`).join('\r')}`
+        const teamPlayers = [...new Set(rolePlayers)]
+        return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+          method: 'POST',
+          body: {
+            type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              content: `Players: \r${teamPlayers.map(({ user, nick }) => `<@${user.id}>`).join('\r')}`,
+              flags: 1 << 6
+            }
           }
         })
       }
