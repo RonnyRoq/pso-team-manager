@@ -1,6 +1,9 @@
 import 'dotenv/config';
 import express from 'express';
 import mysql from 'mysql';
+import http from 'http';
+import https from 'https';
+import fs from 'fs';
 import {
   InteractionType,
   InteractionResponseType,
@@ -10,6 +13,10 @@ import {
 } from 'discord-interactions';
 import * as chrono from 'chrono-node';
 import { VerifyDiscordRequest, getRandomEmoji, DiscordRequest } from './utils.js';
+
+var privateKey  = fs.readFileSync('./shinmugen.net.key', 'utf8');
+var certificate = fs.readFileSync('./shinmugen.net.cer', 'utf8');
+var credentials = {key: privateKey, cert: certificate};
 
 const msToTimestamp = (ms) => {
   const msAsString = ms.toString();
@@ -38,18 +45,22 @@ const optionToTimezoneStr = (option = 0) => {
 function start() {
   // Create an express app
   const app = express();
-  // Get port, or default to 3000
-  const PORT = process.env.PORT || 3000;
+  // Get port, or default
+  const PORT = process.env.PORT || 8080;
+  const PORTHTTPS = process.env.PORTHTTPS || 8443;
   // Parse request body and verifies incoming requests using discord-interactions package
   app.use(express.json({ verify: VerifyDiscordRequest(process.env.PUBLIC_KEY) }));
 
-  // Store for in-progress games. In production, you'd want to use a DB
-  const activeGames = {};
 
+  app.get('/', async function (req, res) {
+    return res.send('<p>no thank you</p>')
+  })
   /**
    * Interactions endpoint URL where Discord will send HTTP requests
    */
   app.post('/interactions', async function (req, res) {
+    console.log(req.protocol, req.originalUrl);
+    console.log(req.headers)
     // Interaction type and data
     const { type, id:interaction_id, token, data, guild_id } = req.body;
 
@@ -132,12 +143,19 @@ function start() {
         })
       }
     }
+    
+    return res.send("<p>Payload incorrect</p>");
   });
 
-  app.listen(PORT, () => {
-    //connection.connect();
-    console.log('Listening on port', PORT);
+
+  var httpServer = http.createServer(app);
+  var httpsServer = https.createServer(credentials, app);
+  httpServer.listen(PORT, ()=> {
+    console.log('Listening http on port', PORT);
   });
+  httpsServer.listen(PORTHTTPS, (()=>{
+    console.log('Listening https on port', PORTHTTPS);
+  }));
   /*process.on('exit', () => {
     connection.end()
   });*/
