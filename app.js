@@ -36,9 +36,7 @@ const client = new MongoClient(uri, {
 let credentials = {}
 
 const clubPlayerRole = '1072620805600592062';
-const transferLogChannel = '1147837037089673317';
 const webHookDetails = process.env.WEBHOOK
-const logWebHook = 'https://discord.com/api/'+webHookDetails
 
 if(online){
   const privateKey  = fs.readFileSync(keyPath, 'utf8');
