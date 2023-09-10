@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import express from 'express';
-import mysql from 'mysql';
 import http from 'http';
 import https from 'https';
 import fs from 'fs';
@@ -12,8 +11,10 @@ import {
   ButtonStyleTypes,
 } from 'discord-interactions';
 import { MongoClient, ServerApiVersion } from 'mongodb';
-import * as chrono from 'chrono-node';
 import { VerifyDiscordRequest, DiscordRequest } from './utils.js';
+import mongoClient from './functions/mongoClient.js';
+import { now } from './commands/now.js';
+import { timestamp } from './commands/timestamp.js';
 
 const keyPath = process.env.CERTKEY;
 const certPath = process.env.CERT;
@@ -32,10 +33,10 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   }
 });
-
+const dbClient = mongoClient(client)
 let credentials = {}
 
-const clubPlayerRole = '1072620805600592062';
+const clubPlayerRole = '1072620805600592062'
 const webHookDetails = process.env.WEBHOOK
 
 if(online){
@@ -89,8 +90,10 @@ const getPlayerTeam = (player, teams) =>
   teams.findOne({active:true, $or:player.roles.map(role=>({id:role}))})
 
 const displayTeam = (team) => (
-  `Team: ${team.name} - ${team.shortName}` +
-  `\rBudget: ${new Intl.NumberFormat('en-US').format(team.budget)}`
+  `Team: ${team.flag} ${team.emoji} ${team.name} - ${team.shortName}` +
+  `\rBudget: ${new Intl.NumberFormat('en-US').format(team.budget)}` +
+  `\rCity: ${team.city}` +
+  `\rPalmarès: ${team.description}`
 )
 
 function start() {
@@ -157,51 +160,24 @@ function start() {
         }
 
         if (name === 'now') {
-          const timestamp = msToTimestamp(Date.now())
-          return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-            method: 'POST',
-            body: {
-              type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-              data: {
-                content: `<t:${timestamp}:F> < t:${timestamp}:F >`,
-                flags: 1 << 6
-              }
-            }
-          })
+          return now({interaction_id, token})
         }
-
         if (name === "timestamp") {
-          const [date, timezone = 0] = options
-          const strTimezone = optionToTimezoneStr(timezone.value)
-          const parsedDate = chrono.parseDate(date.value, { instance: new Date(), timezone: strTimezone })
-          const timestamp = msToTimestamp(Date.now())
-          const doubleParse = msToTimestamp(Date.parse(parsedDate))
-          return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-            method: 'POST',
-            body: {
-              type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-              data: {
-                content: `<t:${doubleParse}:F> < t:${doubleParse}:F >`,
-                flags: 1 << 6
-              }
-            }
-        })
+          return timestamp({interaction_id, token, options})
         }
 
         if(name === "boxlineup"){
           const {gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5, vs} = Object.fromEntries(options.map(({name, value})=> [name, value]))
           let playerTeam = ''
           let embedColor = 16777215
+          let teamIcon = ''
           if(process.env.GUILD_ID === guild_id) {
-            try {
-              const teams = await getTeamsCollection();
+            await dbClient(async ({teams})=>{            
               const memberTeam = await getPlayerTeam(member, teams)
               playerTeam = memberTeam.name +' '
               embedColor = memberTeam.color
-            }
-            finally{
-              client.close()
-            }
+              teamIcon = `https://cdn.discordapp.com/role-icons/${memberTeam.id}/${memberTeam.icon}.png`
+            })
           }
           const lineupEmbed = {
             "type": "rich",
@@ -214,7 +190,7 @@ function start() {
             },
             "fields": [
               {
-                "name": `Lineup${vs? ` against ${vs}`: ''}`,
+                "name": `${vs? `Against ${vs}`: ' '}`,
                 "value": " ",
                 "inline": false
               },
@@ -293,6 +269,9 @@ function start() {
                 "inline": false
               })
           }
+          if(teamIcon){
+            lineupEmbed.author.icon_url = teamIcon
+          }
           return res.send({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: { embeds : [lineupEmbed]}
           })
@@ -302,16 +281,12 @@ function start() {
           const {gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5, vs} = Object.fromEntries(options.map(({name, value})=> [name, value]))
           let playerTeam = ''
           if(process.env.GUILD_ID === guild_id) {
-            try {
-              const teams = await getTeamsCollection();
+            await dbClient(async ({teams})=>{            
               const memberTeam = await getPlayerTeam(member, teams)
-              playerTeam = memberTeam.name +' '
-            }
-            finally{
-              client.close()
-            }
+              playerTeam = memberTeam.emoji+' ' + memberTeam.name +' '
+            })
           }
-          let response = `${playerTeam}lineup vs ${vs}\r`
+          let response = `${playerTeam}lineup ${vs? `vs ${vs}`: ''}\r`
           response += `GK: <@${gk}>\r`;
           response += `LB: <@${lb}>\r`;
           response += `RB: <@${rb}>\r`;
@@ -350,14 +325,10 @@ function start() {
             } else {
               roles = [{id: role.value}]
             }
-            try {
-              const teams = await getTeamsCollection();
+            await dbClient(async (client, {teams})=>{            
               const team = await teams.findOne({active:true, $or:roles})
               response = displayTeam(team)
-            } finally {
-              // Ensures that the client will close when you finish/error
-              await client.close();
-            }
+            })
           
             return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
               method: 'POST',
@@ -372,34 +343,41 @@ function start() {
           }
 
           if(name === "teams") {
-            let response = "Failed"
+            let teamsResponse = []
             try {
               const teams = await getTeamsCollection();
               const query = {active: true}
               if ((await teams.countDocuments(query)) === 0) {
-                response = "No teams found !"
+                teamsResponse = ["No teams found !"]
               } else {
-                response = ""
+                let currentResponse = ''
                 const allTeams = teams.find(query)
+                let i=0
                 for await (const team of allTeams) {
-                  response += displayTeam(team) + '\r'
+                  if(i>5) {
+                    teamsResponse.push(currentResponse)
+                    i=0
+                    currentResponse =''
+                  }
+                  currentResponse += displayTeam(team) + '\r'
+                  i++
                 }
               }
             } finally {
               // Ensures that the client will close when you finish/error
               await client.close();
             }
-            const teamsEmbed = {
+            const teamsEmbed = teamsResponse.map(teamResponse => ({
               "type": "rich",
               "color": 16777215,
               "title": "PSAF Teams",
-              "description": response,
-            }
+              "description": teamResponse,
+            }))
             return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
               method: 'POST',
               body: {
                 type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: { embeds : [teamsEmbed]},
+                data: { embeds : teamsEmbed},
                 flags: 1 << 6
               }
             })
@@ -637,6 +615,39 @@ function start() {
             } finally {
               await client.close();
             }
+            return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+              method: 'POST',
+              body: {
+                type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: {
+                  content: response,
+                  flags: 1 << 6
+                }
+              }
+            })
+          }
+
+          if (name==="editteam") {
+            let response = "No teams found"
+            const {team, palmares, emoji, city, flag} = Object.fromEntries(options.map(({name, value})=> [name, value]))
+            const roles = [{id: team}]
+            try {
+              const teams = await getTeamsCollection();
+              const team = await teams.findOne({active:true, $or:roles})
+              const payload = {
+                description: palmares || team.description,
+                emoji: emoji || team.emoji,
+                city: city || team.emoji,
+                flag: flag || team.flag
+              }
+              teams.updateOne({id: team.id}, {$set: payload})
+              const updatedTeam = await teams.findOne({active:true, id:team.id})
+              response = displayTeam(updatedTeam)
+            } finally {
+              // Ensures that the client will close when you finish/error
+              await client.close();
+            }
+          
             return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
               method: 'POST',
               body: {

@@ -1,5 +1,7 @@
 import 'dotenv/config';
 import { InstallGlobalCommands } from './utils.js';
+import { nowCmd } from './commands/now.js';
+import { timestampCmd } from './commands/timestamp.js';
 
 const NOW = {
   name: 'now',
@@ -41,6 +43,33 @@ const TEAM =  {
     type: 8,
     name: 'team',
     description: 'Team'
+  }]
+}
+const EDITTEAM =  {
+  name: 'editteam',
+  description: 'Edit team details',
+  type: 1,
+  options: [{
+    type: 8,
+    name: 'team',
+    description: 'Team',
+    required: true
+  },{
+    type: 3,
+    name: 'palmares',
+    description: 'palmares'
+  },{
+    type: 3,
+    name: 'emoji',
+    description: 'Emoji'
+  },{
+    type: 3,
+    name: 'city',
+    description: 'City'
+  },{
+    type: 3,
+    name: 'flag',
+    description: 'Flag'
   }]
 }
 
@@ -237,6 +266,12 @@ const HELP = {
   type: 1
 }
 
-const ALL_COMMANDS = [NOW, TEAM, TEAMS, PLAYERS, TRANSFER, TEAMTRANSFER, FREEPLAYER, LINEUP, BOXLINEUP, FINE, BONUS, TIMESTAMP, HELP];
+const INITEMOJI = {
+  name: 'initemoji',
+  description: 'Testing',
+  type: 1
+}
+
+const ALL_COMMANDS = [nowCmd, timestampCmd, TEAM, TEAMS, PLAYERS, TRANSFER, TEAMTRANSFER, FREEPLAYER, LINEUP, BOXLINEUP, FINE, BONUS, INITEMOJI, EDITTEAM, HELP];
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);
