@@ -2,38 +2,8 @@ import 'dotenv/config';
 import { InstallGlobalCommands } from './utils.js';
 import { nowCmd } from './commands/now.js';
 import { timestampCmd } from './commands/timestamp.js';
-
-const NOW = {
-  name: 'now',
-  description: 'Gives the current time as a timestamp',
-  type: 1
-}
-
-const TIMESTAMP = {
-  name: 'timestamp',
-  description: 'Send a date, get the timestamp',
-  type: 1,
-  options: [{
-    type: 3,
-    name: 'date',
-    description: "The date you'd like to convert to a timestamp",
-    required: true
-  }, {
-    type: 4,
-    name: 'timezone',
-    description: "Which timezone to apply",
-    choices: [{
-      name: "UK",
-      value: "0"
-    }, {
-      name: "Central Europe",
-      value: "1"
-    }, {
-      name: "Turkey",
-      value: "2"
-    }]
-  }]
-}
+import { helpCmd } from './commands/help.js';
+import { boxLineupcmd, lineupCmd } from './commands/lineup.js';
 
 const TEAM =  {
   name: 'team',
@@ -272,6 +242,6 @@ const INITEMOJI = {
   type: 1
 }
 
-const ALL_COMMANDS = [nowCmd, timestampCmd, TEAM, TEAMS, PLAYERS, TRANSFER, TEAMTRANSFER, FREEPLAYER, LINEUP, BOXLINEUP, FINE, BONUS, INITEMOJI, EDITTEAM, HELP];
+const ALL_COMMANDS = [nowCmd, timestampCmd, TEAM, TEAMS, PLAYERS, TRANSFER, TEAMTRANSFER, FREEPLAYER, lineupCmd, boxLineupcmd, FINE, BONUS, INITEMOJI, EDITTEAM, helpCmd];
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);

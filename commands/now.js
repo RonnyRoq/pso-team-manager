@@ -1,4 +1,3 @@
-
 import {
   InteractionResponseType,
 } from 'discord-interactions';

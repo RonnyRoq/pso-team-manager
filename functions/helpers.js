@@ -30,6 +30,9 @@ export const removePlayerPrefix = (teamShortName, playerName) => {
   return updatedPlayerName
 }
 
-const addPlayerPrefix = (teamShortName, playerName) => {
+export const addPlayerPrefix = (teamShortName, playerName) => {
   return `${teamShortName} | ${playerName}`
 }
+
+export const getPlayerTeam = (player, teams) => 
+  teams.findOne({active:true, $or:player.roles.map(role=>({id:role}))})

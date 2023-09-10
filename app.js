@@ -15,6 +15,8 @@ import { VerifyDiscordRequest, DiscordRequest } from './utils.js';
 import mongoClient from './functions/mongoClient.js';
 import { now } from './commands/now.js';
 import { timestamp } from './commands/timestamp.js';
+import { help } from './commands/help.js';
+import { boxLineup, lineup } from './commands/lineup.js';
 
 const keyPath = process.env.CERTKEY;
 const certPath = process.env.CERT;
@@ -124,194 +126,29 @@ function start() {
       }
 
       if (type === InteractionType.APPLICATION_COMMAND) {
-        const { id, name, options, target_id } = data;
+        const { name, options } = data;
+
+        const commandOptions = {
+          name, options, member, interaction_id, token, guild_id, callerId, res, dbClient
+        }
 
         if (name === 'help') {
-          let responseLines = ['**/now**: Gives you privately a timestamp representing the current time, plus its code (<t:XXXXX:F>) with extra spaces for copy pasting.',
-            '**/timestamp** *date* *timezone*: Gives you privately a timestamp for the date of your choice. Can be "Tomorrow 5PM", "Friday 14:32" etc... ',
-            'Careful as the dates are american style, 06/08 is the 8th of June. The timezone attribute is your own timezone  (UK, Central Europe or Turkey) to help the bot generate an accurate time.',
-            '**/lineup** *gk*... : Posts a lineup with up to 5 subs. You can also name your opponent by filling the attribute *vs*',
-            `${isPSAF(guild_id) ? 'On the PSAF server, your own team name will be prefilled' :''}`,
-            '**/boxlineup** *gk*... : Same as **/lineup** but the lineup is sent in a box with better formatting',
-            `${isPSAF(guild_id) ? 'On the PSAF server, your own team name will be prefilled, and the box\'s shade will be the colour of your team.' :''}`
-          ]
-          if(isPSAF(guild_id)){
-            const psafCommandLines = [
-              '**/team** *team* : List a team\'s details, such as name and budget. Leave *team* empty for details on your own team.',
-              '**/players** *team* : List players registered for a team. Leave *team* empty for your own list of players',
-            ]
-            responseLines = responseLines.concat(psafCommandLines)
-          }
-          const response = responseLines.join('\r')
-          const helpEmbed = {
-            "type": "rich",
-            "color": 16777215,
-            "title": "PSO Team Manager Commands",
-            "description": response,
-          }
-          return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-            method: 'POST',
-            body: {
-              type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-              data: { embeds : [helpEmbed]},
-              flags: 1 << 6
-            }
-          })
+          return help(commandOptions)
         }
 
         if (name === 'now') {
-          return now({interaction_id, token})
+          return now(commandOptions)
         }
         if (name === "timestamp") {
-          return timestamp({interaction_id, token, options})
+          return timestamp(commandOptions)
         }
 
         if(name === "boxlineup"){
-          const {gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5, vs} = Object.fromEntries(options.map(({name, value})=> [name, value]))
-          let playerTeam = ''
-          let embedColor = 16777215
-          let teamIcon = ''
-          if(process.env.GUILD_ID === guild_id) {
-            await dbClient(async ({teams})=>{            
-              const memberTeam = await getPlayerTeam(member, teams)
-              playerTeam = memberTeam.name +' '
-              embedColor = memberTeam.color
-              teamIcon = `https://cdn.discordapp.com/role-icons/${memberTeam.id}/${memberTeam.icon}.png`
-            })
-          }
-          const lineupEmbed = {
-            "type": "rich",
-            "color": embedColor,
-            "thumbnail": {
-              "url": "https://shinmugen.net/Football-pitch-icon.png"
-            },
-            "author": {
-              "name": `${playerTeam}Lineup by ${getPlayerNick(member)}`
-            },
-            "fields": [
-              {
-                "name": `${vs? `Against ${vs}`: ' '}`,
-                "value": " ",
-                "inline": false
-              },
-              {
-                "name": " ",
-                "value": "",
-                "inline": false
-              },
-              {
-                "name": "LW:",
-                "value": `<@${lw}>`,
-                "inline": true
-              },
-              {
-                "name": " ",
-                "value": "",
-                "inline": true
-              },
-              {
-                "name": "RW:",
-                "value": `<@${rw}>`,
-                "inline": true
-              },
-              {
-                "name": " ",
-                "value": "",
-                "inline": true
-              },
-              {
-                "name": "CM",
-                "value": `<@${cm}>`,
-                "inline": true
-              },
-              {
-                "name": " ",
-                "value": "",
-                "inline": true
-              },
-              {
-                "name": "LB",
-                "value": `<@${lb}>`,
-                "inline": true
-              },
-              {
-                "name": " ",
-                "value": "",
-                "inline": true
-              },
-              {
-                "name": "RB",
-                "value": `<@${rb}>`,
-                "inline": true
-              },
-              {
-                "name": " ",
-                "value": "",
-                "inline": true
-              },
-              {
-                "name": "GK",
-                "value": `<@${gk}>`,
-                "inline": true
-              },
-              {
-                "name": " ",
-                "value": "",
-                "inline": true
-              }
-            ]
-          }
-          if(sub1) {
-            lineupEmbed.fields.push(
-              {
-                "name": "Subs",
-                "value": `${sub1? `<@${sub1}>`: ''}${sub2? `, <@${sub2}>`: ''}${sub3? `, <@${sub3}>`: ''}${sub4? `, <@${sub4}>`: ''}${sub5? `, <@${sub5}>`: ''}`,
-                "inline": false
-              })
-          }
-          if(teamIcon){
-            lineupEmbed.author.icon_url = teamIcon
-          }
-          return res.send({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: { embeds : [lineupEmbed]}
-          })
+          return boxLineup(commandOptions)
         }
 
         if(name === "lineup") {
-          const {gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5, vs} = Object.fromEntries(options.map(({name, value})=> [name, value]))
-          let playerTeam = ''
-          if(process.env.GUILD_ID === guild_id) {
-            await dbClient(async ({teams})=>{            
-              const memberTeam = await getPlayerTeam(member, teams)
-              playerTeam = memberTeam.emoji+' ' + memberTeam.name +' '
-            })
-          }
-          let response = `${playerTeam}lineup ${vs? `vs ${vs}`: ''}\r`
-          response += `GK: <@${gk}>\r`;
-          response += `LB: <@${lb}>\r`;
-          response += `RB: <@${rb}>\r`;
-          response += `CM: <@${cm}>\r`;
-          response += `LW: <@${lw}>\r`;
-          response += `RW: <@${rw}>`;
-          if(sub1) {
-            response += `\rSubs: <@${sub1}>`;
-          }
-          if(sub2) {
-            response += `, <@${sub2}>`;
-          }
-          if(sub3) {
-            response += `, <@${sub3}>`;
-          }
-          if(sub4) {
-            response += `, <@${sub4}>`;
-          }
-          if(sub5) {
-            response += `, <@${sub5}>`;
-          }
-          
-          return res.send({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: { content : response }
-          })
+          return lineup(commandOptions)
         }
 
         if(process.env.GUILD_ID === guild_id) {
