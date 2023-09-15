@@ -36,3 +36,16 @@ export const addPlayerPrefix = (teamShortName, playerName) => {
 
 export const getPlayerTeam = (player, teams) => 
   teams.findOne({active:true, $or:player.roles.map(role=>({id:role}))})
+
+export const displayTeam = (team) => (
+  `Team: ${team.flag} ${team.emoji} ${team.name} - ${team.shortName}` +
+  `\rBudget: ${new Intl.NumberFormat('en-US').format(team.budget)}` +
+  `\rCity: ${team.city}` +
+  `\rPalmarès: ${team.description}`
+)
+
+export const sleep = (ms) => {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}

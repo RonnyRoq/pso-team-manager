@@ -4,17 +4,9 @@ import { nowCmd } from './commands/now.js';
 import { timestampCmd } from './commands/timestamp.js';
 import { helpCmd } from './commands/help.js';
 import { boxLineupcmd, lineupCmd } from './commands/lineup.js';
+import { teamCmd } from './commands/team.js';
+import { editMatchCmd, endMatchCmd, matchCmd, matchesCmd, publishMatchCmd } from './commands/match.js';
 
-const TEAM =  {
-  name: 'team',
-  description: 'List team details',
-  type: 1,
-  options: [{
-    type: 8,
-    name: 'team',
-    description: 'Team'
-  }]
-}
 const EDITTEAM =  {
   name: 'editteam',
   description: 'Edit team details',
@@ -124,68 +116,6 @@ const FREEPLAYER = {
   }]
 }
 
-const LINEUP = {
-  name: 'lineup',
-  description: 'Create a lineup for your team',
-  type: 1,
-  options: [{
-    type: 6,
-    name: 'gk',
-    description: 'GK',
-    required: true
-  },{
-    type: 6,
-    name: 'lb',
-    description: 'LB',
-    required: true
-  },{
-    type: 6,
-    name: 'rb',
-    description: 'RB',
-    required: true
-  },{
-    type: 6,
-    name: 'cm',
-    description: 'CM',
-    required: true
-  },{
-    type: 6,
-    name: 'lw',
-    description: 'LW',
-    required: true
-  },{
-    type: 6,
-    name: 'rw',
-    description: 'RW',
-    required: true
-  },{
-    type: 6,
-    name: 'sub1',
-    description: 'Sub1'
-  },{
-    type: 6,
-    name: 'sub2',
-    description: 'Sub2'
-  },{
-    type: 6,
-    name: 'sub3',
-    description: 'Sub3'
-  },{
-    type: 6,
-    name: 'sub4',
-    description: 'Sub4'
-  },{
-    type: 6,
-    name: 'sub5',
-    description: 'Sub5'
-  }, {
-    type: 3,
-    name: 'vs',
-    description: 'Against'
-  }]
-}
-const BOXLINEUP = {...LINEUP, name: 'boxlineup'}
-
 const FINE =  {
   name: 'fine',
   description: 'Remove money from a team\'s budget',
@@ -230,18 +160,12 @@ const BONUS = {
   }]
 }
 
-const HELP = {
-  name: 'help',
-  description: 'List all the commands you can use for this bot',
+export const emojisCmd = {
+  name: 'emojis',
+  description: 'List all the emojis',
   type: 1
 }
 
-const INITEMOJI = {
-  name: 'initemoji',
-  description: 'Testing',
-  type: 1
-}
-
-const ALL_COMMANDS = [nowCmd, timestampCmd, TEAM, TEAMS, PLAYERS, TRANSFER, TEAMTRANSFER, FREEPLAYER, lineupCmd, boxLineupcmd, FINE, BONUS, INITEMOJI, EDITTEAM, helpCmd];
+const ALL_COMMANDS = [nowCmd, timestampCmd, teamCmd, emojisCmd, matchCmd, editMatchCmd, endMatchCmd, publishMatchCmd, matchesCmd, TEAMS, PLAYERS, TRANSFER, TEAMTRANSFER, FREEPLAYER, lineupCmd, boxLineupcmd, FINE, BONUS, EDITTEAM, helpCmd];
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);

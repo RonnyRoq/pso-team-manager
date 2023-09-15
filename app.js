@@ -5,18 +5,17 @@ import https from 'https';
 import fs from 'fs';
 import {
   InteractionType,
-  InteractionResponseType,
-  InteractionResponseFlags,
-  MessageComponentTypes,
-  ButtonStyleTypes,
+  InteractionResponseType
 } from 'discord-interactions';
-import { MongoClient, ServerApiVersion } from 'mongodb';
+import { CommandFailedEvent, MongoClient, ServerApiVersion } from 'mongodb';
 import { VerifyDiscordRequest, DiscordRequest } from './utils.js';
 import mongoClient from './functions/mongoClient.js';
 import { now } from './commands/now.js';
 import { timestamp } from './commands/timestamp.js';
 import { help } from './commands/help.js';
 import { boxLineup, lineup } from './commands/lineup.js';
+import { team } from './commands/team.js';
+import { editMatch, endMatch, match, matches, publishMatch } from './commands/match.js';
 
 const keyPath = process.env.CERTKEY;
 const certPath = process.env.CERT;
@@ -47,24 +46,6 @@ if(online){
   credentials = {key: privateKey, cert: certificate};
 }
 
-const isPSAF = (guild_id) => guild_id === process.env.GUILD_ID
-
-const msToTimestamp = (ms) => {
-  const msAsString = ms.toString();
-  return msAsString.substring(0, msAsString.length - 3);
-}
-
-const optionToTimezoneStr = (option = 0) => {
-  const today = new Date()
-  switch (option) {
-    case 1:
-      return "CET";
-    case 2:
-      return "EEST";
-    default:
-      return "BST";
-  }
-}
 const getPlayerNick = (player) => 
   player.nick || player.user.global_name || player.user.username
 
@@ -87,9 +68,6 @@ const getTeamsCollection = async () => {
   const psoTeams = client.db("PSOTeamManager");
   return psoTeams.collection("Teams");
 }
-
-const getPlayerTeam = (player, teams) => 
-  teams.findOne({active:true, $or:player.roles.map(role=>({id:role}))})
 
 const displayTeam = (team) => (
   `Team: ${team.flag} ${team.emoji} ${team.name} - ${team.shortName}` +
@@ -152,31 +130,28 @@ function start() {
         }
 
         if(process.env.GUILD_ID === guild_id) {
-
           if (name === "team") {
-            let response = "No teams found"
-            const [role] = options || []
-            let roles = []
-            if(!role) {
-              roles = member.roles.map(role=>({id:role}))
-            } else {
-              roles = [{id: role.value}]
-            }
-            await dbClient(async (client, {teams})=>{            
-              const team = await teams.findOne({active:true, $or:roles})
-              response = displayTeam(team)
-            })
-          
-            return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-              method: 'POST',
-              body: {
-                type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: {
-                  content: response,
-                  flags: 1 << 6
-                }
-              }
-            })
+            return team(commandOptions)
+          }
+
+          if (name === "match") {
+            return match(commandOptions)
+          }
+
+          if (name === "editmatch") {
+            return editMatch(commandOptions)
+          }
+
+          if (name === "endmatch") {
+            return endMatch(commandOptions)
+          }
+
+          if(name === "publishmatch") {
+            return publishMatch(commandOptions)
+          }
+
+          if (name === "matches") {
+            return matches(commandOptions)
           }
 
           if(name === "teams") {
@@ -323,7 +298,7 @@ function start() {
               const teams = await getTeamsCollection();
               const [team, playerResp] = await Promise.all([
                 teams.findOne({id: role.value}),
-                DiscordRequest(`/guilds/${guild_id}/members/${playeroption.value}`)
+                DiscordRequest(`/guilds/${guild_id}/members/${playeroption.value}`, {})
               ])
               const player = await playerResp.json();
               const playerName = player.nick || player.user.global_name || player.user.username
@@ -535,6 +510,21 @@ function start() {
                 type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
                 data: {
                   content: response,
+                  flags: 1 << 6
+                }
+              }
+            })
+          }
+          if (name ==='emojis') {
+            const emojisResp = await DiscordRequest(`/guilds/${guild_id}/emojis`, { method: 'GET' })
+            const emojis = await emojisResp.json()
+            console.log(emojis)
+            return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+              method: 'POST',
+              body: {
+                type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: {
+                  content: `${emojis.length} listed`,
                   flags: 1 << 6
                 }
               }
