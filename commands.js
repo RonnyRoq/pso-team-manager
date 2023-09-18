@@ -5,36 +5,9 @@ import { timestampCmd } from './commands/timestamp.js';
 import { helpCmd } from './commands/help.js';
 import { boxLineupcmd, lineupCmd } from './commands/lineup.js';
 import { teamCmd } from './commands/team.js';
-import { editMatchCmd, endMatchCmd, matchCmd, matchesCmd, publishMatchCmd } from './commands/match.js';
-
-const EDITTEAM =  {
-  name: 'editteam',
-  description: 'Edit team details',
-  type: 1,
-  options: [{
-    type: 8,
-    name: 'team',
-    description: 'Team',
-    required: true
-  },{
-    type: 3,
-    name: 'palmares',
-    description: 'palmares'
-  },{
-    type: 3,
-    name: 'emoji',
-    description: 'Emoji'
-  },{
-    type: 3,
-    name: 'city',
-    description: 'City'
-  },{
-    type: 3,
-    name: 'flag',
-    description: 'Flag'
-  }]
-}
-
+import { editMatchCmd, endMatchCmd, matchCmd, matchIdCmd, matchesCmd, publishMatchCmd } from './commands/match.js';
+import { initCountriesCmd, systemTeamCmd } from './commands/system.js';
+import { editTeamCmd } from './commands/editTeam.js';
 
 const TEAMS = {
   name: 'teams',
@@ -166,6 +139,9 @@ export const emojisCmd = {
   type: 1
 }
 
-const ALL_COMMANDS = [nowCmd, timestampCmd, teamCmd, emojisCmd, matchCmd, editMatchCmd, endMatchCmd, publishMatchCmd, matchesCmd, TEAMS, PLAYERS, TRANSFER, TEAMTRANSFER, FREEPLAYER, lineupCmd, boxLineupcmd, FINE, BONUS, EDITTEAM, helpCmd];
+const ALL_COMMANDS = [nowCmd, timestampCmd, teamCmd, emojisCmd, matchCmd, editMatchCmd, endMatchCmd, publishMatchCmd, matchIdCmd, matchesCmd,
+  TEAMS, PLAYERS, TRANSFER, TEAMTRANSFER, FREEPLAYER, lineupCmd, boxLineupcmd, FINE, BONUS, editTeamCmd, helpCmd,
+  systemTeamCmd, initCountriesCmd,
+];
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);

@@ -67,6 +67,8 @@ export const match = async ({interaction_id, token, guild_id, options, dbClient}
         content: response,
       }
     })
+    const logResp = await messageResp.json()
+    await matches.updateOne({_id: new ObjectId(insertResult.insertedId)}, {$set: {logId: logResp.id}})
   })
 
   return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
@@ -78,6 +80,36 @@ export const match = async ({interaction_id, token, guild_id, options, dbClient}
         flags: 1 << 6
       }
     }
+  })
+}
+
+export const matchId = async ({interaction_id, token, guild_id, options, dbClient}) => {
+  const {id, home, away} = Object.fromEntries(options.map(({name, value})=> [name, value]))
+  return await dbClient(async ({matches})=> {
+    const foundMatches = await matches.find({home, away}).sort({dateTimestamp: 1}).toArray()
+    if(foundMatches.length === 0) {
+      return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+        method: 'POST',
+        body: {
+          type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          data: {
+            content: `Match <@&${home}> - <@&${away}> not found`,
+            flags: 1 << 6
+          }
+        }
+      })
+    }
+    const response = foundMatches.map(({home, away, dateTimestamp, _id})=> `<@&${home}> - <@&${away}> <t:${dateTimestamp}:F> ${_id}`).join('\r')
+    return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+      method: 'POST',
+      body: {
+        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+          content: response,
+          flags: 1 << 6
+        }
+      }
+    })
   })
 }
 
@@ -123,9 +155,8 @@ export const editMatch = async ({interaction_id, token, guild_id, options, dbCli
       league: leaguePick,
       matchday: matchDayPick
     }})
-    let response = `Updated \r`
     const post = formatMatch(currentLeague, homeTeam, awayTeam, {...match, home: homeTeam.id, away:awayTeam.id, dateTimestamp, matchday: matchDayPick})
-    response += formatMatch(currentLeague, homeTeam, awayTeam, {...match, home: homeTeam.id, away:awayTeam.id, dateTimestamp, matchday: matchDayPick}, true)
+    const response = formatMatch(currentLeague, homeTeam, awayTeam, {...match, home: homeTeam.id, away:awayTeam.id, dateTimestamp, matchday: matchDayPick}, true)
     if(match.messageId) {
       await DiscordRequest(`/channels/${currentLeague.value}/messages/${match.messageId}`, {
         method: 'PATCH',
@@ -135,12 +166,21 @@ export const editMatch = async ({interaction_id, token, guild_id, options, dbCli
         }
       })
     }
+    if(match.logId) {
+      await DiscordRequest(`/channels/${matchLogChannelId}/messages/${match.logId}`, {
+        method: 'PATCH',
+        body: {
+          type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          content: response
+        }
+      })
+    }
     return await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
       method: 'POST',
       body: {
         type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: response,
+          content: `Updated \r`+response,
           flags: 1 << 6
         }
       }
@@ -179,10 +219,9 @@ export const endMatch = async ({interaction_id, token, guild_id, options, dbClie
       isFF: ff,
       finished: true
     }})
-    let response = `Updated \r`
     const post = formatMatch(currentLeague, homeTeam, awayTeam, {...match, homeScore: homescore, awayScore:awayscore, isFF: ff})
-    response += post
-    if(match.messageId) {   
+    const response = formatMatch(currentLeague, homeTeam, awayTeam, {...match, homeScore: homescore, awayScore:awayscore, isFF: ff}, true)
+    if(match.messageId) {
       await DiscordRequest(`/channels/${currentLeague.value}/messages/${match.messageId}`, {
         method: 'PATCH',
         body: {
@@ -191,12 +230,21 @@ export const endMatch = async ({interaction_id, token, guild_id, options, dbClie
         }
       })
     }
+    if(match.logId) {
+      await DiscordRequest(`/channels/${matchLogChannelId}/messages/${match.logId}`, {
+        method: 'PATCH',
+        body: {
+          type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          content: response
+        }
+      })
+    }
     return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
       method: 'POST',
       body: {
         type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: response,
+          content: `Updated \r`+response,
           flags: 1 << 6
         }
       }
@@ -267,10 +315,11 @@ export const matches = async ({interaction_id, token, guild_id, options=[], dbCl
   
   let response=' '
   return await dbClient(async ({teams, matches}) => {
-    const matchesOfDay = matches.find({dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}})
+    const matchesOfDay = await matches.find({dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}}).sort({dateTimestamp:1}).toArray()
     const allTeamsDb = teams.find({active: true})
     const allTeams = await allTeamsDb.toArray()
-    for await (const match of matchesOfDay) {
+    response = `${matchesOfDay.length} matches that day.\r`
+    for (const match of matchesOfDay) {
       const homeTeam = allTeams.find(({id})=> id === match.home)
       const awayTeam = allTeams.find(({id})=> id === match.away)
       const currentLeague = fixturesChannels.find(({value})=> value === match.league)
@@ -281,7 +330,7 @@ export const matches = async ({interaction_id, token, guild_id, options=[], dbCl
       body: {
         type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: response,
+          content: response.substring(0, 1999),
           flags: 1 << 6
         }
       }
@@ -407,6 +456,23 @@ export const publishMatchCmd = {
       required: true
     }
   ]
+}
+
+export const matchIdCmd = {
+  name: 'matchid',
+  description: 'Get a match\'s ID',
+  type: 1,
+  options: [{
+    type: 8,
+    name: 'home',
+    description: 'Home Team',
+    required: true
+  },{
+    type: 8,
+    name: 'away',
+    description: 'Away Team',
+    required: true
+  }]
 }
 
 export const matchesCmd = {

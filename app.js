@@ -15,7 +15,9 @@ import { timestamp } from './commands/timestamp.js';
 import { help } from './commands/help.js';
 import { boxLineup, lineup } from './commands/lineup.js';
 import { team } from './commands/team.js';
-import { editMatch, endMatch, match, matches, publishMatch } from './commands/match.js';
+import { editMatch, endMatch, match, matchId, matches, publishMatch } from './commands/match.js';
+import { initCountries, systemTeam } from './commands/system.js';
+import { editTeam } from './commands/editTeam.js';
 
 const keyPath = process.env.CERTKEY;
 const certPath = process.env.CERT;
@@ -146,8 +148,12 @@ function start() {
             return endMatch(commandOptions)
           }
 
-          if(name === "publishmatch") {
+          if (name === "publishmatch") {
             return publishMatch(commandOptions)
+          }
+
+          if (name === "matchid") {
+            return matchId(commandOptions)
           }
 
           if (name === "matches") {
@@ -439,37 +445,16 @@ function start() {
             })
           }
 
+          if(name === "systemteam") {
+            return systemTeam(commandOptions)
+          }
+
           if (name==="editteam") {
-            let response = "No teams found"
-            const {team, palmares, emoji, city, flag} = Object.fromEntries(options.map(({name, value})=> [name, value]))
-            const roles = [{id: team}]
-            try {
-              const teams = await getTeamsCollection();
-              const team = await teams.findOne({active:true, $or:roles})
-              const payload = {
-                description: palmares || team.description,
-                emoji: emoji || team.emoji,
-                city: city || team.emoji,
-                flag: flag || team.flag
-              }
-              teams.updateOne({id: team.id}, {$set: payload})
-              const updatedTeam = await teams.findOne({active:true, id:team.id})
-              response = displayTeam(updatedTeam)
-            } finally {
-              // Ensures that the client will close when you finish/error
-              await client.close();
-            }
-          
-            return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-              method: 'POST',
-              body: {
-                type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: {
-                  content: response,
-                  flags: 1 << 6
-                }
-              }
-            })
+            editTeam(commandOptions)
+          }
+
+          if(name === "initcountries") {
+            return initCountries(commandOptions)
           }
 
           if (name === "players") {
