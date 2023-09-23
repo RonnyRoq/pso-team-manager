@@ -28,6 +28,7 @@ export const team = async ({interaction_id, token, options, member, dbClient})=>
         i++
         if(i === 4) {
           matchEmbeds.push(currentEmbed)
+          currentEmbed = ''
           i = 0
         }
       }

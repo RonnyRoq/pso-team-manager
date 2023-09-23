@@ -14,6 +14,7 @@ import { now } from './commands/now.js';
 import { timestamp } from './commands/timestamp.js';
 import { help } from './commands/help.js';
 import { boxLineup, lineup } from './commands/lineup.js';
+import { allPlayers, autoCompleteNation, editPlayer, player, players } from './commands/player.js';
 import { team } from './commands/team.js';
 import { editMatch, endMatch, match, matchId, matches, publishMatch } from './commands/match.js';
 import { initCountries, systemTeam } from './commands/system.js';
@@ -96,7 +97,7 @@ function start() {
    */
   app.post('/interactions', async function (req, res) {
     // Interaction type and data
-    const { type, member, id:interaction_id, token, data, guild_id } = req.body;
+    const { type, member, id:interaction_id, application_id, token, data, guild_id } = req.body;
 
     const callerId = member?.user?.id
 
@@ -105,11 +106,17 @@ function start() {
         return res.send({ type: InteractionResponseType.PONG });
       }
 
+      if (type === InteractionType.APPLICATION_COMMAND_AUTOCOMPLETE) {
+        if(data.name==="editplayer"){
+          return autoCompleteNation(data, res)
+        }
+      }
+
       if (type === InteractionType.APPLICATION_COMMAND) {
         const { name, options } = data;
 
         const commandOptions = {
-          name, options, member, interaction_id, token, guild_id, callerId, res, dbClient
+          name, options, member, interaction_id, application_id, token, guild_id, callerId, res, dbClient
         }
 
         if (name === 'help') {
@@ -132,6 +139,18 @@ function start() {
         }
 
         if(process.env.GUILD_ID === guild_id) {
+          if (name === "player") {
+            return player(commandOptions)
+          }
+
+          if (name === "editplayer") {
+            return editPlayer(commandOptions)
+          }
+
+          if (name === "allplayers") {
+            return allPlayers(commandOptions)
+          }
+
           if (name === "team") {
             return team(commandOptions)
           }
@@ -458,47 +477,7 @@ function start() {
           }
 
           if (name === "players") {
-            const [role] = options || []
-            let roles = []
-            let response = "No team found"
-            if(!role) {
-              roles = member.roles.map(role=>({id:role}))
-            } else {
-              roles = [{id: role.value}]
-            }
-            let teamToList = ''
-            const playersResp = await DiscordRequest(`/guilds/${guild_id}/members?limit=1000`, { method: 'GET' })
-            const players1 = await playersResp.json()
-            let players = []
-            if(players1.size === 1000) {
-              const playersResp2 = await DiscordRequest(`/guilds/${guild_id}/members?limit=1000&after=${players1[players1.length-1].user.id}`, { method: 'GET' })
-              const player2 = await playersResp2.json()
-              players = players1.concat(player2)
-            }
-            else {
-              players = players1
-            }
-            try {
-              const teams = await getTeamsCollection();
-              const team = await teams.findOne({active:true, $or:roles})
-              teamToList = team.id
-            } finally {
-              // Ensures that the client will close when you finish/error
-              await client.close();
-            }
-            const rolePlayers = players.filter((player) => player.roles.includes(teamToList))
-            const teamPlayers = [...new Set(rolePlayers)]
-            response = `Players: \r${teamPlayers.map(({ user, nick }) => `<@${user.id}>`).join('\r')}`
-            return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-              method: 'POST',
-              body: {
-                type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: {
-                  content: response,
-                  flags: 1 << 6
-                }
-              }
-            })
+            return players(commandOptions)
           }
           if (name ==='emojis') {
             const emojisResp = await DiscordRequest(`/guilds/${guild_id}/emojis`, { method: 'GET' })

@@ -8,22 +8,12 @@ import { teamCmd } from './commands/team.js';
 import { editMatchCmd, endMatchCmd, matchCmd, matchIdCmd, matchesCmd, publishMatchCmd } from './commands/match.js';
 import { initCountriesCmd, systemTeamCmd } from './commands/system.js';
 import { editTeamCmd } from './commands/editTeam.js';
+import { allPlayersCmd, editPlayerCmd, playerCmd, playersCmd } from './commands/player.js';
 
 const TEAMS = {
   name: 'teams',
   description: 'List team details',
   type: 1,
-}
-
-const PLAYERS = {
-  name: 'players',
-  description: 'List players for this team',
-  type: 1,
-  options: [{
-    type: 8,
-    name: 'team',
-    description: 'Team'
-  }]
 }
 
 const TRANSFER = {
@@ -140,7 +130,8 @@ export const emojisCmd = {
 }
 
 const ALL_COMMANDS = [nowCmd, timestampCmd, teamCmd, emojisCmd, matchCmd, editMatchCmd, endMatchCmd, publishMatchCmd, matchIdCmd, matchesCmd,
-  TEAMS, PLAYERS, TRANSFER, TEAMTRANSFER, FREEPLAYER, lineupCmd, boxLineupcmd, FINE, BONUS, editTeamCmd, helpCmd,
+  playerCmd, editPlayerCmd, allPlayersCmd, playersCmd,
+  TEAMS, TRANSFER, TEAMTRANSFER, FREEPLAYER, lineupCmd, boxLineupcmd, FINE, BONUS, editTeamCmd, helpCmd,
   systemTeamCmd, initCountriesCmd,
 ];
 
