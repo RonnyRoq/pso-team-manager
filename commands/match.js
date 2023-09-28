@@ -302,8 +302,7 @@ export const publishMatch = async ({interaction_id, token, guild_id, options, db
   })
 }
 
-export const matches = async ({interaction_id, token, guild_id, options=[], dbClient}) => {
-  const {date = "today"} = Object.fromEntries(options.map(({name, value})=> [name, value]))
+export const getMatchesOfDay = async ({date='today', dbClient}) => {
   const strTimezone = optionToTimezoneStr()
   const parsedDate = chrono.parseDate(date, { instance: new Date(), timezone: strTimezone })
   const startOfDay = new Date(parsedDate)
@@ -313,28 +312,33 @@ export const matches = async ({interaction_id, token, guild_id, options=[], dbCl
   const startDateTimestamp = msToTimestamp(Date.parse(startOfDay))
   const endDateTimestamp = msToTimestamp(Date.parse(endOfDay))
   
-  let response=' '
-  return await dbClient(async ({teams, matches}) => {
-    const matchesOfDay = await matches.find({dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}}).sort({dateTimestamp:1}).toArray()
+  return dbClient(async ({teams, matches}) => {
+    const matchesOfDay = await matches.find({dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, $or: [{finished:false}, {finished:null}]}).sort({dateTimestamp:1}).toArray()
     const allTeamsDb = teams.find({active: true})
     const allTeams = await allTeamsDb.toArray()
-    response = `${matchesOfDay.length} matches that day.\r`
+    let response = `${matchesOfDay.length} match${matchesOfDay.length >1?'es':''} on <t:${startDateTimestamp}:d>.\r`
     for (const match of matchesOfDay) {
       const homeTeam = allTeams.find(({id})=> id === match.home)
       const awayTeam = allTeams.find(({id})=> id === match.away)
       const currentLeague = fixturesChannels.find(({value})=> value === match.league)
       response += formatMatch(currentLeague, homeTeam, awayTeam, match, true)+'\r'
     }
-    return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-      method: 'POST',
-      body: {
-        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: response.substring(0, 1999),
-          flags: 1 << 6
-        }
+    return response
+  })
+}
+
+export const matches = async ({interaction_id, token, guild_id, options=[], dbClient}) => {
+  const {date = "today"} = Object.fromEntries(options.map(({name, value})=> [name, value]))
+  const response = await getMatchesOfDay({date, dbClient})
+  return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+    method: 'POST',
+    body: {
+      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        content: response.substring(0, 1999),
+        flags: 1 << 6
       }
-    })
+    }
   })
 }
 

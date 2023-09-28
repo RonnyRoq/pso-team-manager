@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import fetch from 'node-fetch';
 import { verifyKey } from 'discord-interactions';
+import { sleep } from './functions/helpers.js';
 
 export function VerifyDiscordRequest(clientKey) {
   return function (req, res, buf, encoding) {
@@ -18,22 +19,30 @@ export function VerifyDiscordRequest(clientKey) {
 export async function DiscordRequest(endpoint, options={}) {
   // append endpoint to root API URL
   const url = 'https://discord.com/api/v10/' + endpoint;
+  let payload = {...options}
   // Stringify payloads
-  if (options.body) options.body = JSON.stringify(options.body);
+  if (options.body) payload.body = JSON.stringify(options.body);
   // Use node-fetch to make requests
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
-      'Content-Type': 'application/json; charset=UTF-8',
-      'User-Agent': 'PSAF Team Manager',
-    },
-    ...options
+  const headers = {
+    Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
+    'Content-Type': 'application/json; charset=UTF-8',
+    'User-Agent': 'PSAF Team Manager',
+  }
+  let res = await fetch(url, {
+    headers,
+    ...payload
   });
   // throw API errors
   if (!res.ok) {
     const data = await res.json();
-    console.log(res.endpoint);
-    throw new Error(JSON.stringify(data));
+    console.log(endpoint);
+    console.log(data)
+    if(data.retry_after) {
+      await sleep(data.retry_after*1000)
+      res = await DiscordRequest(endpoint, options)
+    } else {
+      throw new Error(JSON.stringify(data));
+    }
   }
   // return original response
   return res;

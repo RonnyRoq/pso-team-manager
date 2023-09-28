@@ -8,7 +8,8 @@ import { teamCmd } from './commands/team.js';
 import { editMatchCmd, endMatchCmd, matchCmd, matchIdCmd, matchesCmd, publishMatchCmd } from './commands/match.js';
 import { initCountriesCmd, systemTeamCmd } from './commands/system.js';
 import { editTeamCmd } from './commands/editTeam.js';
-import { allPlayersCmd, editPlayerCmd, playerCmd, playersCmd } from './commands/player.js';
+import { allPlayersCmd, editPlayerCmd, myPlayerCmd, playerCmd, playersCmd } from './commands/player.js';
+import { addSelectionCmd, allNationalTeamsCmd, nationalTeamCmd, postNationalTeamsCmd, removeSelectionCmd } from './commands/nationalTeam.js';
 
 const TEAMS = {
   name: 'teams',
@@ -130,7 +131,8 @@ export const emojisCmd = {
 }
 
 const ALL_COMMANDS = [nowCmd, timestampCmd, teamCmd, emojisCmd, matchCmd, editMatchCmd, endMatchCmd, publishMatchCmd, matchIdCmd, matchesCmd,
-  playerCmd, editPlayerCmd, allPlayersCmd, playersCmd,
+  playerCmd, editPlayerCmd, allPlayersCmd, playersCmd, myPlayerCmd,
+  nationalTeamCmd, allNationalTeamsCmd, postNationalTeamsCmd, addSelectionCmd, removeSelectionCmd,
   TEAMS, TRANSFER, TEAMTRANSFER, FREEPLAYER, lineupCmd, boxLineupcmd, FINE, BONUS, editTeamCmd, helpCmd,
   systemTeamCmd, initCountriesCmd,
 ];

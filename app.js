@@ -7,7 +7,8 @@ import {
   InteractionType,
   InteractionResponseType
 } from 'discord-interactions';
-import { CommandFailedEvent, MongoClient, ServerApiVersion } from 'mongodb';
+import { MongoClient, ServerApiVersion } from 'mongodb';
+import { CronJob } from 'cron';
 import { VerifyDiscordRequest, DiscordRequest } from './utils.js';
 import mongoClient from './functions/mongoClient.js';
 import { now } from './commands/now.js';
@@ -16,9 +17,11 @@ import { help } from './commands/help.js';
 import { boxLineup, lineup } from './commands/lineup.js';
 import { allPlayers, autoCompleteNation, editPlayer, player, players } from './commands/player.js';
 import { team } from './commands/team.js';
-import { editMatch, endMatch, match, matchId, matches, publishMatch } from './commands/match.js';
+import { editMatch, endMatch, getMatchesOfDay, match, matchId, matches, publishMatch } from './commands/match.js';
 import { initCountries, systemTeam } from './commands/system.js';
 import { editTeam } from './commands/editTeam.js';
+import { addSelection, allNationalTeams, nationalTeam, postNationalTeams, removeSelection } from './commands/nationalTeam.js';
+import { addPlayerPrefix, removePlayerPrefix } from './functions/helpers.js';
 
 const keyPath = process.env.CERTKEY;
 const certPath = process.env.CERT;
@@ -42,6 +45,7 @@ let credentials = {}
 
 const clubPlayerRole = '1072620805600592062'
 const webHookDetails = process.env.WEBHOOK
+const matchesWebhook = process.env.MATCHESWEBOOK
 
 if(online){
   const privateKey  = fs.readFileSync(keyPath, 'utf8');
@@ -52,19 +56,6 @@ if(online){
 const getPlayerNick = (player) => 
   player.nick || player.user.global_name || player.user.username
 
-const removePlayerPrefix = (teamShortName, playerName) => {
-  const teamPrefixToRemove = `${teamShortName} | `
-  const indexTeamPrefix = playerName.indexOf(teamPrefixToRemove)
-  let updatedPlayerName = `${playerName}`
-  if(indexTeamPrefix>=0) {
-    updatedPlayerName = `${playerName.substring(0,indexTeamPrefix)}${playerName.substring(indexTeamPrefix+teamPrefixToRemove.length)}`
-  }
-  return updatedPlayerName
-}
-
-const addPlayerPrefix = (teamShortName, playerName) => {
-  return `${teamShortName} | ${playerName}`
-}
 
 const getTeamsCollection = async () => {
   await client.connect();
@@ -110,6 +101,10 @@ function start() {
         if(data.name==="editplayer"){
           return autoCompleteNation(data, res)
         }
+        if(data.name === "nationalteam"){
+          return autoCompleteNation(data, res)
+        }
+        return autoCompleteNation(data, res)
       }
 
       if (type === InteractionType.APPLICATION_COMMAND) {
@@ -140,6 +135,10 @@ function start() {
 
         if(process.env.GUILD_ID === guild_id) {
           if (name === "player") {
+            return player(commandOptions)
+          }
+
+          if (name==="myplayer") {
             return player(commandOptions)
           }
 
@@ -177,6 +176,26 @@ function start() {
 
           if (name === "matches") {
             return matches(commandOptions)
+          }
+
+          if(name === "nationalteam") {
+            return nationalTeam(commandOptions)
+          }
+
+          if(name === "allnationalteams") {
+            return allNationalTeams(commandOptions)
+          }
+
+          if(name === "postnationalteams") {
+            return postNationalTeams(commandOptions)
+          }
+
+          if(name === "addselection") {
+            return addSelection(commandOptions)
+          }
+
+          if(name === "removeselection") {
+            return removeSelection(commandOptions)
           }
 
           if(name === "teams") {
@@ -550,6 +569,21 @@ function start() {
       }
     });
   }
+  const job = new CronJob(
+    '0 9 * * *',
+    async function() {
+      const response = await getMatchesOfDay({date:'today', dbClient})
+      await DiscordRequest(matchesWebhook, {
+        method: 'POST',
+        body: {
+          content: response.substring(0, 1999),
+        }
+      })
+    },
+    null,
+    true,
+    'Europe/London'
+  );
 }
 
 start()

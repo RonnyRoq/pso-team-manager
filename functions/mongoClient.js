@@ -10,7 +10,7 @@ const mongoClient = (client) => {
         matches : psoDb.collection("Matches"),
         nationalities: psoDb.collection("Nationalities"),
       }
-      await callback(collections)
+      return await callback(collections)
     }
     finally {
       db.close()

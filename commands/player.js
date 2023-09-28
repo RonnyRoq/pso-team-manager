@@ -1,7 +1,8 @@
 import { InteractionResponseType } from "discord-interactions"
 import { DiscordRequest } from "../utils.js"
-import { getPlayerNick } from "../functions/helpers.js"
+import { getPlayerNick, sleep } from "../functions/helpers.js"
 import { countries } from "../config/countriesConfig.js"
+import { getAllPlayers } from "../functions/playersCache.js"
 
 const nationalTeamPlayerRole = '1103327647955685536'
 const staffRoles = ['1081886764366573658', '1072210995927339139', '1072201212356726836']
@@ -120,6 +121,35 @@ export const editPlayer = async ({options=[], member, callerId, interaction_id, 
   })
 }
 
+const getPlayersList = async(totalPlayers, teamToList, displayCountries, players) => {
+  const teamPlayers = totalPlayers.filter((player) => player.roles.includes(teamToList)).sort((playerA, playerB) => {
+    const aManager = playerA.roles.includes(clubManagerRole)
+    const bManager = playerB.roles.includes(clubManagerRole)
+    if(aManager === bManager) {
+      return playerA.nick.localeCompare(playerB.nick)
+    } else if (aManager) {
+      return -1
+    } else {
+      return 1
+    }
+  })
+  const userIds = teamPlayers.map(({user})=> user.id)
+  const knownPlayers = await players.find({$or: userIds.map(id => ({id}))}).toArray()
+  const displayPlayers = teamPlayers.map((player) => {
+    const foundPlayer = knownPlayers.find(({id})=> id === player.user.id) || {}
+    return({
+      ...player,
+      ...foundPlayer,
+      isManager: player.roles.includes(clubManagerRole)
+    })
+  })
+  let response = `<@&${teamToList}> players: ${displayPlayers.length}/30${displayPlayers.length>30? '\r## Too many players':''}\r`
+  response += `${displayPlayers.map(({ user, nat1, nat2, nat3, rating, isManager }) => 
+    `${isManager?':crown:':''}${nat1?displayCountries[nat1]:''}${nat2?displayCountries[nat2]:''}${nat3?displayCountries[nat3]:''}<@${user.id}>${rating? ` [${rating}]`:''}`
+  ).join('\r')}`
+  return response
+}
+
 export const allPlayers = async ({guild_id, member, interaction_id, application_id, token, options, dbClient}) => {
   await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
     method: 'POST',
@@ -130,23 +160,50 @@ export const allPlayers = async ({guild_id, member, interaction_id, application_
       }
     }
   })
-  let lastId = 0
-  let totalPlayers = []
-  let currentPlayers = []
-  let i=0
-  do{
-    const playersResp = await DiscordRequest(`/guilds/${guild_id}/members?limit=1000&after=${lastId}`, { method: 'GET' })
-    currentPlayers= await playersResp.json()
-    totalPlayers = totalPlayers.concat(currentPlayers)
-    i++
-    lastId = currentPlayers[currentPlayers.length-1].user.id
-  } while (currentPlayers.length === 1000 && i<5) // wont support more than 5000 players.
-
+  const allPlayers = await getAllPlayers(guild_id)
+  const embeds = await dbClient(async ({teams, players, nationalities})=>{
+    const allTeams = await teams.find({active: true}).toArray()
+    const allNations = await nationalities.find({}).toArray()
+    const displayCountries = Object.fromEntries(allNations.map(({name, flag})=> ([name, flag])))
+    
+    const embeds = []
+    let currentEmbed =''
+    let i = 0
+    for(const team of allTeams) {
+      currentEmbed += await getPlayersList(allPlayers, team.id, displayCountries, players) +'\r\r'
+      i++
+      if(i > 4) {
+        i=0
+        console.log(currentEmbed.length)
+        embeds.push({
+          title: 'PSAF Players',
+          description: currentEmbed
+        })
+        await DiscordRequest('/channels/1150376229178978377/messages', {
+          method: 'POST',
+          body: {
+            embeds: [{title: 'PSAF Players', description: currentEmbed}]
+          }
+        })
+        await sleep(1000)
+        currentEmbed = ''
+      }
+    }
+    if(i!== 0) {
+      await DiscordRequest('/channels/1150376229178978377/messages', {
+        method: 'POST',
+        body: {
+          embeds: [{title: 'PSAF Players', description: currentEmbed}]
+        }
+      })
+    }
+    return []
+  })
 
   return await DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
     method: 'PATCH',
     body: {
-      content: totalPlayers.length,
+      content: 'done',
       flags: 1 << 6
     }
   })
@@ -162,18 +219,7 @@ export const players = async ({guild_id, member, interaction_id, application_id,
       }
     }
   })
-  let lastId = 0
-  let totalPlayers = []
-  let currentPlayers = []
-  let i=0
-  do{
-    const playersResp = await DiscordRequest(`/guilds/${guild_id}/members?limit=1000&after=${lastId}`, { method: 'GET' })
-    currentPlayers= await playersResp.json()
-    totalPlayers = totalPlayers.concat(currentPlayers)
-    i++
-    lastId = currentPlayers[currentPlayers.length-1].user.id
-  } while (currentPlayers.length === 1000 && i<5) // wont support more than 5000 players.
-  
+  const totalPlayers = await getAllPlayers(guild_id)
   const [role] = options || []
   let roles = []
   let response = "No team found"
@@ -182,45 +228,18 @@ export const players = async ({guild_id, member, interaction_id, application_id,
   } else {
     roles = [{id: role.value}]
   }
-  let teamToList = ''
-  let knownPlayers = []
-  return await dbClient(async ({teams, players, nationalities})=> {
+  response = await dbClient(async ({teams, players, nationalities})=> {
     const team = await teams.findOne({active:true, $or:roles})
     const allNations = await nationalities.find({}).toArray()
     const displayCountries = Object.fromEntries(allNations.map(({name, flag})=> ([name, flag])))
-    teamToList = team.id
-    const teamPlayers = totalPlayers.filter((player) => player.roles.includes(teamToList)).sort((playerA, playerB) => {
-      const aManager = playerA.roles.includes(clubManagerRole)
-      const bManager = playerB.roles.includes(clubManagerRole)
-      if(aManager === bManager) {
-        return playerA.nick.localeCompare(playerB.nick)
-      } else if (aManager) {
-        return -1
-      } else {
-        return 1
-      }
-    })
-    const userIds = teamPlayers.map(({user})=> user.id)
-    knownPlayers = await players.find({$or: userIds.map(id => ({id}))}).toArray()
-    const displayPlayers = teamPlayers.map((player) => {
-      const foundPlayer = knownPlayers.find(({id})=> id === player.user.id) || {}
-      return({
-        ...player,
-        ...foundPlayer,
-        isManager: player.roles.includes(clubManagerRole)
-      })
-    })
-    response = `<@&${teamToList}> players:\r`
-    response += `${displayPlayers.map(({ user, nat1, nat2, nat3, rating, isManager }) => 
-      `${isManager?':crown:':''}${nat1?displayCountries[nat1]:''}${nat2?displayCountries[nat2]:''}${nat3?displayCountries[nat3]:''}<@${user.id}>${rating? ` [${rating}]`:''}`
-    ).join('\r')}`
-    return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-      method: 'PATCH',
-      body: {
-        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        content: response,
-      }
-    })
+    return getPlayersList(totalPlayers, team.id, displayCountries, players)
+  })
+  return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
+    method: 'PATCH',
+    body: {
+      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      content: response,
+    }
   })
 }
 
@@ -233,6 +252,12 @@ export const playerCmd = {
     name: 'player',
     description: 'Player'
   }]
+}
+
+export const myPlayerCmd = {
+  name: 'myplayer',
+  description: 'Show player details',
+  type: 1
 }
 
 export const allPlayersCmd = {
@@ -264,7 +289,6 @@ export const autoCompleteNation = ({options}, res) => {
       choices : countryChoices.map(({name})=> ({name: name, value: name}))
     }
   })
-   
 }
 
 export const editPlayerCmd = {
@@ -274,7 +298,8 @@ export const editPlayerCmd = {
   options: [{
     type: 6,
     name: 'player',
-    description: 'Player'
+    description: 'Player',
+    required: true,
   },{
     type: 3,
     name: 'nat1',

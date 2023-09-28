@@ -18,6 +18,7 @@ export const optionToTimezoneStr = (option = 0) => {
       return "BST";
   }
 }
+
 export const getPlayerNick = (player) => 
   player.nick || player.user.global_name || player.user.username
 
@@ -32,8 +33,19 @@ export const removePlayerPrefix = (teamShortName, playerName) => {
 }
 
 export const addPlayerPrefix = (teamShortName, playerName) => {
-  return `${teamShortName} | ${playerName}`
+  let prefix = ''
+  let displayName = playerName
+  if(playerName.startsWith('⭐')) {
+    displayName = playerName.substring(1)
+    displayName = displayName.trimStart()
+    prefix = '⭐ '
+  }
+  return `${prefix}${teamShortName} | ${playerName}`
 }
+
+export const setInternational = (playerName) => playerName.startsWith('⭐ ') ? playerName : `⭐ ${playerName}`
+
+export const removeInternational = (playerName) => playerName.startsWith('⭐ ') ? playerName.substring(2) : playerName
 
 export const getPlayerTeam = (player, teams) => 
   teams.findOne({active:true, $or:player.roles.map(role=>({id:role}))})
