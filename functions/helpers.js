@@ -8,14 +8,13 @@ export const msToTimestamp = (ms) => {
 }
 
 export const optionToTimezoneStr = (option = 0) => {
-  const today = new Date()
   switch (option) {
     case 1:
       return "CET";
     case 2:
       return "EEST";
     default:
-      return "BST";
+      return "UK";
   }
 }
 
@@ -40,7 +39,7 @@ export const addPlayerPrefix = (teamShortName, playerName) => {
     displayName = displayName.trimStart()
     prefix = '⭐ '
   }
-  return `${prefix}${teamShortName} | ${playerName}`
+  return `${prefix}${teamShortName} | ${displayName}`
 }
 
 export const setInternational = (playerName) => playerName.startsWith('⭐ ') ? playerName : `⭐ ${playerName}`
@@ -50,11 +49,12 @@ export const removeInternational = (playerName) => playerName.startsWith('⭐ ')
 export const getPlayerTeam = (player, teams) => 
   teams.findOne({active:true, $or:player.roles.map(role=>({id:role}))})
 
-export const displayTeam = (team) => (
+export const displayTeam = (team, noLogo) => (
   `Team: ${team.flag} ${team.emoji} ${team.name} - ${team.shortName}` +
-  `\rBudget: ${new Intl.NumberFormat('en-US').format(team.budget)}` +
-  `\rCity: ${team.city}` +
-  `\rPalmarès: ${team.description}`
+  `\r> Budget: ${new Intl.NumberFormat('en-US').format(team.budget)}` +
+  `\r> City: ${team.city}` +
+  `\r> Palmarès: ${team.description || 'None'}` +
+  `${noLogo ? '': `\r> Logo: ${team.logo || 'None'}`}`
 )
 
 export const genericFormatMatch = (teams, match) => {
@@ -71,3 +71,7 @@ export const sleep = (ms) => {
     setTimeout(resolve, ms);
   });
 }
+
+export const getCurrentSeason = async (seasons) => (await seasons.findOne({endedAt: null}))?.season
+
+export const optionsToObject = (options) => Object.fromEntries(options.map(({name, value})=> [name, value]))

@@ -5,23 +5,34 @@ import https from 'https';
 import fs from 'fs';
 import {
   InteractionType,
-  InteractionResponseType
+  InteractionResponseType,
+  InteractionResponseFlags
 } from 'discord-interactions';
+import DiscordOauth2 from 'discord-oauth2';
 import { MongoClient, ServerApiVersion } from 'mongodb';
 import { CronJob } from 'cron';
 import { VerifyDiscordRequest, DiscordRequest } from './utils.js';
 import mongoClient from './functions/mongoClient.js';
 import { now } from './commands/now.js';
 import { timestamp } from './commands/timestamp.js';
-import { help } from './commands/help.js';
-import { boxLineup, lineup } from './commands/lineup.js';
+import { help, helpAdmin } from './commands/help.js';
+import { boxLineup, eightLineup, internationalLineup, lineup } from './commands/lineup.js';
 import { allPlayers, autoCompleteNation, editPlayer, player, players } from './commands/player.js';
 import { team } from './commands/team.js';
-import { editMatch, endMatch, getMatchesOfDay, match, matchId, matches, publishMatch } from './commands/match.js';
-import { initCountries, systemTeam } from './commands/system.js';
-import { editTeam } from './commands/editTeam.js';
+import { editInterMatch, editMatch, endMatch, getMatchesOfDay, internationalMatch, match, matchId, matches, publishMatch } from './commands/match.js';
+import { blacklistTeam, doubleContracts, emoji, initCountries, systemTeam } from './commands/system.js';
+import { activateTeam, editTeam } from './commands/editTeams.js';
 import { addSelection, allNationalTeams, nationalTeam, postNationalTeams, removeSelection } from './commands/nationalTeam.js';
-import { addPlayerPrefix, removePlayerPrefix } from './functions/helpers.js';
+import { confirm, pendingConfirmations } from './commands/confirm.js';
+import { approveDealAction, declineDealAction } from './commands/confirmations/actions.js';
+import componentRegister from './componentsRegister.js'
+import commandsRegister from './commandsRegister.js';
+import { freePlayer, renew, setContract, teamTransfer, transfer } from './commands/transfers.js';
+import { innerUpdateTeam, postAllTeams, postTeam, updateTeamPost } from './commands/postTeam.js';
+import { sleep } from './functions/helpers.js';
+import { deal } from './commands/confirmations/deal.js';
+import { listDeals } from './commands/confirmations/listDeals.js';
+import { showBlacklist } from './commands/blacklist.js';
 
 const keyPath = process.env.CERTKEY;
 const certPath = process.env.CERT;
@@ -43,7 +54,6 @@ const client = new MongoClient(uri, {
 const dbClient = mongoClient(client)
 let credentials = {}
 
-const clubPlayerRole = '1072620805600592062'
 const webHookDetails = process.env.WEBHOOK
 const matchesWebhook = process.env.MATCHESWEBOOK
 
@@ -53,10 +63,6 @@ if(online){
   credentials = {key: privateKey, cert: certificate};
 }
 
-const getPlayerNick = (player) => 
-  player.nick || player.user.global_name || player.user.username
-
-
 const getTeamsCollection = async () => {
   await client.connect();
   const psoTeams = client.db("PSOTeamManager");
@@ -64,10 +70,11 @@ const getTeamsCollection = async () => {
 }
 
 const displayTeam = (team) => (
-  `Team: ${team.flag} ${team.emoji} ${team.name} - ${team.shortName}` +
+  `Team: $+{team.flag} ${team.emoji} ${team.name} - ${team.shortName}` +
   `\rBudget: ${new Intl.NumberFormat('en-US').format(team.budget)}` +
   `\rCity: ${team.city}` +
-  `\rPalmarès: ${team.description}`
+  `\rPalmarès: ${team.description}` +
+  `\rLogo: ${team.logo}`
 )
 
 function start() {
@@ -79,22 +86,56 @@ function start() {
   // Parse request body and verifies incoming requests using discord-interactions package
   app.use(express.json({ verify: VerifyDiscordRequest(process.env.PUBLIC_KEY) }));
 
-
+  const oauth = new DiscordOauth2({
+    clientId: process.env.APP_ID,
+    clientSecret: process.env.PUBLIC_KEY,
+    redirectUri: "https://pso.shinmugen.net",
+  });
   app.get('/', async function (req, res) {
     return res.send('<p>no thank you</p>')
   })
+
+  app.get('/matches', async (req, res) => {
+    const response = await getMatchesOfDay({date: 'today', dbClient})
+    return res.send(response)
+  })
+
   /**
    * Interactions endpoint URL where Discord will send HTTP requests
    */
   app.post('/interactions', async function (req, res) {
     // Interaction type and data
-    const { type, member, id:interaction_id, application_id, token, data, guild_id } = req.body;
+    const { type, member, id:interaction_id, application_id, channel_id, token, data, guild_id } = req.body;
 
     const callerId = member?.user?.id
 
     try {
       if (type === InteractionType.PING) {
         return res.send({ type: InteractionResponseType.PONG });
+      }
+
+      if(type === InteractionType.MESSAGE_COMPONENT) {
+        const { message } = req.body
+        const { custom_id } = data
+        if(guild_id === process.env.GUILD_ID) {
+          const componentOptions = {custom_id, callerId, member, message, interaction_id, application_id, channel_id, token, guild_id, dbClient}
+          if(componentRegister[custom_id]) {
+            return componentRegister[custom_id](componentOptions)
+          }
+          if(custom_id.startsWith("approve_deal_")) {
+            return approveDealAction(componentOptions)
+          }
+          if(custom_id.startsWith("decline_deal_")) {
+            return declineDealAction(componentOptions)
+          }
+          return res.send({
+            type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              content: 'Failed to process the command.',
+              flags: InteractionResponseFlags.EPHEMERAL
+            }
+          })
+        }
       }
 
       if (type === InteractionType.APPLICATION_COMMAND_AUTOCOMPLETE) {
@@ -111,7 +152,7 @@ function start() {
         const { name, options } = data;
 
         const commandOptions = {
-          name, options, member, interaction_id, application_id, token, guild_id, callerId, res, dbClient
+          name, options, member, interaction_id, application_id, channel_id, token, guild_id, callerId, res, dbClient
         }
 
         if (name === 'help') {
@@ -133,9 +174,21 @@ function start() {
           return lineup(commandOptions)
         }
 
+        if(name === "eightlineup") {
+          return eightLineup(commandOptions)
+        }
+
         if(process.env.GUILD_ID === guild_id) {
+          if(commandsRegister[name]) {
+            return commandsRegister[name](commandOptions)
+          }
+          
           if (name === "player") {
             return player(commandOptions)
+          }
+
+          if(name === "interlineup") {
+            return internationalLineup(commandOptions)
           }
 
           if (name==="myplayer") {
@@ -164,6 +217,14 @@ function start() {
 
           if (name === "endmatch") {
             return endMatch(commandOptions)
+          }
+
+          if (name === "intermatch") {
+            return internationalMatch(commandOptions)
+          }
+
+          if (name === "editintermatch") {
+            return editInterMatch(commandOptions);
           }
 
           if (name === "publishmatch") {
@@ -198,6 +259,38 @@ function start() {
             return removeSelection(commandOptions)
           }
 
+          if(name === "confirm") {
+            return confirm(commandOptions)
+          }
+
+          if(name === "updateconfirm") {
+            return pendingConfirmations(commandOptions)
+          }
+
+          if(name === "renew") {
+            return renew(commandOptions)
+          }
+
+          if(name === "postteam") {
+            return postTeam(commandOptions)
+          }
+
+          if(name === "setcontract") {
+            return setContract(commandOptions)
+          }
+
+          if(name === "blacklistteam") {
+            return blacklistTeam(commandOptions)
+          }
+
+          if(name === "showblacklist") {
+            return showBlacklist(commandOptions)
+          }
+
+          if(name ==="helpadmin") {
+            return helpAdmin(commandOptions)
+          }
+
           if(name === "teams") {
             let teamsResponse = []
             try {
@@ -210,7 +303,7 @@ function start() {
                 const allTeams = teams.find(query)
                 let i=0
                 for await (const team of allTeams) {
-                  if(i>5) {
+                  if(i>3) {
                     teamsResponse.push(currentResponse)
                     i=0
                     currentResponse =''
@@ -229,160 +322,37 @@ function start() {
               "title": "PSAF Teams",
               "description": teamResponse,
             }))
-            return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-              method: 'POST',
-              body: {
-                type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: { embeds : teamsEmbed},
-                flags: 1 << 6
-              }
+            teamsEmbed.forEach(async (teamEmbed) => {
+              await DiscordRequest(`/channels/${channel_id}/messages`, {
+                method: 'POST',
+                body: {
+                  type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                  embeds : [teamEmbed],
+                }
+              })
+              await sleep(500)
             })
+            return 
           }
 
           if (name === "transfer") {
-            let response = "No transfer happened"
-            const [playeroption, role, desc] = options
-            try {
-              const teams = await getTeamsCollection();
-              const [team, playerResp] = await Promise.all([
-                teams.findOne({id: role.value}),
-                DiscordRequest(`/guilds/${guild_id}/members/${playeroption.value}`, {})
-              ])
-              const player = await playerResp.json();
-              const playerName = getPlayerNick(player);
-              const updatedPlayerName = addPlayerPrefix(team.shortName, playerName)
-              const payload= {
-                nick: updatedPlayerName,
-                roles: [...player.roles.filter(role => role !==clubPlayerRole), role.value, clubPlayerRole]
-              }
-              await DiscordRequest(`guilds/${guild_id}/members/${playeroption.value}`, {
-                method: 'PATCH',
-                body: payload
-              })
-            
-              const log = `<@${player.user.id}> joined <@&${team.id}>${desc?.value ? `\r${desc.value}\r`: ' '}(from <@${callerId}>)`
-              response = log
-              await DiscordRequest(webHookDetails, {
-                method: 'POST',
-                body: {
-                  content: log
-                }
-              })
-            } finally {
-              // Ensures that the client will close when you finish/error
-              await client.close();
-            }
-            return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-              method: 'POST',
-              body: {
-                type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: {
-                  content: response,
-                  flags: 1 << 6
-                }
-              }
-            })
+            return transfer(commandOptions)
           }
 
           if(name === "teamtransfer") {
-            let response = "No transfer happened"
-            const [playeroption, roleTo, amount, reason] = options
-
-            try {
-              const teams = await getTeamsCollection();
-              const [teamTo, playerResp] = await Promise.all([
-                teams.findOne({id: roleTo.value}),
-                DiscordRequest(`/guilds/${guild_id}/members/${playeroption.value}`, {})
-              ])
-              const player = await playerResp.json();
-              const teamFrom = await teams.findOne({active:true, $or:player.roles.map(role=>({id:role}))})
-              const playerName = player.nick
-              
-              const updatedPlayerName = addPlayerPrefix(teamTo.shortName, removePlayerPrefix(teamFrom.shortName, playerName))
-              const payload= {
-                nick: updatedPlayerName,
-                roles: [...new Set([...player.roles.filter(role => role!==teamFrom.id), roleTo.value, clubPlayerRole])]
-              }
-              Promise.all([
-                await DiscordRequest(`guilds/${guild_id}/members/${playeroption.value}`, {
-                  method: 'PATCH',
-                  body: payload
-                }),
-                teams.updateOne({id: teamTo.id}, {$set: {budget: teamTo.budget-amount.value}}),
-                teams.updateOne({id: teamFrom.id}, {$set: {budget: teamFrom.budget+amount.value}}),
-              ])
-              const log = `<@${player.user.id}> left <@&${teamFrom.id}> joined <@&${teamTo.id}> for ${new Intl.NumberFormat('en-US').format(amount.value)} EBits${reason?.value ? `\r${reason.value}\r`: ' '}(from <@${callerId}>)`
-              response = log
-              await DiscordRequest(webHookDetails, {
-                method: 'POST',
-                body: {
-                  content: log
-                }
-              })
-            } finally {
-              // Ensures that the client will close when you finish/error
-              await client.close();
-            }
-            return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-              method: 'POST',
-              body: {
-                type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: {
-                  content: response,
-                  flags: 1 << 6
-                }
-              }
-            })
+            return teamTransfer(commandOptions)
           }
 
           if(name === "freeplayer") {
-            let response = "No transfer happened"
-            const [playeroption, role] = options
-            try {
-              const teams = await getTeamsCollection();
-              const [team, playerResp] = await Promise.all([
-                teams.findOne({id: role.value}),
-                DiscordRequest(`/guilds/${guild_id}/members/${playeroption.value}`, {})
-              ])
-              const player = await playerResp.json();
-              const playerName = player.nick || player.user.global_name || player.user.username
-              const teamPrefixToRemove = `${team.shortName} |`
-              const indexTeamPrefix = playerName.indexOf(teamPrefixToRemove)
-              let updatedPlayerName = `${playerName}`
-              if(indexTeamPrefix>=0) {
-                updatedPlayerName = `${playerName.substring(0,indexTeamPrefix)}${playerName.substring(indexTeamPrefix+teamPrefixToRemove.length)}`
-              }
-              
-              const payload= {
-                nick: updatedPlayerName,
-                roles: player.roles.filter(playerRole=> playerRole.includes(role.value, '1072620805600592062'))
-              }
-              await DiscordRequest(`guilds/${guild_id}/members/${playeroption.value}`, {
-                method: 'PATCH',
-                body: payload
-              })
-              const log = `<@${player.user.id}> released from <@&${team.id}> (from <@${callerId}>)`
-              response = log
-              await DiscordRequest(webHookDetails, {
-                method: 'POST',
-                body: {
-                  content: log
-                }
-              })
-            } finally {
-              await client.close();
-            }
-            return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-              method: 'POST',
-              body: {
-                type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: {
-                  content: response,
-                  flags: 1 << 6
-                }
-              }
-            })
+            return freePlayer(commandOptions)
+          }
 
+          if(name === "deal") {
+            return deal(commandOptions)
+          }
+
+          if(name === "listdeals") {
+            return listDeals(commandOptions)
           }
 
           if (name === "fine") {
@@ -450,6 +420,9 @@ function start() {
               }
             })
           }
+          if (name === "activateteam") {
+            return activateTeam(commandOptions)
+          }
 
           if (name === "initteam") {
             const rolesResp = await DiscordRequest(`/guilds/${guild_id}/roles`, {})
@@ -458,7 +431,7 @@ function start() {
             let response = "Failed to insert teams"
             try {
               const teams = await getTeamsCollection();
-              const team = await teams.insertMany(roles.map(role => (
+              await teams.insertMany(roles.map(role => (
                 {
                   ...role,
                   active: false,
@@ -488,7 +461,15 @@ function start() {
           }
 
           if (name==="editteam") {
-            editTeam(commandOptions)
+            return editTeam(commandOptions)
+          }
+
+          if(name === "postallteams") {
+            return postAllTeams(commandOptions)
+          }
+
+          if(name === "updateteam") {
+            return updateTeamPost(commandOptions)
           }
 
           if(name === "initcountries") {
@@ -498,6 +479,15 @@ function start() {
           if (name === "players") {
             return players(commandOptions)
           }
+
+          if(name === "doublecontracts") {
+            return doubleContracts(commandOptions)
+          }
+
+          if(name === 'emoji') {
+            return emoji(commandOptions)
+          }
+
           if (name ==='emojis') {
             const emojisResp = await DiscordRequest(`/guilds/${guild_id}/emojis`, { method: 'GET' })
             const emojis = await emojisResp.json()
@@ -508,7 +498,7 @@ function start() {
                 type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
                 data: {
                   content: `${emojis.length} listed`,
-                  flags: 1 << 6
+                  flags: InteractionResponseFlags.EPHEMERAL
                 }
               }
             })
@@ -532,6 +522,7 @@ function start() {
   });
 
 
+  let allActiveTeams = []
   var httpServer = http.createServer(app);
   httpServer.listen(PORT, async ()=> {
     console.log('Listening http on port', PORT);
@@ -560,6 +551,10 @@ function start() {
         // Send a ping to confirm a successful connection
         await client.db("PSOTeams").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        dbClient(async ({teams})=> {
+          allActiveTeams = await teams.find({active: true}).toArray()
+          allActiveTeams.sort(() => Math.random() - 0.5)
+        })
       }
       catch(e){
         console.error(e)
@@ -569,7 +564,7 @@ function start() {
       }
     });
   }
-  const job = new CronJob(
+  new CronJob(
     '0 9 * * *',
     async function() {
       const response = await getMatchesOfDay({date:'today', dbClient})
@@ -584,6 +579,23 @@ function start() {
     true,
     'Europe/London'
   );
+  let currentTeamIndex = 0
+  new CronJob(
+    '*/5 7-22 * * *',
+    async function() {
+      if(allActiveTeams.length > 0) {
+        await innerUpdateTeam({guild_id: process.env.GUILD_ID, team: allActiveTeams[currentTeamIndex]?.id, dbClient})
+        console.log(`${allActiveTeams[currentTeamIndex].name} updated.`)
+        currentTeamIndex++
+        if(currentTeamIndex>= allActiveTeams.length) {
+          currentTeamIndex = 0
+        }
+      }
+    },
+    null, 
+    true, 
+    'Europe/London'
+  )
 }
 
 start()

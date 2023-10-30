@@ -9,6 +9,10 @@ const mongoClient = (client) => {
         players : psoDb.collection("Players"),
         matches : psoDb.collection("Matches"),
         nationalities: psoDb.collection("Nationalities"),
+        confirmations: psoDb.collection("Confirmations"),
+        contracts: psoDb.collection("Contracts"),
+        seasonsCollect: psoDb.collection("Seasons"),
+        pendingDeals: psoDb.collection("PendingDeals"),
       }
       return await callback(collections)
     }

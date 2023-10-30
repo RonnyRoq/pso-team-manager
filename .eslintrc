@@ -1,0 +1,18 @@
+{
+  "env": {
+      "browser": false,
+      "es6": true,
+      "es2021": true,
+      "node": true
+  },
+  "globals": {
+    "process": "readonly",
+    "Intl": "readonly",
+    "console": "readonly"
+  },
+  "extends": "eslint:recommended",
+  "parserOptions": {
+      "ecmaVersion": "latest",
+      "sourceType": "module"
+  },
+}

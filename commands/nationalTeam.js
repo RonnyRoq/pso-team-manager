@@ -1,10 +1,11 @@
-import { InteractionResponseType } from "discord-interactions"
+import { InteractionResponseType, InteractionResponseFlags } from "discord-interactions"
 import { DiscordRequest } from "../utils.js"
 import { getAllPlayers } from "../functions/playersCache.js"
 import { getPlayerNick, removeInternational, setInternational, sleep } from "../functions/helpers.js"
 
 const nationalTeamPlayerRole = '1103327647955685536'
 const nationalTeamCaptainRole = '1103327640942809108'
+const matchBlacklistRole = '1095055617703543025'
 
 const getNationalTeamPostInsideDb = async (allPlayers, players, nation) => {
   const countryPlayers = await players.find({nat1: nation.name}, {projection: {id:1}}).toArray()
@@ -13,7 +14,7 @@ const getNationalTeamPostInsideDb = async (allPlayers, players, nation) => {
     const aManager = playerA.roles.includes(nationalTeamCaptainRole)
     const bManager = playerB.roles.includes(nationalTeamCaptainRole)
     if(aManager === bManager) {
-      return playerA.nick.localeCompare(playerB.nick)
+      return getPlayerNick(playerA).localeCompare(getPlayerNick(playerB))
     } else if (aManager) {
       return -1
     } else {
@@ -21,7 +22,7 @@ const getNationalTeamPostInsideDb = async (allPlayers, players, nation) => {
     }
   })
   let response = `### ${nation.flag} - ${nation.name} ${teamPlayers.length}/18\r`
-  response += teamPlayers.map(player => `> ${player.roles.includes(nationalTeamCaptainRole) ? ':crown: ':''}<@${player.user.id}>`).join('\r')
+  response += teamPlayers.map(player => `> ${player.roles.includes(nationalTeamCaptainRole) ? ':crown: ':''}${player.roles.includes(matchBlacklistRole)? ':no_entry_sign:':''}<@${player.user.id}>`).join('\r')
   return {response, length:teamPlayers.length}
 }
 
@@ -31,6 +32,28 @@ const getNationalTeamPost = async ({country, guild_id, dbClient}) => {
     const nation = await nationalities.findOne({name: country})
     return await getNationalTeamPostInsideDb(allPlayers, players, nation)
   })
+}
+
+export const updateNationalTeam = async ({guild_id, nation, players, nationalities})=> {
+  const allPlayers = await getAllPlayers(guild_id)
+  const {response, length} = await getNationalTeamPostInsideDb(allPlayers, players, nation)
+  if(nation.messageId) {
+    await DiscordRequest(`/channels/1091749687356297307/messages/${nation.messageId}`, {
+      method: 'PATCH',
+      body: {
+        content: response
+      }
+    })
+  } else if(length>0) {
+    const postResponse = await DiscordRequest('/channels/1091749687356297307/messages', {
+      method: 'POST',
+      body: {
+        content: response
+      }
+    })
+    const message = await postResponse.json()
+    await nationalities.updateOne({name: nation.name}, {$set: {messageId: message.id}})
+  }
 }
 
 export const nationalTeam = async ({options, interaction_id, guild_id, application_id, token, dbClient}) => {
@@ -92,18 +115,28 @@ export const allNationalTeams =  async ({interaction_id, guild_id, application_i
   })
 }
 
-export const postNationalTeams = async({application_id, interaction_id, guild_id, token, dbClient}) => {
+export const postNationalTeams = async({application_id, interaction_id, guild_id, token, dbClient, options}) => {
   await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
     method: 'POST',
     body: {
       type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
-        content: 'Searching...',
-        flags: 1 << 6
+        flags: InteractionResponseFlags.EPHEMERAL
       }
     }
   })
-  await updateNationalTeams({guild_id, dbClient})
+  const updateFunction = (team) => {
+    DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
+      method: 'PATCH',
+      body: {
+        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        content: `Updated ${team}`,
+      }
+    })
+  }
+  const {country} = Object.fromEntries(options.map(({name, value})=> [name, value]))
+
+  await updateNationalTeams({guild_id, dbClient, updateFunction, country})
 
   return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
     method: 'PATCH',
@@ -114,23 +147,24 @@ export const postNationalTeams = async({application_id, interaction_id, guild_id
   })
 }
 
-export const updateNationalTeams = async({guild_id, dbClient}) => {
+export const updateNationalTeams = async({guild_id, dbClient, updateFunction, country}) => {
   const allPlayers = await getAllPlayers(guild_id)
   await dbClient(async ({players, nationalities})=>{
     const allNations = nationalities.find({})
     for await(const nation of allNations) {
+      if(nation.name !== country)
+        continue
       const {response, length} = await getNationalTeamPostInsideDb(allPlayers, players, nation)
       if(length>0) {
-        let postResponse
         if(nation.messageId) {
-          postResponse = await DiscordRequest(`/channels/1091749687356297307/messages/${nation.messageId}`, {
+          await DiscordRequest(`/channels/1091749687356297307/messages/${nation.messageId}`, {
             method: 'PATCH',
             body: {
               content: response
             }
           })
         } else {
-          postResponse = await DiscordRequest('/channels/1091749687356297307/messages', {
+          const postResponse = await DiscordRequest('/channels/1091749687356297307/messages', {
             method: 'POST',
             body: {
               content: response
@@ -139,7 +173,8 @@ export const updateNationalTeams = async({guild_id, dbClient}) => {
           const message = await postResponse.json()
           await nationalities.updateOne({name: nation.name}, {$set: {messageId: message.id}})
         }
-        await sleep(2000)
+        updateFunction(nation.name)
+        await sleep(1000)
       }
     }
   })
@@ -160,8 +195,8 @@ export const addSelection = async ({options, dbClient, guild_id, application_id,
   const discordPlayer = await discordPlayerResp.json()
   const response = await dbClient(async ({players, nationalities}) => {
     const foundPlayer = await players.findOne({id: player})
-    const playerCountry = await nationalities.findOne({name: country})
-    if(foundPlayer && foundPlayer.nat1 === playerCountry.name) {
+    const nation = await nationalities.findOne({name: country})
+    if(foundPlayer && foundPlayer.nat1 === nation.name) {
       const nick = setInternational(getPlayerNick(discordPlayer))
       await Promise.all([
         DiscordRequest(`/guilds/${guild_id}/members/${player}`, {
@@ -173,6 +208,7 @@ export const addSelection = async ({options, dbClient, guild_id, application_id,
         }),
         players.updateOne({id:player}, {$set: {nick}})
       ])
+      await updateNationalTeam({guild_id, nation, nationalities, players})
       return `<@${player}> added in ${country}'s national team`
     }
     return 'Did not add player - did you check if he\'s eligible?'
@@ -200,9 +236,9 @@ export const removeSelection = async ({options, dbClient, guild_id, application_
   const {player} = Object.fromEntries(options.map(({name, value})=> [name, value]))
   const discordPlayerResp = await DiscordRequest(`/guilds/${guild_id}/members/${player}`, {method: 'GET'})
   const discordPlayer = await discordPlayerResp.json()
-  const response = await dbClient(async ({players}) => {
+  const response = await dbClient(async ({players, nationalities}) => {
     const nick = removeInternational(getPlayerNick(discordPlayer))
-    await Promise.all([
+    const  [, dbPlayer] = await Promise.all([
       DiscordRequest(`/guilds/${guild_id}/members/${player}`, {
         method: 'PATCH',
         body: {
@@ -210,8 +246,10 @@ export const removeSelection = async ({options, dbClient, guild_id, application_
           nick
         }
       }),
-      players.updateOne({id: player}, {$set: {nick}}, {upsert: true})
+      players.findOneAndUpdate({id: player}, {$set: {nick}}, {returnDocument: 'after', upsert: true})
     ])
+    const nation = await nationalities.findOne({name: dbPlayer.nat1})
+    await updateNationalTeam({guild_id, nation, nationalities, players})
     return `<@${player}> removed from national teams`
   })
 
@@ -247,6 +285,12 @@ export const postNationalTeamsCmd = {
   name: 'postnationalteams',
   description: 'Post all national teams',
   type: 1,
+  options: [{
+    type: 3,
+    name: 'country',
+    description: 'Country to update',
+    autocomplete: true,
+  }]
 }
 
 export const addSelectionCmd = {

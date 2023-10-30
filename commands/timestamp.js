@@ -1,12 +1,11 @@
 import { InteractionResponseType } from "discord-interactions";
-import { optionToTimezoneStr, msToTimestamp } from "../functions/helpers.js"
+import { optionToTimezoneStr, msToTimestamp, optionsToObject } from "../functions/helpers.js"
 import { DiscordRequest } from "../utils.js"
 import * as chrono from 'chrono-node';
 
 export const timestamp = ({interaction_id, token, options}) => {
-  const [date, timezone = 0] = options
-  const strTimezone = optionToTimezoneStr(timezone.value)
-  const parsedDate = chrono.parseDate(date.value, { instance: new Date(), timezone: strTimezone })
+  const {date, timezone = 0} = optionsToObject(options)
+  const parsedDate = parseDate(date, timezone)
   const doubleParse = msToTimestamp(Date.parse(parsedDate))
   return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
     method: 'POST',
@@ -18,6 +17,18 @@ export const timestamp = ({interaction_id, token, options}) => {
       }
     }
   })
+}
+
+export const parseDate = (date, timezone) => {
+  const strTimezone = optionToTimezoneStr(timezone)
+  return chrono.parseDate(date, { instance: new Date(), timezone: strTimezone }, {
+    timezones: { 
+      "UK": {
+        timezoneOffsetDuringDst: 60,
+        timezoneOffsetNonDst: 0,
+        dstStart: (year) => chrono.getLastWeekdayOfMonth(year, chrono.Month.MARCH, chrono.Weekday.SUNDAY, 2),
+        dstEnd: (year) => chrono.getLastWeekdayOfMonth(year, chrono.Month.OCTOBER, chrono.Weekday.SUNDAY, 3),
+      }}})
 }
 
 export const timestampCmd = {

@@ -1,15 +1,21 @@
 import 'dotenv/config';
-import { InstallGlobalCommands } from './utils.js';
+import { InstallGlobalCommands, InstallGuildCommands } from './utils.js';
 import { nowCmd } from './commands/now.js';
 import { timestampCmd } from './commands/timestamp.js';
-import { helpCmd } from './commands/help.js';
-import { boxLineupcmd, lineupCmd } from './commands/lineup.js';
+import { helpAdminCmd, helpCmd } from './commands/help.js';
+import { boxLineupcmd, eightLineupCmd, internationalLineupCmd, lineupCmd } from './commands/lineup.js';
 import { teamCmd } from './commands/team.js';
-import { editMatchCmd, endMatchCmd, matchCmd, matchIdCmd, matchesCmd, publishMatchCmd } from './commands/match.js';
-import { initCountriesCmd, systemTeamCmd } from './commands/system.js';
-import { editTeamCmd } from './commands/editTeam.js';
+import { editInternationalMatchCmd, editMatchCmd, endMatchCmd, internationalMatchCmd, matchCmd, matchIdCmd, matchesCmd, publishMatchCmd } from './commands/match.js';
+import { blacklistTeamCmd, doubleContractsCmd, emojiCmd, initCountriesCmd, systemTeamCmd } from './commands/system.js';
+import { activateTeamCmd, editTeamCmd } from './commands/editTeams.js';
 import { allPlayersCmd, editPlayerCmd, myPlayerCmd, playerCmd, playersCmd } from './commands/player.js';
 import { addSelectionCmd, allNationalTeamsCmd, nationalTeamCmd, postNationalTeamsCmd, removeSelectionCmd } from './commands/nationalTeam.js';
+import { confirmCmd, updateConfirmCmd } from './commands/confirm.js';
+import { dealCmd } from './commands/confirmations/deal.js';
+import { listDealsCmd } from './commands/confirmations/listDeals.js';
+import { renewCmd, setContractCmd, teamTransferCmd, transferCmd } from './commands/transfers.js';
+import { postAllTeamsCmd, postTeamCmd, updateTeamPostCmd } from './commands/postTeam.js';
+import { showBlacklistCmd } from './commands/blacklist.js';
 
 const TEAMS = {
   name: 'teams',
@@ -17,52 +23,6 @@ const TEAMS = {
   type: 1,
 }
 
-const TRANSFER = {
-  name: 'transfer',
-  description: 'Transfer a free agent to a team',
-  type: 1,
-  options: [{
-    type: 6,
-    name: 'player',
-    description: 'Player',
-    required: true
-  },{
-    type: 8,
-    name: 'team',
-    description: 'Team',
-    required: true
-  },{
-    type: 3,
-    name: 'desc',
-    description: 'Description (length)'
-  }]
-}
-const TEAMTRANSFER = {
-  name: 'teamtransfer',
-  description: 'Transfer a player from his team to another',
-  type: 1,
-  options: [{
-    type: 6,
-    name: 'player',
-    description: 'Player',
-    required: true
-  },{
-    type: 8,
-    name: 'team',
-    description: 'Team to transfer',
-    required: true
-  },{
-    type: 4,
-    name: 'amount',
-    description: 'Amount (Place 0 if free)',
-    required: true,
-    min_value: 0,
-  },{
-    type: 3,
-    name: 'desc',
-    description: 'Description (length, loan...)'
-  }]
-}
 const FREEPLAYER = {
   name: 'freeplayer',
   description: 'Release a player from a team',
@@ -130,11 +90,17 @@ export const emojisCmd = {
   type: 1
 }
 
-const ALL_COMMANDS = [nowCmd, timestampCmd, teamCmd, emojisCmd, matchCmd, editMatchCmd, endMatchCmd, publishMatchCmd, matchIdCmd, matchesCmd,
+const ALL_COMMANDS = [nowCmd, timestampCmd, lineupCmd, boxLineupcmd, eightLineupCmd, helpCmd];
+
+const GUILD_COMMANDS = [
+  teamCmd, emojisCmd, matchCmd, editMatchCmd, endMatchCmd, publishMatchCmd, matchIdCmd, matchesCmd, internationalMatchCmd, editInternationalMatchCmd,
   playerCmd, editPlayerCmd, allPlayersCmd, playersCmd, myPlayerCmd,
+  confirmCmd, updateConfirmCmd, renewCmd, dealCmd, activateTeamCmd, listDealsCmd,
   nationalTeamCmd, allNationalTeamsCmd, postNationalTeamsCmd, addSelectionCmd, removeSelectionCmd,
-  TEAMS, TRANSFER, TEAMTRANSFER, FREEPLAYER, lineupCmd, boxLineupcmd, FINE, BONUS, editTeamCmd, helpCmd,
-  systemTeamCmd, initCountriesCmd,
-];
+  TEAMS, transferCmd, teamTransferCmd, FREEPLAYER, FINE, BONUS, editTeamCmd,
+  internationalLineupCmd, helpAdminCmd, emojiCmd, showBlacklistCmd,
+  systemTeamCmd, initCountriesCmd, postTeamCmd, postAllTeamsCmd, setContractCmd, updateTeamPostCmd, doubleContractsCmd, blacklistTeamCmd,
+]
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);
+InstallGuildCommands(process.env.APP_ID, process.env.GUILD_ID, GUILD_COMMANDS)

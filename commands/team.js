@@ -12,8 +12,13 @@ export const team = async ({interaction_id, token, options, member, dbClient})=>
   } else {
     roles = [{id: role.value}]
   }
-  await dbClient(async ({teams, matches})=>{            
+  await dbClient(async ({teams, matches})=>{
     const team = await teams.findOne({active:true, $or:roles})
+    if(!team)
+    {
+      response = 'No team found'
+      return
+    }
     response = displayTeam(team)
     const teamsMatches = await matches.find({$or: [{home: team.id}, {away: team.id}], finished: null}).sort({dateTimestamp: 1}).toArray()
     const allTeams = await teams.find({active: true}).toArray()

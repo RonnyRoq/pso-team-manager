@@ -4,7 +4,7 @@ import { verifyKey } from 'discord-interactions';
 import { sleep } from './functions/helpers.js';
 
 export function VerifyDiscordRequest(clientKey) {
-  return function (req, res, buf, encoding) {
+  return function (req, res, buf) {
     const signature = req.get('X-Signature-Ed25519');
     const timestamp = req.get('X-Signature-Timestamp');
 
@@ -36,7 +36,8 @@ export async function DiscordRequest(endpoint, options={}) {
   if (!res.ok) {
     const data = await res.json();
     console.log(endpoint);
-    console.log(data)
+    console.log(JSON.stringify(options))
+    console.log(JSON.stringify(data))
     if(data.retry_after) {
       await sleep(data.retry_after*1000)
       res = await DiscordRequest(endpoint, options)
@@ -54,6 +55,16 @@ export async function InstallGlobalCommands(appId, commands) {
 
   try {
     // This is calling the bulk overwrite endpoint: https://discord.com/developers/docs/interactions/application-commands#bulk-overwrite-global-application-commands
+    await DiscordRequest(endpoint, { method: 'PUT', body: commands });
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+export const InstallGuildCommands = async (appId, guild_id, commands) => {
+  const endpoint = `applications/${appId}/guilds/${guild_id}/commands`
+  
+  try {
     await DiscordRequest(endpoint, { method: 'PUT', body: commands });
   } catch (err) {
     console.error(err);

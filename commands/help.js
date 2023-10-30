@@ -34,10 +34,62 @@ export const help = ({guild_id, interaction_id, token}) => {
     }
   })
 }
+const isAdmin = (member) => (member.roles || []).find(role => ['1081886764366573658', '1072201212356726836'].includes(role))
 
+export const helpAdmin = ({member, interaction_id, token}) => {
+  let responseLines = ['**/matchid**: Find a match between two clubs',
+    '**/editmatch** Enter a match ID and update the details',
+    '**/endmatch** Enter the match results from a Match ID',
+  ]
+  if(isAdmin(member)){
+    const psafCommandLines = [
+      '## Matches',
+      '**/match** Create a match to play',
+      '**/publishmatch** Publish a matchday',
+      '## National teams',
+      '**/addselection** Add a player to a selection. You can only add a player to a selection set in his nat1 slot. Check with /player and /editplayer to confirm his nationality is right',
+      '**/removeselection** Remove a player from a national selection',
+      '## Transfers',
+      '**/transfer** ',
+      '**/teamtransfer**',
+      '**/freeplayer**',
+      '**/setcontract** Set a player\'s contract',
+      '**/bonus** Send money to a team. Please include a reason.',
+      '**/fine** Remove money from a team. Please include a reason',
+      '## System',
+      '**/blacklistteam** Applies a blacklist to an entire team. Used for FFing teams.',
+      '**/editteam** Update a team\'s emoji, name, logo...',
+      '**/updateteam** Send the discord attributes (icon, palmares...) to the DB',
+      '**/teams** Posts a list of teams details, including their budget',
+      '**/postteam** Post a team full details with players, similar to #clubs',
+    ]
+    responseLines = responseLines.concat(psafCommandLines)
+  }
+  const response = responseLines.join('\r')
+  const helpEmbed = {
+    "type": "rich",
+    "color": 16777215,
+    "title": "PSAF Team Manager Commands",
+    "description": response,
+  }
+  return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+    method: 'POST',
+    body: {
+      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: { embeds : [helpEmbed]},
+      flags: 1 << 6
+    }
+  })
+}
 
 export const helpCmd = {
   name: 'help',
   description: 'List all the commands you can use for this bot',
+  type: 1
+}
+
+export const helpAdminCmd = {
+  name: 'helpadmin',
+  description: 'List all the Admin commands you can use for this bot',
   type: 1
 }
