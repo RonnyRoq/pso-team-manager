@@ -97,7 +97,7 @@ function start() {
 
   app.get('/matches', async (req, res) => {
     const response = await getMatchesOfDay({date: 'today', dbClient})
-    return res.send(response)
+    return res.send(response.join('<br >'))
   })
 
   /**
@@ -568,11 +568,13 @@ function start() {
     '0 9 * * *',
     async function() {
       const response = await getMatchesOfDay({date:'today', dbClient})
-      await DiscordRequest(matchesWebhook, {
-        method: 'POST',
-        body: {
-          content: response.substring(0, 1999),
-        }
+      await response.forEach(async content => {
+        await DiscordRequest(matchesWebhook, {
+          method: 'POST',
+          body: {
+            content,
+          }
+        })
       })
     },
     null,

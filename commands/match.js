@@ -374,30 +374,41 @@ export const getMatchesOfDay = async ({date='today', dbClient}) => {
     const matchesOfDay = await matches.find({dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, $or: [{finished:false}, {finished:null}]}).sort({dateTimestamp:1}).toArray()
     const allTeams = await teams.find({active: true}).toArray()
     const allNationalTeams = await nationalities.find({}).toArray()
-    let response = `${matchesOfDay.length} match${matchesOfDay.length >1?'es':''} on <t:${startDateTimestamp}:d>.\r`
+    let response = [`${matchesOfDay.length} match${matchesOfDay.length >1?'es':''} on <t:${startDateTimestamp}:d>.`]
     for (const match of matchesOfDay) {
       const homeTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.home) : allTeams.find(({id})=> id === match.home)
       const awayTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.away) : allTeams.find(({id})=> id === match.away)
       const currentLeague = fixturesChannels.find(({value})=> value === match.league)
-      response += formatMatch(currentLeague, homeTeam, awayTeam, match, true, match.isInternational)+'\r'
+      response.push(formatMatch(currentLeague, homeTeam, awayTeam, match, true, match.isInternational))
     }
     return response
   })
 }
 
-export const matches = async ({interaction_id, token, options=[], dbClient}) => {
-  const {date = "today", post} = Object.fromEntries(options.map(({name, value})=> [name, value]))
+export const matches = async ({interaction_id, token, application_id, options=[], dbClient}) => {
+  const {date = "today", post} = optionsToObject(options)
   const response = await getMatchesOfDay({date, dbClient})
-  return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
     method: 'POST',
     body: {
       type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
-        content: response.substring(0, 1999),
+        content: response[0],
         flags: !post ? InteractionResponseFlags.EPHEMERAL : 0
       }
     }
   })
+  await response.forEach(async (match, index) => {
+    if(index>0) {
+      await DiscordRequest(`/webhooks/${application_id}/${token}`, {
+        method: 'POST',
+        body: {
+          content: match,
+          flags: !post ? InteractionResponseFlags.EPHEMERAL : 0
+        }
+      })
+    }
+  });
 }
 
 export const matchCmd = {

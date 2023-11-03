@@ -4,12 +4,13 @@ import { displayTeam, optionsToObject } from "../functions/helpers.js"
 
 export const editTeam = async ({interaction_id, token, options, dbClient}) => {
   let response = "No teams found"
-  const {team, palmares, emoji, city, flag, shortname, logo} = Object.fromEntries(options.map(({name, value})=> [name, value]))
+  const {team, palmares, emoji, city, flag, shortname, name, logo} = Object.fromEntries(options.map(({name, value})=> [name, value]))
   const roles = [{id: team}]
   return await dbClient(async ({teams})=>{
     const team = (await teams.findOne({$or:roles})) || {}
     const payload = {
       shortName: shortname || team.shortName,
+      name: name || team.name,
       description: palmares || team.description,
       emoji: emoji || team.emoji,
       city: city || team.city,
@@ -95,6 +96,10 @@ export const editTeamCmd =  {
     type: 3,
     name: 'shortname',
     description: 'Team\'s short name (max 4 chars)'
+  },{
+    type: 3,
+    name: 'name',
+    description: 'Team\'s name'
   }]
 }
 

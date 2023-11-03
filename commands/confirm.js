@@ -62,6 +62,7 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
     const teamToJoin = allTeams.find(({id})=> id === team)
     if(currentTeam) {
       if(!pendingDeal) {
+        console.log(`${getPlayerNick(member)} tried to confirm for ${teamToJoin.name} but no deal`)
         return 'You can only confirm a transfer to teams your club has a deal with.'
       }
       if(pendingDeal.destTeam !== team) {

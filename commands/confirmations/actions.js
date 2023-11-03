@@ -1,8 +1,8 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { innerRemoveConfirmation, innerRemoveDeal } from "../confirm.js"
 import { DiscordRequest } from "../../utils.js"
-import { ObjectId } from "mongodb"
 import { serverRoles } from "../../config/psafServerConfig.js"
+import { getPlayerNick } from "../../functions/helpers.js"
 
 export const removeConfirmation = async ({dbClient, interaction_id, token, message }) => {
   const content = await dbClient(async({confirmations, pendingDeals})=> {
@@ -23,7 +23,7 @@ export const removeConfirmation = async ({dbClient, interaction_id, token, messa
 }
 
 export const removeDeal = async ({dbClient, message, interaction_id, token }) => {
-  const content = dbClient(async({confirmations, pendingDeals}) => {
+  const content = await dbClient(async({confirmations, pendingDeals}) => {
     const pendingDeal = await pendingDeals.findOne({adminMessage: message.id})
     return innerRemoveConfirmation({reason: 'Denied by admin', ...pendingDeal, dbClient, isDeal: true, pendingDeals, confirmations})
   })
@@ -59,18 +59,19 @@ export const declineDealAction =  async ({member, application_id, interaction_id
       }
     })
   }
-  const dealId = custom_id.substr("decline_deal_".length)
+  const playerId = custom_id.substr("decline_deal_".length)
   const content = await dbClient(async ({pendingDeals}) => {
-    const pendingDeal = await pendingDeals.findOne({...new ObjectId(dealId), approved: null})
+    const pendingDeal = await pendingDeals.findOne({playerId, approved: null})
     if(!pendingDeal) {
       return "Can't find the deal you're trying to approve."
     }
     if(!member.roles.includes(pendingDeal?.teamFrom)){
+      console.log(`${getPlayerNick(member)} tries to decline transfer of ${pendingDeal.playerId} but ${member.roles} doesnt include ${pendingDeal.teamFrom}`)
       return "Can't decline a deal for a team you're not a Manager of."
     }
 
     await innerRemoveDeal({reason: `Declined by <@${callerId}>`, ...pendingDeal})
-    await pendingDeals.deleteOne({...new ObjectId(dealId)})
+    await pendingDeals.deleteOne({playerId})
     return 'Deal declined'
   })
   return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
@@ -101,18 +102,20 @@ export const approveDealAction = async ({member, application_id, interaction_id,
       }
     })
   }
-  const dealId = custom_id.substr("approve_deal_".length)
+  const playerId = custom_id.substr("approve_deal_".length)
   const content = await dbClient(async ({pendingDeals}) => {
-    const pendingDeal = await pendingDeals.findOne({...new ObjectId(dealId), approved: null})
+    const pendingDeal = await pendingDeals.findOne({playerId, approved: null})
     if(!pendingDeal) {
       return "Can't find the deal you're trying to approve."
     }
+    
     if(!member.roles.includes(pendingDeal?.teamFrom)){
+      console.log(`${getPlayerNick(member)} tries to approve transfer of ${pendingDeal.playerId} but ${member.roles} doesnt include ${pendingDeal.teamFrom}`)
       return "Can't approve a deal for a team you're not a Manager of."
     }
 
     await innerRemoveDeal({reason: `Approved by <@${callerId}>`, ...pendingDeal, dbClient})
-    await pendingDeals.updateOne({...new ObjectId(dealId)}, {$set: {approved: true}})
+    await pendingDeals.updateOne({playerId}, {$set: {approved: true}})
     return 'Deal approved'
   })
   return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {

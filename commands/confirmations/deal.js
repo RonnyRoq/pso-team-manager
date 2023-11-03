@@ -35,6 +35,9 @@ export const deal = async ({dbClient, options, guild_id, interaction_id, token, 
     if(discPlayer.roles.includes(serverRoles.clubManagerRole)) {
       return `Cannot recruit <@${player}> ; Club Manager of ${sourceTeam.name}.`
     }
+    if(sourceTeam.id === destTeam.id) {
+      return `You can't buy <@${player}, he's already in your team, ${destTeam.name}.`
+    }
     const response = `<@${callerId}> requests a transfer <@${player}> from ${sourceTeam.emoji} ${sourceTeam.name} to ${destTeam.emoji} ${destTeam.name}\rFor <:EBit:1128310625873961013>**${new Intl.NumberFormat('en-US').format(amount)} Ebits**\r${desc?desc:''}`
     const [dealPostResp, adminPostResp] = await Promise.all([
       DiscordRequest(`/channels/${channel_id}/messages`, {

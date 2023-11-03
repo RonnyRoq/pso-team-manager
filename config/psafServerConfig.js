@@ -34,7 +34,7 @@ export const fixturesChannels = [
     emoji: ':___ChallengersLeague:1085657554845171822',
     channel: '1101999929171394653'
   },{
-    name: 'Challengers League (Knockouts)',
+    name: 'Challengers League',
     value: '1101999929171394653-k',
     emoji: ':___ChallengersLeague:1085657554845171822',
     channel: '1101999929171394653'
@@ -59,7 +59,7 @@ export const fixturesChannels = [
     emoji: ':___MastersLeague:1085657551879815249',
     channel: '1101999952483328140'
   },{
-    name: 'Masters League (Knockouts)',
+    name: 'Masters League',
     value: '1101999952483328140-k',
     emoji: ':___MastersLeague:1085657551879815249',
     channel: '1101999952483328140'
