@@ -122,7 +122,10 @@ export const currentSeason = 3
 export const serverRoles = {
   clubManagerRole: '1072620773434462318',
   matchBlacklistRole: '1095055617703543025',
-  nationalTeamPlayerRole: '1103327647955685536'
+  nationalTeamPlayerRole: '1103327647955685536',
+  adminRole: '1081886764366573658',
+  presidentRole: '1072201212356726836',
+  clubPlayerRole: '1072620805600592062',
 }
 
 export const serverChannels = {

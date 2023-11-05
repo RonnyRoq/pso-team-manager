@@ -33,6 +33,7 @@ import { sleep } from './functions/helpers.js';
 import { deal } from './commands/confirmations/deal.js';
 import { listDeals } from './commands/confirmations/listDeals.js';
 import { showBlacklist } from './commands/blacklist.js';
+import { emergencyOneSeasonContract, showNoContracts } from './commands/contracts.js';
 
 const keyPath = process.env.CERTKEY;
 const certPath = process.env.CERT;
@@ -289,6 +290,14 @@ function start() {
 
           if(name ==="helpadmin") {
             return helpAdmin(commandOptions)
+          }
+
+          if(name === "shownocontracts") {
+            return showNoContracts(commandOptions)
+          }
+
+          if(name === "emergencyoneseasoncontract") {
+            return emergencyOneSeasonContract(commandOptions)
           }
 
           if(name === "teams") {

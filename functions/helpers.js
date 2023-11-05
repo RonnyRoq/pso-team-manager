@@ -1,4 +1,6 @@
+import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions";
 import { fixturesChannels } from "../config/psafServerConfig.js";
+import { DiscordRequest } from "../utils.js";
 
 export const isPSAF = (guild_id) => guild_id === process.env.GUILD_ID
 
@@ -75,3 +77,23 @@ export const sleep = (ms) => {
 export const getCurrentSeason = async (seasons) => (await seasons.findOne({endedAt: null}))?.season
 
 export const optionsToObject = (options) => Object.fromEntries(options.map(({name, value})=> [name, value]))
+
+export const waitingMsg = async ({interaction_id, token}) => 
+  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+    method: 'POST',
+    body: {
+      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        flags: InteractionResponseFlags.EPHEMERAL
+      }
+    }
+  })
+
+export const updateResponse = async ({application_id, token, content}) => 
+  DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
+    method: 'PATCH',
+    body: {
+      content,
+      flags: 1 << 6
+    }
+  })

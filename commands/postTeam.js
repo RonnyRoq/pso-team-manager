@@ -1,5 +1,5 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
-import { displayTeam, optionsToObject } from "../functions/helpers.js"
+import { displayTeam, optionsToObject, updateResponse, waitingMsg } from "../functions/helpers.js"
 import { getAllPlayers } from "../functions/playersCache.js"
 import { getPlayersList } from "./player.js"
 import { DiscordRequest } from "../utils.js"
@@ -122,16 +122,11 @@ export const innerUpdateTeam = async ({guild_id, team, dbClient}) => {
   })
 }
 
-export const updateTeamPost = async ({guild_id, res, options, dbClient}) => {
+export const updateTeamPost = async ({guild_id, interaction_id, token, application_id, options, dbClient}) => {
+  await waitingMsg({interaction_id, token})
   const {team} = optionsToObject(options)
   await innerUpdateTeam({guild_id, team, dbClient})
-  return res.send({
-    type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-    data: {
-      content: 'done',
-      flags: InteractionResponseFlags.EPHEMERAL,
-    }
-  })
+  return updateResponse({application_id, token, content: 'done'})
 }
 
 export const postTeamCmd = {

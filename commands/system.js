@@ -2,7 +2,7 @@ import { InteractionResponseFlags, InteractionResponseType } from "discord-inter
 import { DiscordRequest } from "../utils.js"
 import { countries } from '../config/countriesConfig.js'
 import { getAllPlayers } from "../functions/playersCache.js"
-import { optionsToObject } from "../functions/helpers.js"
+import { optionsToObject, updateResponse, waitingMsg } from "../functions/helpers.js"
 
 const matchBlacklistRole = '1095055617703543025'
 
@@ -45,6 +45,42 @@ export const systemTeam = async ({interaction_id, token, options, guild_id,  dbC
 }
 
 export const doubleContracts = async ({interaction_id, token, application_id, dbClient}) => {
+  await waitingMsg({interaction_id, token})
+  const content = await dbClient(async({contracts})=> {
+    const duplicates = []
+    await contracts.aggregate([
+      { $match: { 
+        endedAt: null
+      }},
+      { $group: { 
+        _id: { team: "$team", playerId: "$playerId"}, // can be grouped on multiple properties 
+        dups: { "$addToSet": "$_id" }, 
+        count: { "$sum": 1 } 
+      }},
+      { $match: { 
+        count: { "$gt": 1 }    // Duplicates considered as count greater than one
+      }}
+    ],
+    {allowDiskUse: true}       // For faster processing if set is larger
+    )               // You can display result until this and check duplicates 
+    .forEach(function(doc) {
+        doc.dups.shift();      // First element skipped for deleting
+        doc.dups.forEach( function(dupId){ 
+            duplicates.push(dupId);   // Getting all duplicate ids
+            }
+        )
+    })
+    
+    // If you want to Check all "_id" which you are deleting else print statement not needed
+    console.log(JSON.stringify(duplicates))
+    return duplicates
+    //const response = await contracts.deleteMany({_id:{$in:duplicates}})
+    //return response
+  })
+  await updateResponse({application_id, token, content})
+}
+
+/*export const doubleContracts = async ({interaction_id, token, application_id, dbClient}) => {
   await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
     method: 'POST',
     body: {
@@ -76,7 +112,7 @@ export const doubleContracts = async ({interaction_id, token, application_id, db
       flags: 1 << 6
     }
   })
-}
+}*/
 
 export const blacklistTeam = async ({interaction_id, application_id, token, guild_id, options}) => {
   await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {

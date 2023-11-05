@@ -16,6 +16,7 @@ import { listDealsCmd } from './commands/confirmations/listDeals.js';
 import { renewCmd, setContractCmd, teamTransferCmd, transferCmd } from './commands/transfers.js';
 import { postAllTeamsCmd, postTeamCmd, updateTeamPostCmd } from './commands/postTeam.js';
 import { showBlacklistCmd } from './commands/blacklist.js';
+import { showNoContractsCmd } from './commands/contracts.js';
 
 const TEAMS = {
   name: 'teams',
@@ -98,7 +99,7 @@ const GUILD_COMMANDS = [
   confirmCmd, updateConfirmCmd, renewCmd, dealCmd, activateTeamCmd, listDealsCmd,
   nationalTeamCmd, allNationalTeamsCmd, postNationalTeamsCmd, addSelectionCmd, removeSelectionCmd,
   TEAMS, transferCmd, teamTransferCmd, FREEPLAYER, FINE, BONUS, editTeamCmd,
-  internationalLineupCmd, helpAdminCmd, emojiCmd, showBlacklistCmd,
+  internationalLineupCmd, helpAdminCmd, emojiCmd, showBlacklistCmd, showNoContractsCmd,
   systemTeamCmd, initCountriesCmd, postTeamCmd, postAllTeamsCmd, setContractCmd, updateTeamPostCmd, doubleContractsCmd, blacklistTeamCmd,
 ]
 

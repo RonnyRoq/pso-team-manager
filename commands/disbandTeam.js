@@ -1,0 +1,88 @@
+import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
+import { getPlayerNick, optionsToObject, removePlayerPrefix, sleep } from "../functions/helpers.js"
+import { DiscordRequest } from "../utils"
+import { serverRoles } from "../config/psafServerConfig.js"
+import { getAllPlayers } from "../functions/playersCache.js"
+
+const logWebhook = process.env.WEBHOOK
+
+export const disbandTeam = async ({interaction_id, token, options}) => {
+  const {team} = optionsToObject(options)
+  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+    method: 'POST',
+    body: {
+      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        content: `Are you sure you want to disband <@&${team}> ? This cannot be undone. (dismiss this message if you don't want to do this)`,
+        components: [{
+          type: 1,
+          components: [{
+            type: 2,
+            label: `Confirm deletion`,
+            style: 4,
+            custom_id: `confirm_delete_${team}`
+          }]
+        }],
+        flags: InteractionResponseFlags.EPHEMERAL
+      }
+    }
+  })
+}
+
+export const disbandTeamConfirmed = async ({interaction_id, custom_id, guild_id, token, member, callerId, dbClient}) => {
+  if(!member.roles.find(role => role === serverRoles.adminRole || role === serverRoles.presidentRole)) {
+    return await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+      method: 'POST',
+      body: {
+        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+          content: `Only Admins and Presidents can disband`,
+          flags: InteractionResponseFlags.EPHEMERAL
+        }
+      }
+    })
+  }
+  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+    method: 'POST',
+    body: {
+      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        flags: InteractionResponseFlags.EPHEMERAL
+      }
+    }
+  })
+  const id = custom_id.substr("confirm_delete_".length)
+  const totalPlayers = await getAllPlayers(guild_id)
+  const disbandedTeam = await dbClient(async ({contracts, teams})=>{
+    const teamToDisband = await teams.findOne({id})
+    await teamToDisband.updateOne({id}, {$set: {active: false}})
+    await contracts.updateMany({team: id, endedAt: null}, {$set: {endedAt: Date.now()}})
+    return teamToDisband
+  })
+  const teamPlayers = totalPlayers.filter((player) => player.roles.includes(id))
+  await teamPlayers.forEach(async discPlayer => {
+    const playerName = getPlayerNick(discPlayer)
+    let updatedPlayerName = removePlayerPrefix(disbandedTeam.shortName, playerName)
+    const payload= {
+      nick: updatedPlayerName,
+      roles: discPlayer.roles.filter(playerRole=> ![id, serverRoles.clubManagerRole, serverRoles.clubPlayerRole, serverRoles.matchBlacklistRole].includes(playerRole))
+    }
+    await DiscordRequest(`guilds/${guild_id}/members/${discPlayer.user.id}`, {
+      method: 'PATCH',
+      body: payload
+    })
+    await sleep(500)
+  })
+  const log = [
+    `# <@&${id}> has been removed.\rThe following players are now free agents:`,
+    ...teamPlayers.map(discPlayer => `<@${discPlayer.user.id}>`),
+    `*from <@${callerId}>*`
+  ]
+
+  await DiscordRequest(logWebhook, {
+    method: 'POST',
+    body: {
+      content: log.join('\r')
+    }
+  })
+}

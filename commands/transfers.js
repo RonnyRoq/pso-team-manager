@@ -43,7 +43,7 @@ const transferMessage = ({playerId, team, seasons, desc, callerId}) => `# :bust_
 const teamTransferMessage = ({playerId, teamFromId, team, seasons, amount, desc, callerId}) => 
 `# <@&${teamFromId}> :arrow_right: <@&${team}>\r> <:EBit:1128310625873961013> ${new Intl.NumberFormat('en-US').format(amount)} EBits\r> <@${playerId}>\r> for ${seasons} seasons.\r*(from <@${callerId}>)*${desc ? `\r${desc}`: ' '}`
 
-export const transferAction = async ({interaction_id, token, message, dbClient, callerId, guild_id}) => {
+export const transferAction = async ({interaction_id, token, application_id, message, dbClient, callerId, guild_id}) => {
   await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
     method: 'POST',
     body: {
@@ -71,13 +71,13 @@ export const transferAction = async ({interaction_id, token, message, dbClient, 
     method: 'POST',
     body: {content}
   })
-  return {
-    type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-    data: {
+  return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
+    method: 'PATCH',
+    body: {
       content,
       flags: InteractionResponseFlags.EPHEMERAL
     }
-  }
+  })
 }
 
 export const transfer = async ({options, guild_id, application_id, interaction_id, token, dbClient, callerId}) => {
@@ -158,7 +158,7 @@ export const renew = async ({dbClient, member, callerId, options, res}) => {
       })
     }
     const lastContractUpdate = currentContract?.updatedAt || currentContract?.at || currentSeasonObj.startedAt
-    if(lastContractUpdate+SEVENDAYSMS > Date.now()) {
+    if(lastContractUpdate+SEVENDAYSMS > Date.now() && currentContract.until > (currentSeasonObj.season + 1)) {
       return res.send({
         type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
