@@ -1,0 +1,166 @@
+import { InteractionResponseType } from "discord-interactions"
+import { fixturesChannels } from "../../config/psafServerConfig.js"
+import { msToTimestamp, optionsToObject, sleep } from "../../functions/helpers.js"
+import { getAllPlayers } from "../../functions/playersCache.js"
+import { DiscordRequest } from "../../utils.js"
+import { formatDMMatch } from "../match.js"
+import { parseDate } from "../timestamp.js"
+
+export const lineupToArray = (lineup) => {
+  // eslint-disable-next-line no-unused-vars
+  const {_id, matchId, team, ...players} = lineup
+  return Object.entries(players).map(([,id])=>id)
+}
+export const notifyMatchStart = async ({dbClient}) => {
+  const now = Math.floor(Date.now() / 1000)
+  const plusTen = now + 10*60
+  const {allTeams, notifyMatches, matchLineups} = await dbClient(async ({matches, teams, lineups})=> {
+    const allTeams = await teams.find({active: true}).toArray()
+    const startingMatches = await matches.find({dateTimestamp: {$gte: now.toString(), $lte: plusTen.toString()}, password: null}).toArray()
+    const notifyMatches = await Promise.all(startingMatches.map(async match => {
+      if(!match.password){
+        const password = Math.random().toString(36).slice(-4)
+        await matches.updateOne({_id: match._id}, {$set: {password}})
+        return Promise.resolve({
+          ...match,
+          password
+        })
+      }
+      return Promise.resolve(match)
+    }))
+    console.log(notifyMatches)
+    const matchLineups = await lineups.find({matchId: {$in: notifyMatches.map(match=>match._id.toString())}}).toArray()
+    return Promise.resolve({allTeams, notifyMatches, matchLineups})
+  })
+  const allPlayers = await getAllPlayers(process.env.GUILD_ID)
+  for await(const startingMatch of notifyMatches) {
+    const league = fixturesChannels.find(({value})=> value === startingMatch.league)
+    const homeTeam = allTeams.find(team => startingMatch.home === team.id)
+    const awayTeam = allTeams.find(team => startingMatch.away === team.id)
+    const matchId = startingMatch._id.toString()
+    const homeLineup = matchLineups.find(lineup => lineup.matchId === matchId && lineup.team === startingMatch.home)
+    const awayLineup = matchLineups.find(lineup => lineup.matchId === matchId && lineup.team === startingMatch.away)
+    const body = formatDMMatch(league, homeTeam, awayTeam, startingMatch, homeLineup, awayLineup, startingMatch.isInternational, allPlayers)
+    const refs = startingMatch.refs || ''
+    const matchRefs = refs.split(',')
+    let recipients = []
+    if(matchRefs[0]) {
+      for await (const matchRef of matchRefs) {
+        console.log(matchRef)
+        if(matchRef && !recipients.includes(matchRef)) {
+          const userChannelResp = await DiscordRequest('/users/@me/channels', {
+            method: 'POST',
+            body:{
+              recipient_id: matchRef
+            }
+          })
+          const userChannel = await userChannelResp.json()
+          await DiscordRequest(`/channels/${userChannel.id}/messages`, {
+            method: 'POST',
+            body
+          })
+          recipients.push(matchRef)
+          await sleep(500)
+        }
+      }
+    }
+    if(homeLineup){
+      const homeIds = lineupToArray(homeLineup)
+      console.log(homeLineup)
+      console.log(homeIds)
+      if(homeIds[0]) {
+        await Promise.all(homeIds.map(async homePlayer => {
+          console.log(homePlayer)
+          if(homePlayer && !recipients.includes(homePlayer)) {
+            const userChannelResp = await DiscordRequest('/users/@me/channels', {
+              method: 'POST',
+              body:{
+                recipient_id: homePlayer
+              }
+            })
+            const userChannel = await userChannelResp.json()
+            await DiscordRequest(`/channels/${userChannel.id}/messages`, {
+              method: 'POST',
+              body
+            })
+            recipients.push(homePlayer)
+            return sleep(500)
+          }
+          return Promise.resolve({})
+        }))
+      }
+    }
+    if(awayLineup) {
+      const awayIds = lineupToArray(awayLineup)
+      if(awayIds[0]) {
+        await Promise.all(awayIds.map(async awayPlayer => {
+          console.log(awayPlayer)
+          if(awayPlayer && !recipients.includes(awayPlayer)) {
+            const userChannelResp = await DiscordRequest('/users/@me/channels', {
+              method: 'POST',
+              body:{
+                recipient_id: awayPlayer
+              }
+            })
+            const userChannel = await userChannelResp.json()
+            await DiscordRequest(`/channels/${userChannel.id}/messages`, {
+              method: 'POST',
+              body
+            })
+            recipients.push(awayPlayer)
+            return sleep(500)
+          }
+          return Promise.resolve({})
+        }))
+      }
+    }
+    console.log('lobby sent to:')
+    console.log(recipients)
+  }
+}
+
+export const testDMMatch = async ({dbClient, options, interaction_id, guild_id, token, application_id}) => {
+  const {date} = optionsToObject(options)
+  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+    method: 'POST',
+    body: {
+      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        content: 'Test DM format'
+      }
+    }
+  })
+  const parsedDate = parseDate(date)
+  const dateTimestamp = msToTimestamp(Date.parse(parsedDate))
+  const {allTeams, notifyMatches, matchLineups} = await dbClient(async ({matches, teams, lineups})=> {
+    const allTeams = await teams.find({active: true}).toArray()
+    const notifyMatches = await matches.find({dateTimestamp}).toArray()
+    const matchLineups = await lineups.find({matchId: {$in: notifyMatches.map(match=>match._id.toString())}}).toArray()
+    return Promise.resolve({allTeams, notifyMatches, matchLineups})
+  })
+  const allPlayers = await getAllPlayers(guild_id)
+  for await(const startingMatch of notifyMatches) {
+    const league = fixturesChannels.find(({value})=> value === startingMatch.league)
+    const homeTeam = allTeams.find(team => startingMatch.home === team.id)
+    const awayTeam = allTeams.find(team => startingMatch.away === team.id)
+    const matchId = startingMatch._id.toString()
+    const homeLineup = matchLineups.find(lineup => lineup.matchId === matchId && lineup.team === startingMatch.home)
+    const awayLineup = matchLineups.find(lineup => lineup.matchId === matchId && lineup.team === startingMatch.away)
+    const body = formatDMMatch(league, homeTeam, awayTeam, startingMatch, homeLineup, awayLineup, startingMatch.isInternational, allPlayers)
+    await DiscordRequest(`/webhooks/${application_id}/${token}`, {
+      method: 'POST',
+      body
+    })
+  }
+}
+
+export const testDMMatchCmd = {
+  name: 'testdmmatch',
+  description: 'Post what we would receive in a DM for a match at a time',
+  type: 1,
+  options: [{
+    type: 3,
+    name: 'date',
+    description: "The date planned for the match (UK timezone)",
+  }]
+}

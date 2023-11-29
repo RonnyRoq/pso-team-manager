@@ -14,6 +14,11 @@ export const fixturesChannels = [
     emoji: ':___ENCEL:1091064847212494989',
     pingRole: '1154065149888561162'
   },{
+    name:'WEL',
+    value: '1177013563974500513',
+    emoji: ':__PSAF:1095732362400247838',
+    pingRole: '1154065149888561162'
+  },{
     name: 'Challengers League (Group A)',
     value: '1101999929171394653-a',
     emoji: ':___ChallengersLeague:1085657554845171822',
@@ -107,11 +112,19 @@ export const matchDays = [
   },{
     name: 'Day 15'
   },{
+    name: 'Day 16'
+  },{
+    name: 'Day 17'
+  },{
+    name: 'Day 18'
+  },{
     name: 'Qualifiers'
   },{
     name: 'Quarter-Finals'
   },{
     name: 'Semi-Finals'
+  },{
+    name: '3rd Place'
   },{
     name: 'Final'
   }
@@ -126,6 +139,8 @@ export const serverRoles = {
   adminRole: '1081886764366573658',
   presidentRole: '1072201212356726836',
   clubPlayerRole: '1072620805600592062',
+  psafManagementRole: '1072210995927339139',
+  trialStaffRole: '1093846550226149437'
 }
 
 export const serverChannels = {
@@ -133,4 +148,7 @@ export const serverChannels = {
   dealsChannelId: '1092712923845120010',
   confirmationChannelId: '1074061044361732157',
   botTestingChannelId: '1150376229178978377',
+  clubsChannelId: '1072206607196360764',
+  scheduleChannelId: '1136790176488755303',
+  dailyResultsChannelId: '1174360872886489118',
 }

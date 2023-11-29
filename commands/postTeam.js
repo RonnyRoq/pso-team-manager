@@ -3,8 +3,7 @@ import { displayTeam, optionsToObject, updateResponse, waitingMsg } from "../fun
 import { getAllPlayers } from "../functions/playersCache.js"
 import { getPlayersList } from "./player.js"
 import { DiscordRequest } from "../utils.js"
-
-const clubsChannelId = "1072206607196360764"
+import { serverChannels } from "../config/psafServerConfig.js"
 
 export const postTeam = async ({guild_id, options, channel_id, res, dbClient})=> {
   const {team} = optionsToObject(options)
@@ -65,13 +64,13 @@ export const postAllTeams = async ({guild_id, application_id, dbClient, interact
       let content = displayTeam(team, true) +'\r'
       content += await getPlayersList(allPlayers, team.id, displayCountries, players, teamContracts)
       if(!team.teamMsg) {
-        const logoResp = await DiscordRequest(`/channels/${clubsChannelId}/messages`, {
+        const logoResp = await DiscordRequest(`/channels/${serverChannels.clubsChannelId}/messages`, {
           method: 'POST',
           body: {
             content: team.logo || 'No Logo',
           }
         })
-        const teamResp = await DiscordRequest(`/channels/${clubsChannelId}/messages`, {
+        const teamResp = await DiscordRequest(`/channels/${serverChannels.clubsChannelId}/messages`, {
           method: 'POST',
           body: {
             content
@@ -106,13 +105,13 @@ export const innerUpdateTeam = async ({guild_id, team, dbClient}) => {
     content += await getPlayersList(allPlayers, team, displayCountries, players, teamContracts)
     content += "\r___\r\r"
     if(dbTeam.teamMsg) {
-      await DiscordRequest(`/channels/${clubsChannelId}/messages/${dbTeam.logoMsg}`, {
+      await DiscordRequest(`/channels/${serverChannels.clubsChannelId}/messages/${dbTeam.logoMsg}`, {
         method: 'PATCH',
         body: {
           content: dbTeam.logo || 'No Logo',
         }
       })
-      await DiscordRequest(`/channels/${clubsChannelId}/messages/${dbTeam.teamMsg}`, {
+      await DiscordRequest(`/channels/${serverChannels.clubsChannelId}/messages/${dbTeam.teamMsg}`, {
         method: 'PATCH',
         body: {
           content

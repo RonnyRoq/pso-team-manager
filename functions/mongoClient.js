@@ -13,8 +13,16 @@ const mongoClient = (client) => {
         contracts: psoDb.collection("Contracts"),
         seasonsCollect: psoDb.collection("Seasons"),
         pendingDeals: psoDb.collection("PendingDeals"),
+        pendingLoans: psoDb.collection("PendingLoans"),
+        candidates: psoDb.collection("Candidates"),
+        lineups: psoDb.collection("Lineups"),
+        votes: psoDb.collection("Votes")
       }
       return await callback(collections)
+    }
+    catch(e) {
+      console.error(e.stack)
+      throw e
     }
     finally {
       db.close()

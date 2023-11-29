@@ -3,30 +3,34 @@ import { DiscordRequest } from "../utils.js"
 import componentsRegister from "../componentsRegister.js"
 import { addPlayerPrefix, removePlayerPrefix, getCurrentSeason, getPlayerNick, optionsToObject, msToTimestamp } from "../functions/helpers.js"
 import { innerRemoveConfirmation } from "./confirm.js"
+import { seasonPhases } from "./season.js"
 
 const logWebhook = process.env.WEBHOOK
 const clubPlayerRole = '1072620805600592062'
 
-const innerTransferAction = async ({teams, contracts, seasonsCollect, guild_id, playerId, team, seasons, desc, callerId, amount=0}) => {
+const innerTransferAction = async ({teams, contracts, seasonsCollect, guild_id, playerId, team, seasons, desc, callerId, amount=0, pendingLoan}) => {
   const [dbTeam, playerResp] = await Promise.all([
     teams.findOne({id: team}),
     DiscordRequest(`/guilds/${guild_id}/members/${playerId}`, {}),
-    contracts.updateMany({playerId}, {$set: {endedAt: Date.now()}}),
   ])
+  if(!pendingLoan){
+    await contracts.updateMany({playerId}, {$set: {endedAt: Date.now()}})
+  }
   const currentSeason = await getCurrentSeason(seasonsCollect)
   const playerTransfer = await playerResp.json();
   playerTransfer.roles = playerTransfer.roles || []
   const teamFrom = await teams.findOne({active:true, $or:[...playerTransfer.roles.map(role=>({id:role})), {id:'1'}]}) //little trick to force the search if the array is empty (no roles)
   const playerName = getPlayerNick(playerTransfer);
   const displayName = teamFrom ? removePlayerPrefix(teamFrom.shortName, playerName) : playerName
-  const transferAmount = teamFrom ? amount : 0
+  const transferAmount = teamFrom ? (pendingLoan ? pendingLoan.amount : amount) : 0
   const updatedPlayerName = addPlayerPrefix(dbTeam.shortName, displayName)
   const payload = {
     nick: updatedPlayerName,
     roles: [...new Set([...playerTransfer.roles.filter(role => !(role ===clubPlayerRole || role === teamFrom?.id)), team, clubPlayerRole])]
   }
+  const loanDetails = pendingLoan ? {phase: pendingLoan.phase, until: pendingLoan.until} : {}
   await Promise.all([
-    contracts.insertOne({id: Date.now(), at: Date.now(), playerId, team, until: currentSeason+seasons, desc }),
+    contracts.insertOne({id: Date.now(), at: Date.now(), playerId, team, until: currentSeason+seasons, desc, ...loanDetails, isLoan: !!pendingLoan}),
     teams.updateOne({id: dbTeam?.id}, {$set: {budget: dbTeam.budget-transferAmount}}),
     teamFrom ? teams.updateOne({id: teamFrom.id}, {$set: {budget: teamFrom.budget+transferAmount}}) : Promise.resolve(),
     DiscordRequest(`guilds/${guild_id}/members/${playerId}`, {
@@ -34,14 +38,18 @@ const innerTransferAction = async ({teams, contracts, seasonsCollect, guild_id, 
       body: payload
     })
   ])
-  return teamFrom ?
-   teamTransferMessage({playerId, team, teamFromId: teamFrom.id, seasons, callerId, amount: transferAmount, desc}) 
-   : transferMessage({playerId, team, seasons, callerId, desc})
+  return teamFrom ? (
+    pendingLoan ?
+     loanMessage({playerId, team, teamFromId: teamFrom.id, callerId, amount: transferAmount, desc, ...loanDetails}) 
+     : teamTransferMessage({playerId, team, teamFromId: teamFrom.id, seasons, callerId, amount: transferAmount, desc}) 
+   ): transferMessage({playerId, team, seasons, callerId, desc})
 }
 
 const transferMessage = ({playerId, team, seasons, desc, callerId}) => `# :bust_in_silhouette: Free agent :arrow_right: <@&${team}>\r> <@${playerId}>\r> for ${seasons} seasons.\r*(from <@${callerId}>)*${desc ? `\r${desc}`: ''}`
 const teamTransferMessage = ({playerId, teamFromId, team, seasons, amount, desc, callerId}) => 
 `# <@&${teamFromId}> :arrow_right: <@&${team}>\r> <:EBit:1128310625873961013> ${new Intl.NumberFormat('en-US').format(amount)} EBits\r> <@${playerId}>\r> for ${seasons} seasons.\r*(from <@${callerId}>)*${desc ? `\r${desc}`: ' '}`
+const loanMessage = ({playerId, team, teamFromId, callerId, amount, phase, until}) => 
+`# <@&${teamFromId}> :arrow_right: <@&${team}>\r> <:EBit:1128310625873961013> ${new Intl.NumberFormat('en-US').format(amount)} EBits\r> <@${playerId}>\r> **LOAN** until seaon ${until}, beginning of ${seasonPhases[phase].desc}.\r*(from <@${callerId}>)*`
 
 export const transferAction = async ({interaction_id, token, application_id, message, dbClient, callerId, guild_id}) => {
   await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
@@ -53,24 +61,30 @@ export const transferAction = async ({interaction_id, token, application_id, mes
       }
     }
   })
-  const content = await dbClient(async ({teams, contracts, seasonsCollect, confirmations, pendingDeals}) => {
+  const {done, content} = await dbClient(async ({teams, contracts, seasonsCollect, confirmations, pendingDeals, pendingLoans}) => {
     const confirmation = await confirmations.findOne({adminMessage: message.id})
     if(confirmation) {
       const {playerId, team, seasons} = confirmation
-      const pendingDeal = await pendingDeals.findOne({playerId, approved: true})
+      const pendingDeal = await pendingDeals.findOne({playerId, destTeam:team, approved: true})
       if(pendingDeal && pendingDeal.destTeam !== team) {
-        return `<@${playerId}> has a deal with a different team, can't confirm`
+        return {content:`<@${playerId}> has a deal with a different team, can't confirm`}
       }
-      const content = await innerTransferAction({teams, contracts, seasonsCollect, seasons, guild_id, playerId, team, callerId, amount: pendingDeal?.amount})
-      await innerRemoveConfirmation({reason: `Approved by <@${callerId}>`, ...confirmation, confirmations, pendingDeals})
-      return content
+      let pendingLoan
+      if(!pendingDeal) {
+        pendingLoan = await pendingLoans.findOne({playerId, approved: true})
+      }
+      const content = await innerTransferAction({teams, contracts, seasonsCollect, seasons, guild_id, playerId, team, callerId, amount: pendingDeal?.amount, pendingLoan})
+      await innerRemoveConfirmation({reason: `Approved by <@${callerId}>`, ...confirmation, confirmations, pendingDeals, pendingLoans})
+      return {done: true, content}
     }
-    return 'No confirmation found for transfer.'
+    return {content: 'No confirmation found for transfer.'}
   })
-  await DiscordRequest(logWebhook, {
-    method: 'POST',
-    body: {content}
-  })
+  if(done){
+    await DiscordRequest(logWebhook, {
+      method: 'POST',
+      body: {content}
+    })
+  }
   return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
     method: 'PATCH',
     body: {

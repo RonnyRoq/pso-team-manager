@@ -1,7 +1,7 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { getPlayerNick, optionsToObject, removePlayerPrefix, sleep } from "../functions/helpers.js"
-import { DiscordRequest } from "../utils"
-import { serverRoles } from "../config/psafServerConfig.js"
+import { DiscordRequest } from "../utils.js"
+import { serverRoles, serverChannels } from "../config/psafServerConfig.js"
 import { getAllPlayers } from "../functions/playersCache.js"
 
 const logWebhook = process.env.WEBHOOK
@@ -55,10 +55,16 @@ export const disbandTeamConfirmed = async ({interaction_id, custom_id, guild_id,
   const totalPlayers = await getAllPlayers(guild_id)
   const disbandedTeam = await dbClient(async ({contracts, teams})=>{
     const teamToDisband = await teams.findOne({id})
-    await teamToDisband.updateOne({id}, {$set: {active: false}})
+    await teams.updateOne({id}, {$set: {active: false, logoMsg: null, teamMsg: null}})
     await contracts.updateMany({team: id, endedAt: null}, {$set: {endedAt: Date.now()}})
     return teamToDisband
   })
+  if(disbandTeam.logoMsg) {
+    await DiscordRequest(`channels/${serverChannels.clubsChannelId}/messages/${disbandTeam.logoMsg}/`, {method: 'DELETE'})
+  }
+  if(disbandTeam.clubMsg) {
+    await DiscordRequest(`channels/${serverChannels.clubsChannelId}/messages/${disbandTeam.clubMsg}/`, {method: 'DELETE'})
+  }
   const teamPlayers = totalPlayers.filter((player) => player.roles.includes(id))
   await teamPlayers.forEach(async discPlayer => {
     const playerName = getPlayerNick(discPlayer)
@@ -74,7 +80,7 @@ export const disbandTeamConfirmed = async ({interaction_id, custom_id, guild_id,
     await sleep(500)
   })
   const log = [
-    `# <@&${id}> has been removed.\rThe following players are now free agents:`,
+    `# <@&${id}> has been disbanded.\rThe following players are now free agents:`,
     ...teamPlayers.map(discPlayer => `<@${discPlayer.user.id}>`),
     `*from <@${callerId}>*`
   ]
@@ -85,4 +91,15 @@ export const disbandTeamConfirmed = async ({interaction_id, custom_id, guild_id,
       content: log.join('\r')
     }
   })
+}
+
+export const disbandTeamCmd = {
+  name: 'disbandteam',
+  description: 'Disband a team',
+  type: 1,
+  options: [{
+    type: 8,
+    name: 'team',
+    description: 'Team'
+  }]
 }

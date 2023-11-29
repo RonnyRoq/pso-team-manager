@@ -5,18 +5,21 @@ import { timestampCmd } from './commands/timestamp.js';
 import { helpAdminCmd, helpCmd } from './commands/help.js';
 import { boxLineupcmd, eightLineupCmd, internationalLineupCmd, lineupCmd } from './commands/lineup.js';
 import { teamCmd } from './commands/team.js';
-import { editInternationalMatchCmd, editMatchCmd, endMatchCmd, internationalMatchCmd, matchCmd, matchIdCmd, matchesCmd, publishMatchCmd } from './commands/match.js';
+import { editInternationalMatchCmd, editMatchCmd, endMatchCmd, internationalMatchCmd, matchCmd, matchIdCmd, matchesCmd, pastMatchesCmd, publishMatchCmd } from './commands/match.js';
 import { blacklistTeamCmd, doubleContractsCmd, emojiCmd, initCountriesCmd, systemTeamCmd } from './commands/system.js';
 import { activateTeamCmd, editTeamCmd } from './commands/editTeams.js';
 import { allPlayersCmd, editPlayerCmd, myPlayerCmd, playerCmd, playersCmd } from './commands/player.js';
-import { addSelectionCmd, allNationalTeamsCmd, nationalTeamCmd, postNationalTeamsCmd, removeSelectionCmd } from './commands/nationalTeam.js';
+import { addSelectionCmd, allNationalTeamsCmd, nationalTeamCmd, postNationalTeamsCmd, registerElectionsCmd, removeSelectionCmd, showElectionCandidatesCmd, showVotesCmd, voteCoachCmd } from './commands/nationalTeam.js';
 import { confirmCmd, updateConfirmCmd } from './commands/confirm.js';
-import { dealCmd } from './commands/confirmations/deal.js';
+import { dealCmd, loanCmd } from './commands/confirmations/deal.js';
 import { listDealsCmd } from './commands/confirmations/listDeals.js';
 import { renewCmd, setContractCmd, teamTransferCmd, transferCmd } from './commands/transfers.js';
 import { postAllTeamsCmd, postTeamCmd, updateTeamPostCmd } from './commands/postTeam.js';
 import { showBlacklistCmd } from './commands/blacklist.js';
-import { showNoContractsCmd } from './commands/contracts.js';
+import { expireContractsCmd, showExpiringContractsCmd, showNoContractsCmd } from './commands/contracts.js';
+import { disbandTeamCmd } from './commands/disbandTeam.js';
+import { getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd } from './commands/season.js';
+import { testDMMatchCmd } from './commands/matches/notifyMatchStart.js';
 
 const TEAMS = {
   name: 'teams',
@@ -96,11 +99,13 @@ const ALL_COMMANDS = [nowCmd, timestampCmd, lineupCmd, boxLineupcmd, eightLineup
 const GUILD_COMMANDS = [
   teamCmd, emojisCmd, matchCmd, editMatchCmd, endMatchCmd, publishMatchCmd, matchIdCmd, matchesCmd, internationalMatchCmd, editInternationalMatchCmd,
   playerCmd, editPlayerCmd, allPlayersCmd, playersCmd, myPlayerCmd,
-  confirmCmd, updateConfirmCmd, renewCmd, dealCmd, activateTeamCmd, listDealsCmd,
+  confirmCmd, updateConfirmCmd, renewCmd, dealCmd, activateTeamCmd, listDealsCmd, loanCmd,
   nationalTeamCmd, allNationalTeamsCmd, postNationalTeamsCmd, addSelectionCmd, removeSelectionCmd,
   TEAMS, transferCmd, teamTransferCmd, FREEPLAYER, FINE, BONUS, editTeamCmd,
-  internationalLineupCmd, helpAdminCmd, emojiCmd, showBlacklistCmd, showNoContractsCmd,
-  systemTeamCmd, initCountriesCmd, postTeamCmd, postAllTeamsCmd, setContractCmd, updateTeamPostCmd, doubleContractsCmd, blacklistTeamCmd,
+  internationalLineupCmd, helpAdminCmd, emojiCmd, showBlacklistCmd, showNoContractsCmd, registerElectionsCmd, showElectionCandidatesCmd, voteCoachCmd, showVotesCmd,
+  disbandTeamCmd, expireContractsCmd,
+  getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd, testDMMatchCmd, pastMatchesCmd,
+  systemTeamCmd, initCountriesCmd, postTeamCmd, postAllTeamsCmd, setContractCmd, updateTeamPostCmd, doubleContractsCmd, blacklistTeamCmd, showExpiringContractsCmd,
 ]
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);

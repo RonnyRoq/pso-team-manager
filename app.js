@@ -1,16 +1,21 @@
 import 'dotenv/config';
 import express from 'express';
+import bodyParser from 'body-parser'
 import http from 'http';
 import https from 'https';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import {
   InteractionType,
   InteractionResponseType,
   InteractionResponseFlags
 } from 'discord-interactions';
-import DiscordOauth2 from 'discord-oauth2';
 import { MongoClient, ServerApiVersion } from 'mongodb';
 import { CronJob } from 'cron';
+import session from 'express-session'
+import createMongoStore from 'connect-mongodb-session'
+const MongoDBStore = createMongoStore(session);
 import { VerifyDiscordRequest, DiscordRequest } from './utils.js';
 import mongoClient from './functions/mongoClient.js';
 import { now } from './commands/now.js';
@@ -19,24 +24,35 @@ import { help, helpAdmin } from './commands/help.js';
 import { boxLineup, eightLineup, internationalLineup, lineup } from './commands/lineup.js';
 import { allPlayers, autoCompleteNation, editPlayer, player, players } from './commands/player.js';
 import { team } from './commands/team.js';
-import { editInterMatch, editMatch, endMatch, getMatchesOfDay, internationalMatch, match, matchId, matches, publishMatch } from './commands/match.js';
+import { editInterMatch, editMatch, endMatch, getMatch, getMatchesOfDay, internationalMatch, match, matchId, matches, pastMatches, publishMatch } from './commands/match.js';
 import { blacklistTeam, doubleContracts, emoji, initCountries, systemTeam } from './commands/system.js';
 import { activateTeam, editTeam } from './commands/editTeams.js';
-import { addSelection, allNationalTeams, nationalTeam, postNationalTeams, removeSelection } from './commands/nationalTeam.js';
+import { addSelection, allNationalTeams, nationalTeam, postNationalTeams, registerElections, removeSelection, showElectionCandidates, showVotes, voteCoach } from './commands/nationalTeam.js';
 import { confirm, pendingConfirmations } from './commands/confirm.js';
-import { approveDealAction, declineDealAction } from './commands/confirmations/actions.js';
+import { approveDealAction, approveLoanAction, declineDealAction, declineLoanAction, finishLoanRequest } from './commands/confirmations/actions.js';
 import componentRegister from './componentsRegister.js'
 import commandsRegister from './commandsRegister.js';
 import { freePlayer, renew, setContract, teamTransfer, transfer } from './commands/transfers.js';
 import { innerUpdateTeam, postAllTeams, postTeam, updateTeamPost } from './commands/postTeam.js';
 import { sleep } from './functions/helpers.js';
-import { deal } from './commands/confirmations/deal.js';
+import { deal, loan } from './commands/confirmations/deal.js';
 import { listDeals } from './commands/confirmations/listDeals.js';
 import { showBlacklist } from './commands/blacklist.js';
-import { emergencyOneSeasonContract, showNoContracts } from './commands/contracts.js';
+import { emergencyOneSeasonContract, expireContracts, showExpiringContracts, showNoContracts } from './commands/contracts.js';
+import { disbandTeam, disbandTeamConfirmed } from './commands/disbandTeam.js';
+import { getCurrentSeasonPhase } from './commands/season.js';
+import { setAllMatchToSeason } from './commands/matches/batchWork.js';
+import { refereeMatch } from './commands/matches/actions.js';
+import { serverChannels } from './config/psafServerConfig.js';
+import { notifyMatchStart, testDMMatch } from './commands/matches/notifyMatchStart.js';
+import { voteAction } from './commands/nationalTeams/actions.js';
+import { authUser, hasSession, isStaff } from './site/siteUtils.js';
 
 const keyPath = process.env.CERTKEY;
 const certPath = process.env.CERT;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 let online = false;
 if(fs.existsSync(keyPath)&& fs.existsSync(certPath)){
   online = true
@@ -56,7 +72,6 @@ const dbClient = mongoClient(client)
 let credentials = {}
 
 const webHookDetails = process.env.WEBHOOK
-const matchesWebhook = process.env.MATCHESWEBOOK
 
 if(online){
   const privateKey  = fs.readFileSync(keyPath, 'utf8');
@@ -71,7 +86,7 @@ const getTeamsCollection = async () => {
 }
 
 const displayTeam = (team) => (
-  `Team: $+{team.flag} ${team.emoji} ${team.name} - ${team.shortName}` +
+  `Team: ${team.flag} ${team.emoji} ${team.name} - ${team.shortName}` +
   `\rBudget: ${new Intl.NumberFormat('en-US').format(team.budget)}` +
   `\rCity: ${team.city}` +
   `\rPalmarès: ${team.description}` +
@@ -81,26 +96,93 @@ const displayTeam = (team) => (
 function start() {
   // Create an express app
   const app = express();
+  const site = express() // the site app
+  
   // Get port, or default
   const PORT = (online ? process.env.PORT : process.env.LOCALPORT) || 8080;
   const PORTHTTPS = process.env.PORTHTTPS || 8443;
+  
   // Parse request body and verifies incoming requests using discord-interactions package
   app.use(express.json({ verify: VerifyDiscordRequest(process.env.PUBLIC_KEY) }));
+  
+  site.set('view engine', 'ejs');
+  site.set('views', __dirname + '/site/pages');
+  site.use(express.static('site'))
 
-  const oauth = new DiscordOauth2({
-    clientId: process.env.APP_ID,
-    clientSecret: process.env.PUBLIC_KEY,
-    redirectUri: "https://pso.shinmugen.net",
-  });
-  app.get('/', async function (req, res) {
+  var store = new MongoDBStore({
+    uri,
+    collection: 'siteSessions'
+  })
+  
+  // Catch errors
+  store.on('error', function(error) {
+    console.log(error)
+  })
+
+  site.use(session({
+    cookie: { maxAge: 86400000, secure: true },
+    store,
+    /*store: new MemoryStore({
+      checkPeriod: 86400000 // prune expired entries every 24h
+    }),*/
+    resave: true,
+    saveUninitialized: true,
+    secret: process.env.SESS_SC
+  }))
+
+  site.use(bodyParser.urlencoded({extended: true}))
+
+  site.use(async(req, res, next) => {
+    if(!hasSession(req)) {
+      authUser(req, res, next)
+    } else {
+      next()
+    }
+  })
+
+  site.get('/matches', async (req, res) => {
+    const response = await getMatchesOfDay({date: 'today', dbClient})
+    return res.send(response.map(({content})=>content).join('<br >'))
+  })
+
+  site.post('/editmatch', async (req, res) => {
+    console.log(req.body)
+    return res.send(JSON.stringify(req.body))
+  })
+
+  site.get('/editmatch', async (req, res) => {
+    if(!isStaff(req))
+      return res.send('Unauthorised')
+
+    console.log('/editmatch')
+    let response = {}
+    try{
+      response = await getMatch({id: req.query.id, dbClient})
+    }
+    catch(e) {
+      console.log('Match not found', req.query.id)
+    }
+    console.log('userId', req.session.userId)
+    return res.render('editmatch', response)
+  })
+
+  site.get('/match', async (req, res) => {
+    console.log('/match')
+    let response = {}
+    try{
+      response = await getMatch({id: req.query.id, dbClient})
+    }
+    catch(e) {
+      console.log('Match not found', req.query.id)
+    }
+    return res.render('match', response)
+  })
+
+  site.get('/', async function (req, res) {
+    console.log('main', req.session)
     return res.send('<p>no thank you</p>')
   })
-
-  app.get('/matches', async (req, res) => {
-    const response = await getMatchesOfDay({date: 'today', dbClient})
-    return res.send(response.join('<br >'))
-  })
-
+  app.use('/site', site)
   /**
    * Interactions endpoint URL where Discord will send HTTP requests
    */
@@ -128,6 +210,24 @@ function start() {
           }
           if(custom_id.startsWith("decline_deal_")) {
             return declineDealAction(componentOptions)
+          }
+          if(custom_id.startsWith("approve_loan_")) {
+            return approveLoanAction(componentOptions)
+          }
+          if(custom_id.startsWith("decline_loan_")) {
+            return declineLoanAction(componentOptions)
+          }
+          if(custom_id.startsWith("confirm_delete_")) {
+            return disbandTeamConfirmed(componentOptions)
+          }
+          if(custom_id.startsWith("referee_")) {
+            return refereeMatch(componentOptions)
+          }
+          if(custom_id.startsWith("loan_")) {
+            return finishLoanRequest(componentOptions)
+          }
+          if(custom_id.startsWith("vote_")) {
+            return voteAction(componentOptions)
           }
           return res.send({
             type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -238,6 +338,10 @@ function start() {
 
           if (name === "matches") {
             return matches(commandOptions)
+          }
+
+          if(name === "pastmatches") {
+            return pastMatches(commandOptions)
           }
 
           if(name === "nationalteam") {
@@ -433,6 +537,46 @@ function start() {
             return activateTeam(commandOptions)
           }
 
+          if (name === "registerelections") {
+            return registerElections(commandOptions)
+          }
+
+          if (name === "showelectioncandidates") {
+            return showElectionCandidates(commandOptions)
+          }
+
+          if (name === "showcoach") {
+            return voteCoach(commandOptions)
+          }
+
+          if (name === "showexpiringcontracts") {
+            return showExpiringContracts(commandOptions)
+          }
+
+          if(name === "setallmatchseasons") {
+            return setAllMatchToSeason(commandOptions)
+          }
+
+          if (name === "disbandteam") {
+            return disbandTeam(commandOptions)
+          }
+
+          if (name === "expirecontracts") {
+            return expireContracts(commandOptions)
+          }
+
+          if (name === "getcurrentseasonphase") {
+            return getCurrentSeasonPhase(commandOptions)
+          }
+
+          if (name === "loan") {
+            return loan(commandOptions)
+          }
+
+          if(name === "votecoach") {
+            return voteCoach(commandOptions)
+          }
+
           if (name === "initteam") {
             const rolesResp = await DiscordRequest(`/guilds/${guild_id}/roles`, {})
             const roles = await rolesResp.json()
@@ -497,6 +641,14 @@ function start() {
             return emoji(commandOptions)
           }
 
+          if(name === 'testdmmatch') {
+            return testDMMatch(commandOptions)
+          }
+
+          if(name === 'showvotes') {
+            return showVotes(commandOptions)
+          }
+
           if (name ==='emojis') {
             const emojisResp = await DiscordRequest(`/guilds/${guild_id}/emojis`, { method: 'GET' })
             const emojis = await emojisResp.json()
@@ -553,10 +705,9 @@ function start() {
     httpsServer.listen(PORTHTTPS, async ()=>{
       console.log('Listening https on port', PORTHTTPS);
       try {
-        // Connect the client to the server	(optional starting in v4.7)
         console.log("connecting to Mongo...")
         await client.connect();
-        console.log("connecting to DB...")
+        console.log("connected, pinging the DB...")
         // Send a ping to confirm a successful connection
         await client.db("PSOTeams").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
@@ -568,23 +719,35 @@ function start() {
       catch(e){
         console.error(e)
       } finally {
-        // Ensures that the client will close when you finish/error
         await client.close();
       }
     });
   }
   new CronJob(
-    '0 9 * * *',
+    '1 9 * * *',
     async function() {
       const response = await getMatchesOfDay({date:'today', dbClient})
-      await response.forEach(async content => {
-        await DiscordRequest(matchesWebhook, {
+      for await (const match of response) {
+        const {matchId, content} = match
+        const body = matchId ? {
+          content,
+          components: [{
+            type: 1,
+            components: [{
+              type: 2,
+              label: `Referee`,
+              style: 1,
+              custom_id: `referee_${matchId}`
+            }]
+          }]
+        } : {
+          content
+        }
+        await DiscordRequest(`/channels/${serverChannels.scheduleChannelId}/messages`, {
           method: 'POST',
-          body: {
-            content,
-          }
+          body
         })
-      })
+      }
     },
     null,
     true,
@@ -602,6 +765,35 @@ function start() {
           currentTeamIndex = 0
         }
       }
+    },
+    null, 
+    true, 
+    'Europe/London'
+  )
+  new CronJob(
+    '*/2 6-22 * * *',
+    async function() {
+      //console.log('no notifications for now')
+      await notifyMatchStart({dbClient})
+    },
+    null, 
+    true, 
+    'Europe/London'
+  )
+  new CronJob(
+    '0 22 * * *',
+    async function() {
+      console.log('every day at 22')/*
+      const response = await getMatchesOfDay({date:'today', finished:true, dbClient})
+      await response.forEach(async ({content}) => {
+        const body = {
+          content
+        }
+        await DiscordRequest(`/channels/${serverChannels.dailyResultsChannelId}/messages`, {
+          method: 'POST',
+          body
+        })
+      })*/
     },
     null, 
     true, 

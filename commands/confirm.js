@@ -3,6 +3,7 @@ import { DiscordRequest } from "../utils.js"
 import { msToTimestamp, getPlayerNick, sleep } from "../functions/helpers.js"
 import { serverChannels } from "../config/psafServerConfig.js"
 import commandsRegister from "../commandsRegister.js"
+import { seasonPhases } from "./season.js"
 
 const twoWeeksMs = 1209600033
 
@@ -50,23 +51,25 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
   })
   const {team, seasons, nationality, extranat} = Object.fromEntries(options.map(({name, value})=> [name, value]))
 
-  const response = await dbClient(async ({teams, players, nationalities, confirmations, pendingDeals})=> {
-    const [allTeams, dbPlayer, allCountries, previousConfirmation, pendingDeal] = await Promise.all([
+  const response = await dbClient(async ({teams, players, nationalities, confirmations, pendingDeals, pendingLoans})=> {
+    const [allTeams, dbPlayer, allCountries, previousConfirmation, pendingDeal, pendingLoan] = await Promise.all([
       teams.find({active: true}).toArray(),
       players.findOne({id: callerId}),
       nationalities.find({}).toArray(),
       confirmations.findOne({playerId: callerId}),
-      pendingDeals.findOne({playerId: callerId, approved: true})
+      pendingDeals.findOne({playerId: callerId, destTeam: team, approved: true}),
+      pendingLoans.findOne({playerId: callerId, destTeam: team, approved: true})
     ])
     const currentTeam = allTeams.find(({id}) => member.roles.includes(id))
     const teamToJoin = allTeams.find(({id})=> id === team)
     if(currentTeam) {
-      if(!pendingDeal) {
+      const deal = pendingDeal || pendingLoan
+      if(!deal) {
         console.log(`${getPlayerNick(member)} tried to confirm for ${teamToJoin.name} but no deal`)
         return 'You can only confirm a transfer to teams your club has a deal with.'
       }
-      if(pendingDeal.destTeam !== team) {
-        return `You can only confirm for <@&${pendingDeal.destTeam}> as your club has agreed a deal with them.`
+      if(deal.destTeam !== team) {
+        return `You can only confirm for <@&${deal.destTeam}> as your club has agreed a deal with them.`
       }
     }
     if(!teamToJoin) {
@@ -97,7 +100,9 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
     const {flag: flag2 =''} = allCountries.find(({name})=> name === nat2) || {}
     const {flag: flag3 = ''} = allCountries.find(({name})=> name === nat3) || {}
     
-    const response = `${flag1}${flag2}${flag3}<@${callerId}> requests to join ${teamToJoin.name} for ${seasons} season${seasons=== 1 ? '' :'s'}`
+    const response = pendingLoan ? 
+    `${flag1}${flag2}${flag3}<@${callerId}> requests to join ${teamToJoin.name} on a loan until Season ${pendingLoan.until}, Beginning of ${seasonPhases[pendingLoan.phase]?.desc}`
+    : `${flag1}${flag2}${flag3}<@${callerId}> requests to join ${teamToJoin.name} for ${seasons} season${seasons=== 1 ? '' :'s'}`
 
     const [postResponse, adminResponse] = await Promise.all([
       DiscordRequest(`/channels/${channel_id}/messages`, {
@@ -139,7 +144,7 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
   })
 }
 
-export const innerRemoveConfirmation = async ({reason, messageId, adminMessage, playerId, pendingDeals, confirmations, isDeal}) => {
+export const innerRemoveConfirmation = async ({reason, messageId, adminMessage, playerId, pendingDeals, pendingLoans, confirmations, isDeal}) => {
   const channelId = isDeal ? serverChannels.dealsChannelId : serverChannels.confirmationChannelId
   const [baseMessageResp, adminMessageResp] = await Promise.all([
     DiscordRequest(`/channels/${channelId}/messages/${messageId}`, {method: 'GET'}),
@@ -148,8 +153,9 @@ export const innerRemoveConfirmation = async ({reason, messageId, adminMessage, 
   const [baseMessage, confAdmin] = await Promise.all([baseMessageResp.json(), adminMessageResp.json()])
   
   await Promise.all([
-    confirmations.deleteOne({playerId}),
-    pendingDeals.deleteOne({playerId}),
+    confirmations.deleteMany({playerId}),
+    pendingDeals.deleteMany({playerId}),
+    pendingLoans.deleteMany({playerId}),
     DiscordRequest(`/channels/${channelId}/messages/${messageId}`, {
       method: 'PATCH',
       body: {
@@ -164,6 +170,7 @@ export const innerRemoveConfirmation = async ({reason, messageId, adminMessage, 
       }
     })
   ]);
+  return 'Done.'
 }
 
 export const innerRemoveDeal = async ({reason, messageId, adminMessage}) => {
@@ -192,7 +199,7 @@ export const innerRemoveDeal = async ({reason, messageId, adminMessage}) => {
 
 export const checkConfirmations = async({dbClient}) => {
   await dbClient(async ({confirmations, pendingDeals})=> {
-    const [allConfirmations, allPendingDeals] = await Promise.all([
+    const [allConfirmations, allPendingDeals, pendingLoans] = await Promise.all([
       confirmations.find({validated: null}).toArray(),
       pendingDeals.find({approved: null}).toArray()
     ])
@@ -205,7 +212,7 @@ export const checkConfirmations = async({dbClient}) => {
     for (const confirmation of allConfirmations) {
       const {playerId, team, seasons, adminMessage, expiresOn} = confirmation
       if(expiresOn < Date.now()) {
-        await innerRemoveConfirmation({reason: "Expired", ...confirmation, pendingDeals, confirmations})
+        await innerRemoveConfirmation({reason: "Expired", ...confirmation, pendingDeals, pendingLoans, confirmations})
       } else {
         const approvedDeal = await pendingDeals.findOne({playerId, approved: true})
         if(approvedDeal) {

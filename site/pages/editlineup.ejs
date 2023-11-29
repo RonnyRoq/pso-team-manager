@@ -1,0 +1,42 @@
+<div class="align-middle overflow-hidden rounded-lg shadow shadow-black">
+  <table class="min-w-full">
+    <thead>
+      <tr class="border-b bg-slate-800 border-slate-700">
+        <th class="border-r text-center px-3.5  border-slate-700">Pos</th>
+        <th class="border-r px-2 text-left  border-slate-700">Name</th>
+        <th class="border-r text-center px-3.5  border-slate-700">Pass</th>
+        <th class="border-r text-center px-3.5  border-slate-700">Assists</th>
+        <th class="border-r text-center px-2  border-slate-700">Shots</th>
+        <th class="border-r text-center px-3.5  border-slate-700">Goals</th>
+        <th class="border-r text-center px-3.5  border-slate-700">Tackles</th>
+        <th class="border-r text-center px-3.5  border-slate-700">Int</th>
+        <th class="border-r text-center px-3.5  border-slate-700">Saves</th>
+        <th class="border-r text-center px-2  border-slate-700">Catches</th>
+        <th class="text-center px-3.5 ">Rating</th>
+      </tr>
+    </thead>
+    <tbody>
+      <%- include('editlineupposition', {prefix, posName: 'GK', pos:'gk', player: lineup.gk, bg: "bg-slate-900"}) %>
+      <%- include('editlineupposition', {prefix, posName: 'LB', pos:'lb', player: lineup.lb, bg: "bg-slate-800"}) %>
+      <%- include('editlineupposition', {prefix, posName: 'RB', pos:'rb', player: lineup.rb, bg: "bg-slate-900"}) %>
+      <%- include('editlineupposition', {prefix, posName: 'CM', pos:'cm', player: lineup.cm, bg: "bg-slate-800"}) %>
+      <%- include('editlineupposition', {prefix, posName: 'LW', pos:'lw', player: lineup.lw, bg: "bg-slate-900"}) %>
+      <%- include('editlineupposition', {prefix, posName: 'RW', pos:'rw', player: lineup.rw, bg: "bg-slate-800"}) %>
+      <% if(lineup.sub1.id) { %>
+        <%- include('editlineupposition', {prefix, posName: 'Sub 1', pos:'sub1', player: lineup.sub1, bg: "bg-slate-900"}) %>
+      <% } %>
+      <% if(lineup.sub2.id) { %>
+        <%- include('editlineupposition', {prefix, posName: 'Sub 2', pos:'sub2', player: lineup.sub2, bg: "bg-slate-800"}) %>
+      <% } %>
+      <% if(lineup.sub3.id) { %>
+        <%- include('editlineupposition', {prefix, posName: 'Sub 3', pos:'sub3', player: lineup.sub3, bg: "bg-slate-900"}) %>
+      <% } %>
+      <% if(lineup.sub4.id) { %>
+        <%- include('editlineupposition', {prefix, posName: 'Sub 4', pos:'sub4', player: lineup.sub4, bg: "bg-slate-800"}) %>
+      <% } %>
+      <% if(lineup.sub5.id) { %>
+        <%- include('editlineupposition', {prefix, posName: 'Sub 5', pos:'sub5', player: lineup.sub5, bg: "bg-slate-900"}) %>
+      <% } %>
+    </tbody>
+  </table>
+</div>

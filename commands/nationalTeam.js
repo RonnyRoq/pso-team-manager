@@ -1,7 +1,7 @@
 import { InteractionResponseType, InteractionResponseFlags } from "discord-interactions"
 import { DiscordRequest } from "../utils.js"
 import { getAllPlayers } from "../functions/playersCache.js"
-import { getPlayerNick, removeInternational, setInternational, sleep } from "../functions/helpers.js"
+import { getPlayerNick, optionsToObject, removeInternational, setInternational, sleep, updateResponse, waitingMsg } from "../functions/helpers.js"
 
 const nationalTeamPlayerRole = '1103327647955685536'
 const nationalTeamCaptainRole = '1103327640942809108'
@@ -262,6 +262,147 @@ export const removeSelection = async ({options, dbClient, guild_id, application_
   })
 }
 
+export const registerElections = async ({options, dbClient, interaction_id, callerId, token, application_id}) => {
+  await waitingMsg({interaction_id, token})
+  const {nation, reason} = optionsToObject(options)
+  const content = await dbClient(async ({players, nationalities, candidates})=> {
+    const [existingCandidate, dbPlayer] = await Promise.all([
+      candidates.findOne({playerId: callerId}),
+      players.findOne({id: callerId}),
+      nationalities.find({}).toArray()
+    ])
+    if(existingCandidate) {
+      return `You already applied for ${existingCandidate.nation}`
+    }
+    if(!dbPlayer || !dbPlayer.nat1) {
+      return `You are not registered with us. If you think it's an error, please open a ticket. Only club players/managers can apply.`
+    }
+    if(dbPlayer.nat1 !== nation) {
+      if(dbPlayer.nat2 === nation) {
+        return `You're not applying for your "main" country described in /myplayer. Please open a ticket if you wish to swap nations.`
+      } else {
+        return `You can only apply for your country.`
+      }
+    }
+    await candidates.insertOne({playerId: callerId, nation, reason})
+    return `Application saved for ${nation}.`
+  })
+  await updateResponse({application_id, token, content})
+  
+}
+
+export const showElectionCandidates = async ({interaction_id, token, application_id, dbClient}) => {
+  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+    method: 'POST',
+    body: {
+      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        content: 'All candidates for elections:'
+      }
+    }
+  })
+  const [allCandidates, allNations] = await dbClient (async ({nationalities, candidates})=> 
+    Promise.all([candidates.find({}).toArray(), nationalities.find({}).toArray()])
+  )
+  for await(const candidate of allCandidates) {
+    const candidateNation = allNations.find(({name})=> name === candidate.nation)
+    const content = `${candidateNation.flag} ${candidateNation.name} <@${candidate.playerId}> : ${candidate.reason}`
+    await DiscordRequest(`/webhooks/${application_id}/${token}`, {
+      method: 'POST',
+      body: {
+        content,
+      }
+    })
+  }
+}
+
+export const voteCoach = async ({interaction_id, callerId, guild_id, token, application_id, dbClient}) => {
+  await waitingMsg({interaction_id, token})
+  const allPlayers = await getAllPlayers(guild_id)
+  const response = await dbClient(async({nationalities, players, candidates})=> {
+    const dbPlayer = await players.findOne({id: callerId})
+    const nationality = await nationalities.findOne({name: dbPlayer.nat1})
+    if(!dbPlayer.nat1) {
+      return {content: 'Can\'t find your nationality. Did you register with a club?'}
+    }
+    const candidatesToVote = await candidates.find({nation: dbPlayer.nat1}).toArray()
+    const candidatesIds = candidatesToVote.map(candidate=>candidate.playerId)
+    const candidatesPlayers = allPlayers.filter(player => candidatesIds.includes(player.user.id))
+    if(candidatesToVote.length === 0) {
+      return {content: `No candidates applied for ${nationality.flag} ${dbPlayer.nat1}, you can't vote.`}
+    }
+    if(candidatesToVote.length === 1) {
+      return {content: `Only one candidate applied for ${nationality.flag} ${dbPlayer.nat1}, <@${candidatesToVote[0].playerId}>. No need to vote.`}
+    }
+    return {
+      content: `Please vote for a candidate for ${nationality.flag} ${dbPlayer.nat1}`,
+      components: [{
+        type: 1,
+        components: candidatesPlayers.map((player) => {
+          return {
+            type: 2,
+            label: `${getPlayerNick(player)}`,
+            style: 2,
+            custom_id: `vote_${player.user.id}`
+          }
+        })
+      }]
+    }
+  })
+  return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
+    method: 'PATCH',
+    body: {
+      ...response,
+      flags: 1 << 6
+    }
+  })
+}
+
+export const showVotes = async ({interaction_id, token, application_id, options, dbClient}) => {
+  const {nation} = optionsToObject(options)
+  console.log(nation)
+  await waitingMsg({interaction_id, token})
+  const content = await dbClient(async ({votes})=> {
+    const votingOptions = await votes.aggregate([
+      { $match: { nation } },
+      { $group: { _id: "$coachVote", count: { $sum: 1 } } }
+    ]).toArray()
+    console.log(votingOptions)
+    return votingOptions.map(({_id, count}) => `<@${_id}> : ${count}`).join('\r')
+  })
+  await updateResponse({application_id, token, content: content || 'No result'})
+}
+
+export const voteCoachCmd = {
+  name: 'votecoach',
+  description: 'Vote for your national team coach',
+  type: 1
+}
+
+export const showElectionCandidatesCmd = {
+  name: 'showelectioncandidates',
+  description: 'List all the election candidates and their reasons',
+  type: 1
+}
+
+export const registerElectionsCmd = {
+  name: 'registerelections',
+  description: 'Register to become a national coach',
+  type: 1,
+  options: [{
+    type: 3,
+    name: 'nation',
+    description: 'Nation',
+    autocomplete: true,
+    required: true,
+  },{
+    type: 3,
+    name: 'reason',
+    description: 'Please tell us why you\'d be a good national coach',
+    required: true,
+  }]
+}
+
 export const nationalTeamCmd = {
   name: 'nationalteam',
   description: 'List a national team players list',
@@ -270,6 +411,19 @@ export const nationalTeamCmd = {
     type: 3,
     name: 'country',
     description: 'Country',
+    autocomplete: true,
+    required: true,
+  }],
+}
+
+export const showVotesCmd = {
+  name: 'showvotes',
+  description: 'Show the votes for a nation',
+  type: 1,
+  options: [{
+    type: 3,
+    name: 'nation',
+    description: 'Nation',
     autocomplete: true,
     required: true,
   }],

@@ -53,7 +53,8 @@ export const doubleContracts = async ({interaction_id, token, application_id, db
         endedAt: null
       }},
       { $group: { 
-        _id: { team: "$team", playerId: "$playerId"}, // can be grouped on multiple properties 
+        //_id: { team: "$team", playerId: "$playerId"}, // can be grouped on multiple properties 
+        _id: { playerId: "$playerId"}, // can be grouped on multiple properties 
         dups: { "$addToSet": "$_id" }, 
         count: { "$sum": 1 } 
       }},
@@ -73,7 +74,7 @@ export const doubleContracts = async ({interaction_id, token, application_id, db
     
     // If you want to Check all "_id" which you are deleting else print statement not needed
     console.log(JSON.stringify(duplicates))
-    return duplicates
+    return JSON.stringify(duplicates)
     //const response = await contracts.deleteMany({_id:{$in:duplicates}})
     //return response
   })

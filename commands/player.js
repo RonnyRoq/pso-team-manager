@@ -128,7 +128,7 @@ export const editPlayer = async ({options=[], member, callerId, interaction_id, 
   })
 }
 
-export const getPlayersList = async(totalPlayers, teamToList, displayCountries, players, contracts) => {
+export const getPlayersList = async (totalPlayers, teamToList, displayCountries, players, contracts) => {
   const teamPlayers = totalPlayers.filter((player) => player.roles.includes(teamToList)).sort((playerA, playerB) => {
     const aManager = playerA.roles.includes(serverRoles.clubManagerRole)
     const bManager = playerB.roles.includes(serverRoles.clubManagerRole)

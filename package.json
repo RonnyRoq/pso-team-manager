@@ -15,17 +15,25 @@
   "author": "Ronan Roquais",
   "license": "MIT",
   "dependencies": {
+    "body-parser": "^1.20.2",
     "chrono-node": "^2.6.3",
+    "connect-mongodb-session": "^3.1.1",
     "cron": "^2.4.3",
+    "crypto": "^1.0.1",
     "discord-interactions": "^3.2.0",
     "discord-oauth2": "^2.11.0",
     "dotenv": "^16.0.3",
+    "ejs": "^3.1.9",
     "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "memorystore": "^1.6.7",
     "mongodb": "^6.0.0",
     "node-cache": "^5.1.2",
     "node-fetch": "^3.3.0"
   },
   "devDependencies": {
-    "nodemon": "^2.0.15"
+    "@tailwindcss/forms": "^0.5.7",
+    "nodemon": "^2.0.15",
+    "tailwindcss": "^3.3.5"
   }
 }

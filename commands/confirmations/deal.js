@@ -1,42 +1,45 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { DiscordRequest } from "../../utils.js"
-import { optionsToObject } from "../../functions/helpers.js"
+import { optionsToObject, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { serverChannels, serverRoles } from "../../config/psafServerConfig.js"
+import { seasonPhases } from "../season.js"
 
 
 const twoWeeksMs = 1209600033
 
+const preDealChecks = async({guild_id, player, member, teams, confirmations}) => {
+  if(!member.roles.includes(serverRoles.clubManagerRole)) {
+    return {message: 'This command is restricted to Club Managers'}
+  }
+  const [discPlayerResp, destTeam, ongoingConfirmation] = await Promise.all([
+    DiscordRequest(`/guilds/${guild_id}/members/${player}`, {}),
+    teams.findOne({active: true, $or: member.roles.map(id=>({id}))}),
+    confirmations.findOne({playerId: player})
+  ])
+  if(ongoingConfirmation) {
+    return {message: `<@${player}> is already confirming for <@&${ongoingConfirmation.team}>.`}
+  }
+  const discPlayer = await discPlayerResp.json()
+  const sourceTeam = await teams.findOne({active: true, $or: discPlayer.roles.map((id)=>({id}))})
+  if(discPlayer.roles.includes(serverRoles.clubManagerRole)) {
+    return {message:`Cannot recruit <@${player}> ; Club Manager of ${sourceTeam.name}.`}
+  }
+  if(sourceTeam.id === destTeam.id) {
+    return {message:`You can't buy <@${player}, he's already in your team, ${destTeam.name}.`}
+  }
+  return {sourceTeam, destTeam}
+}
+
+
 export const deal = async ({dbClient, options, guild_id, interaction_id, token, application_id, channel_id, callerId, member})=> {
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        flags: InteractionResponseFlags.EPHEMERAL
-      }
-    }
-  })
+  await waitingMsg({interaction_id, token})
   const {player, amount, desc} = optionsToObject(options)
   
   const response = await dbClient(async ({teams, confirmations, pendingDeals})=> {
-    if(!member.roles.includes(serverRoles.clubManagerRole)) {
-      return 'This command is restricted to Club Managers'
-    }
-    const [discPlayerResp, destTeam, ongoingConfirmation] = await Promise.all([
-      DiscordRequest(`/guilds/${guild_id}/members/${player}`, {}),
-      teams.findOne({active: true, $or: member.roles.map(id=>({id}))}),
-      confirmations.findOne({playerId: player})
-    ])
-    if(ongoingConfirmation) {
-      return `<@${player}> is already confirming for <@&${ongoingConfirmation.team}>.`
-    }
-    const discPlayer = await discPlayerResp.json()
-    const sourceTeam = await teams.findOne({active: true, $or: discPlayer.roles.map((id)=>({id}))})
-    if(discPlayer.roles.includes(serverRoles.clubManagerRole)) {
-      return `Cannot recruit <@${player}> ; Club Manager of ${sourceTeam.name}.`
-    }
-    if(sourceTeam.id === destTeam.id) {
-      return `You can't buy <@${player}, he's already in your team, ${destTeam.name}.`
+    const {message, sourceTeam, destTeam} = await preDealChecks({guild_id, player, member, teams, confirmations})
+    if(message) {
+      //If the checks returned a message, we stop here and return it.
+      return message
     }
     const response = `<@${callerId}> requests a transfer <@${player}> from ${sourceTeam.emoji} ${sourceTeam.name} to ${destTeam.emoji} ${destTeam.name}\rFor <:EBit:1128310625873961013>**${new Intl.NumberFormat('en-US').format(amount)} Ebits**\r${desc?desc:''}`
     const [dealPostResp, adminPostResp] = await Promise.all([
@@ -85,6 +88,70 @@ export const deal = async ({dbClient, options, guild_id, interaction_id, token, 
   })
 }
 
+const activePhase = (phase, phasesCount) => ((phase) % phasesCount)
+
+export const loan = async ({interaction_id, guild_id, application_id, token, member, options, dbClient}) => {
+  await waitingMsg({interaction_id, token})
+  const {player, amount} = optionsToObject(options)
+  if(!member.roles.includes(serverRoles.clubManagerRole)) {
+    return updateResponse({application_id, token, content: 'This command is restricted to Club Managers'})
+  }
+  const message = await dbClient(async ({pendingLoans, teams, seasonsCollect, confirmations}) => {
+    const {message, sourceTeam, destTeam} = await preDealChecks({guild_id, player, member, teams, confirmations})
+    if(message) {
+      //If the checks returned a message, we stop here and return it.
+      return message
+    }
+    await pendingLoans.updateOne({
+      playerId: player,
+      destTeam: destTeam.id
+    },{
+      $set:{
+        playerId: player,
+        teamFrom: sourceTeam.id,
+        destTeam: destTeam.id,
+        amount,
+        expiresOn: Date.now()+twoWeeksMs,
+      }
+    }, {upsert: true})
+    const seasonObj = await seasonsCollect.findOne({endedAt: null})
+    let currentPhaseIndex = seasonPhases.findIndex(({name})=> seasonObj.phase === name)
+    const phasesCount = seasonPhases.length
+    if(seasonObj.phaseStartedAt + (twoWeeksMs/2) < Date.now()) {
+      currentPhaseIndex = (currentPhaseIndex+1) % phasesCount
+    }
+    const options = [activePhase(currentPhaseIndex+1, phasesCount), activePhase(currentPhaseIndex+2, phasesCount), activePhase(currentPhaseIndex+3, phasesCount)]
+    const content = `When would <@${player}>'s loan end?`
+    const components = [{
+      type: 1,
+      components: options.map(option => {
+        let season = seasonObj.season
+        if(option <= currentPhaseIndex) {
+          season = seasonObj.season+1
+        }
+        return {
+          type: 2,
+          label: `Season ${season}, ${seasonPhases[option].desc}`,
+          style: 2,
+          custom_id: `loan_${player}_${option}`
+        }
+      })
+    }]
+    await DiscordRequest(`/webhooks/${application_id}/${token}`, {
+      method: 'POST',
+      body: {
+        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: InteractionResponseFlags.EPHEMERAL,
+        content,
+        components
+      }
+    })
+  })
+  if(message) {
+    return updateResponse({application_id, token, content: message})
+  }
+}
+
 export const dealCmd = {
   name: 'deal',
   description: 'Make a deal over a player',
@@ -104,5 +171,23 @@ export const dealCmd = {
     type: 3,
     name: 'desc',
     description: 'Any comments such as minimum amount of seasons'
+  }]
+}
+
+export const loanCmd = {
+  name: 'loan',
+  description: 'Request a loan for a player',
+  type: 1,
+  options: [{
+    type: 6,
+    name: 'player',
+    description: 'Player to loan',
+    required: true
+  },{
+    type: 4,
+    name: 'amount',
+    description: 'How much for the deal (enter 1000000 for 1M)',
+    min_value: 0,
+    required: true
   }]
 }

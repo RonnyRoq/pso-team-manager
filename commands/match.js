@@ -1,15 +1,17 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions";
 import { ObjectId } from "mongodb";
 import { fixturesChannels, matchDays } from "../config/psafServerConfig.js";
-import { msToTimestamp, optionsToObject } from "../functions/helpers.js";
+import { getCurrentSeason, getPlayerNick, msToTimestamp, optionsToObject } from "../functions/helpers.js";
 import { DiscordRequest } from "../utils.js";
 import { sleep } from "../functions/helpers.js";
 import { parseDate } from "./timestamp.js";
+import { formatDMLineup } from "./lineup.js";
+import { getAllPlayers } from "../functions/playersCache.js";
 
 const matchLogChannelId = '1151131972568092702'
 //const botTestingId = '1150376229178978377'
 
-const formatMatch = (league, homeTeam, awayTeam, match, showId, isInternational) => {
+export const formatMatch = (league, homeTeam, awayTeam, match, showId, isInternational) => {
   let response = `<${league.emoji}> **| ${league.name} ${match.matchday}** - <t:${match.dateTimestamp}:F>`
   if(isInternational) {
     response += `\r> ${homeTeam.flag} **${homeTeam.name} :vs: ${awayTeam.name}** ${awayTeam.flag}`
@@ -20,6 +22,60 @@ const formatMatch = (league, homeTeam, awayTeam, match, showId, isInternational)
   if(showId)
     response += `\rID: ${match._id}`
   return response
+}
+
+export const formatDMMatch = (league, homeTeam, awayTeam, match, homeLineup, awayLineup, isInternational, allPlayers) => {
+  let response = `## PSAF Match starting\r`
+  const embeds= []
+  if(isInternational) {
+    response += `\r${homeTeam.flag} **${homeTeam.name} :vs: ${awayTeam.name}** ${awayTeam.flag}`
+  } else {
+    response += `\r${homeTeam.flag} ${homeTeam.emoji} **${homeTeam.name}** :vs: **${awayTeam.name}** ${awayTeam.emoji} ${awayTeam.flag}`
+  }
+  if(match.password) {
+    const lobbyEmbed = {
+      type: 'rich',
+      title: `<${league.emoji}> **| ${league.name} ${match.matchday}** - <t:${match.dateTimestamp}:F>`,
+      fields: []
+    }
+    lobbyEmbed.fields.push({name: 'Match Id', value: match._id.toString()})
+    lobbyEmbed.fields.push({name: 'Lobby name', value: `PSAF ${homeTeam.name} vs ${awayTeam.name}`})
+    lobbyEmbed.fields.push({name: 'Password', value: match.password})
+    if(match.refs) {
+      lobbyEmbed.fields.push({name: 'Referee(s)', value: match.refs.split(',').map(ref=> ref?`<@${ref}>`:'').join(', ')})
+    }
+    embeds.push(lobbyEmbed)
+  }
+  const nonLineupAttributes = ['_id', 'team', 'matchId']
+  if(homeLineup) {
+    const homeEmbed = {
+      type: 'rich',
+      title: `${homeTeam.flag} ${homeTeam.emoji} ${homeTeam.name}`,
+      color: homeTeam.color,
+    }
+    const lineup = Object.fromEntries(
+      Object.entries(homeLineup)
+        .filter(([name])=> !nonLineupAttributes.includes(name))
+        .map(([name, value])=> [name, {id: value, name: getPlayerNick(allPlayers.find(player=> player?.user?.id === value))}])
+    )
+    homeEmbed.description = formatDMLineup(lineup)
+    embeds.push(homeEmbed)
+  }
+  if(awayLineup) {
+    const awayEmbed = {
+      type: 'rich',
+      title: `${awayTeam.flag} ${awayTeam.emoji} ${awayTeam.name}`,
+      color: awayTeam.color,
+    }
+    const lineup = Object.fromEntries(
+      Object.entries(awayLineup)
+        .filter(([name])=> !nonLineupAttributes.includes(name))
+        .map(([name, value])=> [name, {id: value, name: getPlayerNick(allPlayers.find(player=> player?.user?.id === value))}])
+    )
+    awayEmbed.description = formatDMLineup(lineup)
+    embeds.push(awayEmbed)
+  }
+  return {content:response, embeds}
 }
 
 const createMatch = async ({interaction_id, token, options, dbClient, isInternational}) => {
@@ -44,10 +100,11 @@ const createMatch = async ({interaction_id, token, options, dbClient, isInternat
   const currentLeague = fixturesChannels.find(({value})=> value === league)
 
   let response = `<${currentLeague.emoji}> **| ${currentLeague.name} ${matchday}** - <t:${dateTimestamp}:F>`
-  await dbClient(async ({teams, matches, nationalities})=> {
+  await dbClient(async ({teams, matches, nationalities, seasonsCollect})=> {
     const homeScore = '?'
     const awayScore = '?'
     let insertResult
+    const season = await getCurrentSeason(seasonsCollect)
     if(isInternational) {
       const [homeTeam, awayTeam] = await Promise.all([
         nationalities.findOne({name: home}),
@@ -72,6 +129,7 @@ const createMatch = async ({interaction_id, token, options, dbClient, isInternat
       homeScore,
       awayScore,
       isInternational,
+      season
     })
     response += `\rID: ${insertResult.insertedId}`
     const messageResp = await DiscordRequest(`/channels/${matchLogChannelId}/messages`, {
@@ -361,7 +419,7 @@ export const publishMatch = async ({interaction_id, token, application_id, optio
   })
 }
 
-export const getMatchesOfDay = async ({date='today', dbClient}) => {
+export const getMatchesOfDay = async ({date='today', finished=false, dbClient}) => {
   const parsedDate = parseDate(date)
   const startOfDay = new Date(parsedDate)
   startOfDay.setUTCHours(0,0,0,0)
@@ -371,40 +429,144 @@ export const getMatchesOfDay = async ({date='today', dbClient}) => {
   const endDateTimestamp = msToTimestamp(Date.parse(endOfDay))
   
   return dbClient(async ({teams, matches, nationalities}) => {
-    const matchesOfDay = await matches.find({dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, $or: [{finished:false}, {finished:null}]}).sort({dateTimestamp:1}).toArray()
+    const finishedArg = finished ? {finished: true} : {$or: [{finished:false}, {finished:null}]}
     const allTeams = await teams.find({active: true}).toArray()
     const allNationalTeams = await nationalities.find({}).toArray()
-    let response = [`${matchesOfDay.length} match${matchesOfDay.length >1?'es':''} on <t:${startDateTimestamp}:d>.`]
+    const matchesOfDay = await matches.find({dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, ...finishedArg}).sort({dateTimestamp:1}).toArray()
+    let response = [{content: `${matchesOfDay.length} match${matchesOfDay.length >1?'es':''} on <t:${startDateTimestamp}:d>.`}]
     for (const match of matchesOfDay) {
       const homeTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.home) : allTeams.find(({id})=> id === match.home)
       const awayTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.away) : allTeams.find(({id})=> id === match.away)
       const currentLeague = fixturesChannels.find(({value})=> value === match.league)
-      response.push(formatMatch(currentLeague, homeTeam, awayTeam, match, true, match.isInternational))
+      response.push({content: formatMatch(currentLeague, homeTeam, awayTeam, match, true, match.isInternational), matchId: match._id.toString()})
     }
     return response
   })
 }
 
+export const getPastMatches = async ({dbClient}) => {
+  const now = msToTimestamp(Date.now())
+  
+  return dbClient(async ({teams, matches, nationalities}) => {
+    const finishedArg = {$or: [{finished:false}, {finished:null}]}
+    const allTeams = await teams.find({active: true}).toArray()
+    const allNationalTeams = await nationalities.find({}).toArray()
+    const matchesOfDay = await matches.find({dateTimestamp: { $lt: now}, ...finishedArg}).sort({dateTimestamp:1}).toArray()
+    let response = [{content: `${matchesOfDay.length} unfinished match${matchesOfDay.length >1?'es':''} on <t:${now}:d>.`}]
+    for (const match of matchesOfDay) {
+      const homeTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.home) : allTeams.find(({id})=> id === match.home)
+      const awayTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.away) : allTeams.find(({id})=> id === match.away)
+      const currentLeague = fixturesChannels.find(({value})=> value === match.league)
+      response.push({content: formatMatch(currentLeague, homeTeam, awayTeam, match, true, match.isInternational), matchId: match._id.toString()})
+    }
+    return response
+  })
+}
+
+const nonMatchAttributes = ['_id', 'matchId', 'team']
+const toViewLineup = (rawLineup, allPlayers) => (
+  Object.fromEntries(
+    Object.entries(rawLineup)
+    .filter(([key])=> !nonMatchAttributes.includes(key))
+    .map(([key, value])=> (
+      [
+        key, {
+          id: value,
+          name: getPlayerNick(allPlayers.find(player=> player?.user?.id === value))
+        }
+      ]
+    ))
+  )
+)
+
+export const getMatch = async ({id, dbClient}) => {
+  const allPlayers = await getAllPlayers(process.env.GUILD_ID)
+  return dbClient(async({teams, matches, nationalities, lineups}) => {
+    const matchId = new ObjectId(id)
+    const match = await matches.findOne({_id: matchId})
+    const matchLineups = await lineups.find({matchId: id}).toArray()
+
+    let homeTeam, awayTeam
+    const allNationalTeams = await nationalities.find({}).toArray()
+    if(match.isInternational) {
+      const nationalTeams = await nationalities.find({name: {$in: [match.home, match.away]}})
+      homeTeam = nationalTeams.find(nation => nation.name === match.home)
+      awayTeam = nationalTeams.find(nation => nation.name === match.away)
+    } else {
+      const matchTeams = await teams.find({id: {$in:[match.home, match.away]}}).toArray()
+      homeTeam = matchTeams.find(team => team.id === match.home)
+      awayTeam = matchTeams.find(team => team.id === match.away)
+    }
+    const homeRawLineup = matchLineups.find(lineup=> lineup.team === homeTeam.id)
+    const awayRawLineup = matchLineups.find(lineup=> lineup.team === awayTeam.id)
+
+    const homeLineup = toViewLineup(homeRawLineup, allPlayers)
+    const awayLineup = toViewLineup(awayRawLineup, allPlayers)
+    return {match, homeTeam, awayTeam, allNationalTeams, homeLineup, awayLineup}
+  })
+}
+
+
+export const pastMatches = async ({interaction_id, token, application_id, dbClient}) => {
+  const response = await getPastMatches({dbClient})
+  console.log(response.length)
+  if(response.length>0) {
+    await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+      method: 'POST',
+      body: {
+        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+          content: response[0].content,
+          flags: 0
+        }
+      }
+    })
+  }
+  await response.forEach(async ({content}, index) => {
+    if(index>0) {
+      console.log(content)
+      await DiscordRequest(`/webhooks/${application_id}/${token}`, {
+        method: 'POST',
+        body: {
+          content: content,
+          flags: 0
+        }
+      })
+    }
+  });
+}
+
 export const matches = async ({interaction_id, token, application_id, options=[], dbClient}) => {
   const {date = "today", post} = optionsToObject(options)
   const response = await getMatchesOfDay({date, dbClient})
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        content: response[0],
-        flags: !post ? InteractionResponseFlags.EPHEMERAL : 0
+  if(response.length>0) {
+    await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+      method: 'POST',
+      body: {
+        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+          content: response[0].content,
+          flags: !post ? InteractionResponseFlags.EPHEMERAL : 0
+        }
       }
-    }
-  })
-  await response.forEach(async (match, index) => {
+    })
+  }
+  await response.forEach(async ({content, matchId}, index) => {
     if(index>0) {
       await DiscordRequest(`/webhooks/${application_id}/${token}`, {
         method: 'POST',
         body: {
-          content: match,
-          flags: !post ? InteractionResponseFlags.EPHEMERAL : 0
+          content: content,
+          flags: !post ? InteractionResponseFlags.EPHEMERAL : 0,
+          components: [{
+            type: 1,
+            components: [{
+              type: 2,
+              label: `Referee`,
+              style: 1,
+              custom_id: `referee_${matchId}`
+            }]
+          }]
         }
       })
     }
@@ -641,4 +803,10 @@ export const matchesCmd = {
       description: "Post the matches in the channel?"
     }
   ]
+}
+
+export const pastMatchesCmd = {
+  name: 'pastmatches',
+  description: 'List all the unresolved past matches',
+  type: 1
 }

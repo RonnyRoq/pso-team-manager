@@ -27,12 +27,14 @@ export const listDeals = async({dbClient, interaction_id, token, application_id,
     }
   })
   
-  const{team, teamsDeals} = await dbClient(async ({teams, pendingDeals})=> {
+  const{team, teamsDeals, teamsLoans} = await dbClient(async ({teams, pendingDeals, pendingLoans})=> {
     const team = await teams.findOne({$or: member.roles.map(id=> ({id})), active: true})
     const teamsDeals = await pendingDeals.find({approved: null, $or: [{teamFrom: team.id}, {destTeam: team.id}]}).toArray()
+    const teamsLoans = await pendingLoans.find({approved: null, $or: [{teamFrom: team.id}, {destTeam: team.id}]}).toArray()
     return {
       team,
-      teamsDeals
+      teamsDeals,
+      teamsLoans
     }
   })
   const content = teamsDeals.length > 0 ? `Pending deals for <@&${team.id}>:\r` : `No pending deals for <@&${team.id}>.`
@@ -44,7 +46,7 @@ export const listDeals = async({dbClient, interaction_id, token, application_id,
     }
   })
   await Promise.all([...teamsDeals.map(({playerId, teamFrom, destTeam, amount, expiresOn})=>{
-    const content = `<@${playerId}> from <@&${teamFrom}> to <@&${destTeam}> for ${new Intl.NumberFormat('en-US').format(amount)} (expires on <t:${msToTimestamp(expiresOn)}:F>)` 
+    const content = `TRANSFER: <@${playerId}> from <@&${teamFrom}> to <@&${destTeam}> for ${new Intl.NumberFormat('en-US').format(amount)} (expires on <t:${msToTimestamp(expiresOn)}:F>)` 
     return DiscordRequest(`/webhooks/${application_id}/${token}`, {
       method: 'POST',
       body: {
@@ -62,6 +64,31 @@ export const listDeals = async({dbClient, interaction_id, token, application_id,
             label: "Decline",
             style: 4,
             custom_id: "decline_deal_"+playerId,
+          }]
+        }],
+        flags: InteractionResponseFlags.EPHEMERAL,
+      }
+    })
+  }), 
+  ...teamsLoans.map(({playerId, teamFrom, destTeam,  amount, expiresOn, until, phase})=>{
+    const content = `LOAN: <@${playerId}> from <@&${teamFrom}> to <@&${destTeam}> for ${new Intl.NumberFormat('en-US').format(amount)}\rLoan would end on: Season ${until}, ${phase}\r (expires on <t:${msToTimestamp(expiresOn)}:F>)` 
+    return DiscordRequest(`/webhooks/${application_id}/${token}`, {
+      method: 'POST',
+      body: {
+        content,
+        components: team.id === destTeam ? [] :
+        [{
+          type: 1,
+          components: [{
+            type: 2,
+            label: "Approve",
+            style: 3,
+            custom_id: "approve_loan_"+playerId,
+          }, {
+            type: 2,
+            label: "Decline",
+            style: 4,
+            custom_id: "decline_loan_"+playerId,
           }]
         }],
         flags: InteractionResponseFlags.EPHEMERAL,

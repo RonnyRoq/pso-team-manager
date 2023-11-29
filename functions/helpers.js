@@ -1,5 +1,5 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions";
-import { fixturesChannels } from "../config/psafServerConfig.js";
+import { fixturesChannels, serverRoles } from "../config/psafServerConfig.js";
 import { DiscordRequest } from "../utils.js";
 
 export const isPSAF = (guild_id) => guild_id === process.env.GUILD_ID
@@ -21,7 +21,7 @@ export const optionToTimezoneStr = (option = 0) => {
 }
 
 export const getPlayerNick = (player) => 
-  player.nick || player.user.global_name || player.user.username
+  player?.nick || player?.user?.global_name || player?.user?.username || 'NO NAME'
 
 export const removePlayerPrefix = (teamShortName, playerName) => {
   const teamPrefixToRemove = `${teamShortName} | `
@@ -67,6 +67,8 @@ export const genericFormatMatch = (teams, match) => {
     response += `\r> ${homeTeam.flag} ${homeTeam.emoji} <@&${homeTeam.id}> :vs: <@&${awayTeam.id}> ${awayTeam.emoji} ${awayTeam.flag}`
   return response
 }
+
+export const isStaffRole = (role) => [serverRoles.presidentRole, serverRoles.adminRole, serverRoles.psafManagementRole, serverRoles.trialStaffRole].includes(role)
 
 export const sleep = (ms) => {
   return new Promise((resolve) => {
