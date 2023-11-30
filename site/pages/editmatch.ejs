@@ -1,7 +1,7 @@
 <%- include('header') %>
   
 <form method="post">
-  <div class="grid grid-rows-3 lg:grid-rows-1 lg:grid-cols-3 lg:my-10 items-center justify-center whitespace-nowrap">
+  <div class="grid grid-rows-3 lg:grid-rows-1 lg:grid-cols-3 lg:mt-10 lg:mb-2 items-center justify-center">
     <div class="text-3xl w-full text-left lg:text-right place-self-center font-medium">
       <%= homeTeam.name %>
     </div>
@@ -15,15 +15,15 @@
     </div>
   </div>
 
-  <div class="grid md:grid-rows-2 lg:grid-cols-2 gap-5 justify-center">
-    <button type="submit">Submit</button>
+  <div class="flex justify-center mb-5">
+    <button type="submit" class=" bg-blue-600 hover:bg-blue-900 text-white font-bold py-2 px-4 border-b-4 hover:border-b-0 hover:pb-3 border-blue-900 hover:border-blue-600 rounded">Submit</button>
   </div>
 
-  <div class="grid md:grid-rows-2 lg:grid-cols-2 gap-5 justify-center">
-    <div class="md:place-self-stretch lg:place-self-end">
+  <div class="grid grid-rows-2 gap-5 justify-center pb-10">
+    <div class="place-self-stretch">
       <%- include('editlineup', {lineup: homeLineup, prefix:'home'}); %>
     </div>
-    <div class="md:place-self-stretch lg:place-self-start">
+    <div class="place-self-stretch">
       <%- include('editlineup', {lineup: awayLineup, prefix:'away'}); %>
     </div>
   </div>
