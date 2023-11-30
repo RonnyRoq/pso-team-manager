@@ -7,9 +7,7 @@
     </div>
     <div class="items-center place-self-center text-5xl text-center font-bold">
       <img class="max-h-20 inline" src="<%= homeTeam.logo %>">
-      <span>
-        <input class="bg-slate-950 text-slate-200 mt-0 block w-full px-0.5 border-0 border-b-2 border-slate-700 focus:ring-0 focus:border-white" type="number" min="0" max="99" name="homeScore" value="<%= match.homeScore%>"> : <input class="bg-slate-950 text-slate-200 mt-0 block w-full px-0.5 border-0 border-b-2 border-slate-700 focus:ring-0 focus:border-white" type="number" name="awayScore" min="0" max="99" value="<%= match.awayScore %>">
-      </span>
+      <span> <%= match.homeScore %> : <%= match.awayScore %> </span>
       <img class="max-h-20 inline" src="<%= awayTeam.logo %>">
     </div>
     <div class="text-3xl text-right lg:text-left font-medium">
@@ -20,7 +18,7 @@
   <div class="grid md:grid-rows-2 lg:grid-cols-2 gap-5 justify-center">
     <button type="submit">Submit</button>
   </div>
-  
+
   <div class="grid md:grid-rows-2 lg:grid-cols-2 gap-5 justify-center">
     <div class="md:place-self-stretch lg:place-self-end">
       <%- include('editlineup', {lineup: homeLineup, prefix:'home'}); %>
@@ -29,6 +27,21 @@
       <%- include('editlineup', {lineup: awayLineup, prefix:'away'}); %>
     </div>
   </div>
+
+  <script type="text/javascript">
+    const homeRatingCheckbox = document.getElementsByName("home_rating")
+    const homeCheckbox = homeRatingCheckbox[0]
+    homeCheckbox.addEventListener('change', () => {
+      const allRatings = document.querySelectorAll("#home_lineup input.rating")
+      allRatings.forEach(ratingInput => ratingInput.disabled = !homeCheckbox.checked)
+    })
+    const awayRatingCheckbox = document.getElementsByName("away_rating")
+    const awayCheckbox = awayRatingCheckbox[0]
+    awayCheckbox.addEventListener('change', () => {
+      const allRatings = document.querySelectorAll("#away_lineup input.rating")
+      allRatings.forEach(ratingInput => ratingInput.disabled = !awayCheckbox.checked)
+    })
+  </script>
 
 </form>
   <%- include('footer') %>

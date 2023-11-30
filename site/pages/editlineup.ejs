@@ -1,4 +1,4 @@
-<div class="align-middle overflow-hidden rounded-lg shadow shadow-black">
+<div class="align-middle overflow-hidden rounded-lg shadow shadow-black" id="<%= prefix %>_lineup">
   <table class="min-w-full">
     <thead>
       <tr class="border-b bg-slate-800 border-slate-700">
@@ -12,7 +12,7 @@
         <th class="border-r text-center px-3.5  border-slate-700">Int</th>
         <th class="border-r text-center px-3.5  border-slate-700">Saves</th>
         <th class="border-r text-center px-2  border-slate-700">Catches</th>
-        <th class="text-center px-3.5 ">Rating</th>
+        <th class="text-center px-3.5 "><label for="<%= prefix %>_rating">Rating</label> <input name="<%= prefix %>_rating" type="checkbox" onchange="document.querySelectorAll('input.rating')"/></th>
       </tr>
     </thead>
     <tbody>
