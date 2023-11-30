@@ -10,7 +10,8 @@
   "scripts": {
     "start": "nodemon app.js",
     "register": "node commands.js",
-    "dev": "nodemon app.js"
+    "dev": "nodemon app.js",
+    "site": "nodemon sitetest.js"
   },
   "author": "Ronan Roquais",
   "license": "MIT",

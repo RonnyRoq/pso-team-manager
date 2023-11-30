@@ -1,21 +1,14 @@
 import 'dotenv/config';
 import express from 'express';
-import bodyParser from 'body-parser'
 import http from 'http';
 import https from 'https';
 import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import {
   InteractionType,
   InteractionResponseType,
   InteractionResponseFlags
 } from 'discord-interactions';
-import { MongoClient, ServerApiVersion } from 'mongodb';
 import { CronJob } from 'cron';
-import session from 'express-session'
-import createMongoStore from 'connect-mongodb-session'
-const MongoDBStore = createMongoStore(session);
 import { VerifyDiscordRequest, DiscordRequest } from './utils.js';
 import mongoClient from './functions/mongoClient.js';
 import { now } from './commands/now.js';
@@ -24,7 +17,7 @@ import { help, helpAdmin } from './commands/help.js';
 import { boxLineup, eightLineup, internationalLineup, lineup } from './commands/lineup.js';
 import { allPlayers, autoCompleteNation, editPlayer, player, players } from './commands/player.js';
 import { team } from './commands/team.js';
-import { editInterMatch, editMatch, endMatch, getMatch, getMatchesOfDay, internationalMatch, match, matchId, matches, pastMatches, publishMatch } from './commands/match.js';
+import { editInterMatch, editMatch, endMatch, getMatchesOfDay, internationalMatch, match, matchId, matches, pastMatches, publishMatch } from './commands/match.js';
 import { blacklistTeam, doubleContracts, emoji, initCountries, systemTeam } from './commands/system.js';
 import { activateTeam, editTeam } from './commands/editTeams.js';
 import { addSelection, allNationalTeams, nationalTeam, postNationalTeams, registerElections, removeSelection, showElectionCandidates, showVotes, voteCoach } from './commands/nationalTeam.js';
@@ -46,28 +39,17 @@ import { refereeMatch } from './commands/matches/actions.js';
 import { serverChannels } from './config/psafServerConfig.js';
 import { notifyMatchStart, testDMMatch } from './commands/matches/notifyMatchStart.js';
 import { voteAction } from './commands/nationalTeams/actions.js';
-import { authUser, hasSession, isStaff } from './site/siteUtils.js';
+import { client, uri } from './config/mongoConfig.js';
+import { getSite } from './site.js';
 
 const keyPath = process.env.CERTKEY;
 const certPath = process.env.CERT;
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 let online = false;
 if(fs.existsSync(keyPath)&& fs.existsSync(certPath)){
   online = true
 }
 
-const mongu = encodeURIComponent(process.env.MONGU)
-const mongp = encodeURIComponent(process.env.MONGP)
-const uri = `mongodb+srv://${mongu}:${mongp}@psoteams.gmopjmu.mongodb.net/?retryWrites=true&w=majority&ssl=true`;
-const client = new MongoClient(uri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  }
-});
 const dbClient = mongoClient(client)
 let credentials = {}
 
@@ -96,7 +78,6 @@ const displayTeam = (team) => (
 function start() {
   // Create an express app
   const app = express();
-  const site = express() // the site app
   
   // Get port, or default
   const PORT = (online ? process.env.PORT : process.env.LOCALPORT) || 8080;
@@ -105,84 +86,7 @@ function start() {
   // Parse request body and verifies incoming requests using discord-interactions package
   app.use(express.json({ verify: VerifyDiscordRequest(process.env.PUBLIC_KEY) }));
   
-  site.set('view engine', 'ejs');
-  site.set('views', __dirname + '/site/pages');
-  site.use(express.static('site'))
-
-  var store = new MongoDBStore({
-    uri,
-    collection: 'siteSessions'
-  })
-  
-  // Catch errors
-  store.on('error', function(error) {
-    console.log(error)
-  })
-
-  site.use(session({
-    cookie: { maxAge: 86400000, secure: true },
-    store,
-    /*store: new MemoryStore({
-      checkPeriod: 86400000 // prune expired entries every 24h
-    }),*/
-    resave: true,
-    saveUninitialized: true,
-    secret: process.env.SESS_SC
-  }))
-
-  site.use(bodyParser.urlencoded({extended: true}))
-
-  site.use(async(req, res, next) => {
-    if(!hasSession(req)) {
-      authUser(req, res, next)
-    } else {
-      next()
-    }
-  })
-
-  site.get('/matches', async (req, res) => {
-    const response = await getMatchesOfDay({date: 'today', dbClient})
-    return res.send(response.map(({content})=>content).join('<br >'))
-  })
-
-  site.post('/editmatch', async (req, res) => {
-    console.log(req.body)
-    return res.send(JSON.stringify(req.body))
-  })
-
-  site.get('/editmatch', async (req, res) => {
-    if(!isStaff(req))
-      return res.send('Unauthorised')
-
-    console.log('/editmatch')
-    let response = {}
-    try{
-      response = await getMatch({id: req.query.id, dbClient})
-    }
-    catch(e) {
-      console.log('Match not found', req.query.id)
-    }
-    console.log('userId', req.session.userId)
-    return res.render('editmatch', response)
-  })
-
-  site.get('/match', async (req, res) => {
-    console.log('/match')
-    let response = {}
-    try{
-      response = await getMatch({id: req.query.id, dbClient})
-    }
-    catch(e) {
-      console.log('Match not found', req.query.id)
-    }
-    return res.render('match', response)
-  })
-
-  site.get('/', async function (req, res) {
-    console.log('main', req.session)
-    return res.send('<p>no thank you</p>')
-  })
-  app.use('/site', site)
+  app.use('/site', getSite(false, uri, dbClient))
   /**
    * Interactions endpoint URL where Discord will send HTTP requests
    */
