@@ -16,6 +16,7 @@ const mongoClient = (client) => {
         pendingLoans: psoDb.collection("PendingLoans"),
         candidates: psoDb.collection("Candidates"),
         lineups: psoDb.collection("Lineups"),
+        playerStats: psoDb.collection("PlayerStats"),
         votes: psoDb.collection("Votes")
       }
       return await callback(collections)

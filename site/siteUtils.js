@@ -50,7 +50,14 @@ export const authUser = async (req, res, next) => {
   }
 }
 
-export const isStaff = async (req) => {
-  const guildMember = await oauth.getGuildMember(req.session.access_token, process.env.GUILD_ID)
+export const getGuildMember = async (req) => 
+  oauth.getGuildMember(req.session.access_token, process.env.GUILD_ID)
+
+export const isMemberStaff = async (guildMember) => {
   return (guildMember.roles.find(role => isStaffRole(role)))
+}
+
+export const isStaff = async (req) => {
+  const guildMember = await getGuildMember(req)
+  return isMemberStaff(guildMember)
 }

@@ -9,6 +9,11 @@ export const msToTimestamp = (ms) => {
   return msAsString.substring(0, msAsString.length - 3);
 }
 
+export const timestampToMs = (timestamp) => {
+  return Number(timestamp) * 1000
+  
+}
+
 export const optionToTimezoneStr = (option = 0) => {
   switch (option) {
     case 1:

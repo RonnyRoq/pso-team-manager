@@ -6,8 +6,8 @@ import { fileURLToPath } from 'url';
 import createMongoStore from 'connect-mongodb-session'
 const MongoDBStore = createMongoStore(session);
 
-import { getMatch, getMatchesOfDay } from './commands/match.js';
-import { authUser, hasSession, isStaff } from './site/siteUtils.js';
+import { getMatch, getMatchesOfDay, saveMatchStats } from './commands/match.js';
+import { authUser, getGuildMember, hasSession, isMemberStaff, isStaff } from './site/siteUtils.js';
 import { mockMatch } from './site/mockMatch.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -53,22 +53,30 @@ export const getSite = (localdev=false, uri='', dbClient={}) =>{
   }
   
   site.get('/matches', async (req, res) => {
-    const response = localdev ? [{content: 'test'}] : await getMatchesOfDay({date: 'today', dbClient})
-    return res.send(response.map(({content})=>content).join('<br >'))
+    const date = req.query.date || 'today'
+    const matches = localdev ? [] : await getMatchesOfDay({date, dbClient, forSite:true})
+    console.log(matches)
+    return res.render('matches', {matches})
+    //return res.send(response.map(({content})=>content).join('<br >'))
   })
 
   site.post('/editmatch', async (req, res) => {
-    if(!localdev && !isStaff(req))
+    if(localdev)
+      return editMatch(req, res)
+
+    const member = await getGuildMember(req)
+    if(!isMemberStaff(member))
       return res.send('Unauthorised')
-    console.log(req.body)
-    return res.send(JSON.stringify(req.body))
+    
+      console.log(req.body)
+    await saveMatchStats({id: req.query.id, dbClient, matchStats: req.body, callerId: member?.user?.id })
+    return editMatch(req, res)
   })
 
-  site.get('/editmatch', async (req, res) => {
+  const editMatch = async (req, res) => {
     if(!localdev && !isStaff(req))
       return res.send('Unauthorised')
 
-    console.log('/editmatch')
     let response = mockMatch
     if(!localdev) {
       try{
@@ -80,7 +88,9 @@ export const getSite = (localdev=false, uri='', dbClient={}) =>{
       }
     }
     return res.render('editmatch', response)
-  })
+  }
+
+  site.get('/editmatch', editMatch)
 
   site.get('/match', async (req, res) => {
     console.log('/match')

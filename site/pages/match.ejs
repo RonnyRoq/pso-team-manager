@@ -1,6 +1,5 @@
 <%- include('header') %>
   
-  
 <div class="grid grid-rows-3 lg:grid-rows-1 lg:grid-cols-3 lg:my-10 items-center justify-center">
   <div class="text-3xl w-full text-left lg:text-right place-self-center font-medium">
     <%= homeTeam.name %>
@@ -14,13 +13,24 @@
     <%= awayTeam.name %>
   </div>
 </div>
+<div class="items-center justify-center">
+  <h3><%=league.name%> <%=match.matchday%> <%= (new Date(Number(match.dateTimestamp)*1000)).toLocaleString() %></h3>
+</div>
 
 <div class="grid md:grid-rows-2 lg:grid-cols-2 gap-5 justify-center">
   <div class="md:place-self-stretch lg:place-self-end">
-    <%- include('lineup', {lineup: homeLineup}); %>
+    <% if(homeLineup.gk) { %>
+      <%- include('lineup', {lineup: homeLineup, prefix:'home'}); %>
+    <% } else {%>
+        <h2>No lineup for <%= homeTeam.name %></h2>
+    <% } %>
   </div>
   <div class="md:place-self-stretch lg:place-self-start">
-    <%- include('lineup', {lineup: awayLineup}); %>
+    <% if(awayLineup.gk) { %>
+      <%- include('lineup', {lineup: awayLineup, prefix:'away'}); %>
+    <% } else { %>
+      <h2>No lineup for <%= awayTeam.name %></h2>
+    <% } %>
   </div>
 </div>
 

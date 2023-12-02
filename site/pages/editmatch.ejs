@@ -14,17 +14,27 @@
       <%= awayTeam.name %>
     </div>
   </div>
-
+  <div class="items-center justify-center">
+    <h3><%=league.name%> <%=match.matchday%> <%= (new Date(Number(match.dateTimestamp)*1000)).toLocaleString() %></h3>
+  </div>
   <div class="flex justify-center mb-5">
     <button type="submit" class=" bg-blue-600 hover:bg-blue-900 text-white font-bold py-2 px-4 border-b-4 hover:border-b-0 hover:pb-3 border-blue-900 hover:border-blue-600 rounded">Submit</button>
   </div>
 
   <div class="grid grid-rows-2 gap-5 justify-center pb-10">
     <div class="place-self-stretch">
-      <%- include('editlineup', {lineup: homeLineup, prefix:'home'}); %>
+      <% if(homeLineup.gk) { %>
+        <%- include('editlineup', {lineup: homeLineup, prefix:'home'}); %>
+      <% } else { %>
+        <h2>No lineup for <%= homeTeam.name %></h2>
+      <% } %>
     </div>
     <div class="place-self-stretch">
-      <%- include('editlineup', {lineup: awayLineup, prefix:'away'}); %>
+      <% if(awayLineup.gk) { %>
+        <%- include('editlineup', {lineup: awayLineup, prefix:'away'}); %>
+      <% } else { %>
+        <h2>No lineup for <%= awayTeam.name %></h2>
+      <% } %>
     </div>
   </div>
 

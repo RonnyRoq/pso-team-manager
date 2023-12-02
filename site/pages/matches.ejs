@@ -1,0 +1,29 @@
+<%- include('header') %>
+
+<h1 class="my-1">Matches</h1>
+<div class="my-10 md:grid-rows-2 lg:grid-cols-2 gap-5 justify-center">
+  <div class="align-middle overflow-hidden rounded-lg shadow shadow-black">
+    <table class="min-w-full">
+      <thead>
+        <tr class="border-b text-slate-200 bg-slate-800 border-slate-700">
+          <th class="border-r px-2 text-left  border-slate-700">Home</th>
+          <th class="border-r text-center px-3.5  border-slate-700">Score</th>
+          <th class="border-r px-2 text-left  border-slate-700">Away</th>
+          <th class="border-r text-center px-3.5  border-slate-700">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% matches.forEach(match => {%>
+          <tr>
+            <td class="text-right"><%= match.homeTeam.name %></td>
+            <td><%= match.homeScore%> : <%= match.awayScore %></td>
+            <td class="text-left"><%= match.awayTeam.name %></td>
+            <td><a href="./match?id=<%= match._id.toString() %>">View</a><a href="./editmatch?id=<%= match._id.toString() %>">Edit</a></td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<%- include('footer') %>

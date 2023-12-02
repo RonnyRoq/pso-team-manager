@@ -74,6 +74,14 @@ export const fixturesChannels = [
     emoji: ':NationsLeague:1167121018905690233',
     channel: '1162009301402001418'
   },{
+    name: 'International Friendly',
+    value: '1156513002552573953',
+    emoji: ':full_star:1128309835369291827'
+  },{
+    name: 'Club Friendly',
+    value: '1156513002552573953',
+    emoji: ':__PSAF:1095732362400247838'
+  },{
     name: 'TEST',
     value: '1150376229178978377',
     emoji: ':full_star:1128309835369291827'
