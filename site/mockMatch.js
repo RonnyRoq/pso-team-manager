@@ -197,7 +197,7 @@ homeLineup: {
     sub1: { id: '342405190462341134', name: '⭐ POLG | GoatlaseHD' },
     sub2: { id: '368115588783931393', name: 'POLG | GaZ' },
     sub3: { id: '696719161614926005', name: 'POLG | Ice_Spirit' },
-    sub4: { id: '122497691451260930', name: 'POLG | eric_clive' },
+    sub4: { id: null, name: 'NO NAME' },
     sub5: { id: null, name: 'NO NAME' }
   }
 }

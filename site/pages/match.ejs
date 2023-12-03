@@ -1,37 +1,42 @@
 <%- include('header') %>
   
-<div class="grid grid-rows-3 lg:grid-rows-1 lg:grid-cols-3 lg:my-10 items-center justify-center">
-  <div class="text-3xl w-full text-left lg:text-right place-self-center font-medium">
-    <%= homeTeam.name %>
-  </div>
-  <div class="items-center place-self-center text-5xl text-center font-bold">
-    <img class="max-h-20 inline" src="<%= homeTeam.logo %>">
-    <span> <%= match.homeScore%> : <%= match.awayScore %> </span>
-    <img class="max-h-20 inline" src="<%= awayTeam.logo %>">
-  </div>
-  <div class="text-3xl text-right lg:text-left font-medium">
-    <%= awayTeam.name %>
-  </div>
-</div>
-<div class="items-center justify-center">
-  <h3><%=league.name%> <%=match.matchday%> <%= (new Date(Number(match.dateTimestamp)*1000)).toLocaleString() %></h3>
-</div>
+<div class="gap-5 m-10 flex flex-col">
 
-<div class="grid md:grid-rows-2 lg:grid-cols-2 gap-5 justify-center">
-  <div class="md:place-self-stretch lg:place-self-end">
-    <% if(homeLineup.gk) { %>
-      <%- include('lineup', {lineup: homeLineup, prefix:'home'}); %>
-    <% } else {%>
-        <h2>No lineup for <%= homeTeam.name %></h2>
-    <% } %>
+  <div class="grid grid-rows-3 lg:grid-rows-1 lg:grid-cols-3 items-center justify-center">
+    <div class="text-3xl w-full text-left lg:text-right place-self-center font-medium">
+      <%= homeTeam.name %>
+    </div>
+    <div class="items-center place-self-center text-5xl text-center font-bold">
+      <img class="max-h-20 inline" src="<%= homeTeam.logo %>">
+      <span> <%= match.homeScore%> : <%= match.awayScore %> </span>
+      <img class="max-h-20 inline" src="<%= awayTeam.logo %>">
+    </div>
+    <div class="text-3xl text-right lg:text-left font-medium">
+      <%= awayTeam.name %>
+    </div>
   </div>
-  <div class="md:place-self-stretch lg:place-self-start">
-    <% if(awayLineup.gk) { %>
-      <%- include('lineup', {lineup: awayLineup, prefix:'away'}); %>
-    <% } else { %>
-      <h2>No lineup for <%= awayTeam.name %></h2>
-    <% } %>
+  
+  <div class="flex justify-center">
+    <h3><%=league.name%> <%=match.matchday%> <%= (new Date(Number(match.dateTimestamp)*1000)).toLocaleString() %></h3>
   </div>
+  
+  <div class="grid md:grid-rows-2 lg:grid-cols-2 gap-5 lg:mx-20">
+    <div>
+      <% if(homeLineup.gk) { %>
+        <%- include('lineup', {lineup: homeLineup, prefix:'home'}); %>
+      <% } else {%>
+          <h2>No lineup for <%= homeTeam.name %></h2>
+      <% } %>
+    </div>
+    <div>
+      <% if(awayLineup.gk) { %>
+        <%- include('lineup', {lineup: awayLineup, prefix:'away'}); %>
+      <% } else { %>
+        <h2>No lineup for <%= awayTeam.name %></h2>
+      <% } %>
+    </div>
+  </div>
+  
 </div>
 
 <%- include('footer') %>

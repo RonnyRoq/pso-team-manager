@@ -729,14 +729,27 @@ select {
   --tw-backdrop-sepia:  ;
 }
 
-.mx-1 {
-  margin-left: 0.25rem;
-  margin-right: 0.25rem;
+.absolute {
+  position: absolute;
+}
+
+.m-10 {
+  margin: 2.5rem;
+}
+
+.my-1 {
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
 }
 
 .my-10 {
   margin-top: 2.5rem;
   margin-bottom: 2.5rem;
+}
+
+.mx-52 {
+  margin-left: 13rem;
+  margin-right: 13rem;
 }
 
 .mb-5 {
@@ -745,6 +758,18 @@ select {
 
 .mt-0 {
   margin-top: 0px;
+}
+
+.mb-2 {
+  margin-bottom: 0.5rem;
+}
+
+.mb-3 {
+  margin-bottom: 0.75rem;
+}
+
+.mb-4 {
+  margin-bottom: 1rem;
 }
 
 .block {
@@ -771,6 +796,11 @@ select {
   display: none;
 }
 
+.h-min {
+  height: -moz-min-content;
+  height: min-content;
+}
+
 .max-h-20 {
   max-height: 5rem;
 }
@@ -781,6 +811,14 @@ select {
 
 .min-w-full {
   min-width: 100%;
+}
+
+.origin-left {
+  transform-origin: left;
+}
+
+.grid-flow-dense {
+  grid-auto-flow: dense;
 }
 
 .grid-rows-2 {
@@ -813,6 +851,10 @@ select {
 
 .place-self-stretch {
   place-self: stretch;
+}
+
+.overflow-auto {
+  overflow: auto;
 }
 
 .overflow-hidden {
@@ -937,6 +979,10 @@ select {
   text-align: right;
 }
 
+.align-top {
+  vertical-align: top;
+}
+
 .align-middle {
   vertical-align: middle;
 }
@@ -978,6 +1024,10 @@ select {
 .shadow-black {
   --tw-shadow-color: #000;
   --tw-shadow: var(--tw-shadow-colored);
+}
+
+html {
+  color-scheme: dark;
 }
 
 .odd\:bg-slate-900:nth-child(odd) {
@@ -1025,19 +1075,25 @@ select {
 }
 
 @media (min-width: 768px) {
-  .md\:grid-rows-2 {
-    grid-template-rows: repeat(2, minmax(0, 1fr));
+  .md\:mx-52 {
+    margin-left: 13rem;
+    margin-right: 13rem;
   }
 
-  .md\:place-self-stretch {
-    place-self: stretch;
+  .md\:grid-rows-2 {
+    grid-template-rows: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 1024px) {
-  .lg\:my-10 {
-    margin-top: 2.5rem;
-    margin-bottom: 2.5rem;
+  .lg\:mx-20 {
+    margin-left: 5rem;
+    margin-right: 5rem;
+  }
+
+  .lg\:mx-52 {
+    margin-left: 13rem;
+    margin-right: 13rem;
   }
 
   .lg\:mb-2 {
@@ -1046,6 +1102,11 @@ select {
 
   .lg\:mt-10 {
     margin-top: 2.5rem;
+  }
+
+  .lg\:min-w-min {
+    min-width: -moz-min-content;
+    min-width: min-content;
   }
 
   .lg\:grid-cols-2 {
@@ -1060,12 +1121,17 @@ select {
     grid-template-rows: repeat(1, minmax(0, 1fr));
   }
 
-  .lg\:place-self-start {
-    place-self: start;
+  .lg\:items-start {
+    align-items: flex-start;
   }
 
-  .lg\:place-self-end {
-    place-self: end;
+  .lg\:justify-center {
+    justify-content: center;
+  }
+
+  .lg\:px-52 {
+    padding-left: 13rem;
+    padding-right: 13rem;
   }
 
   .lg\:text-left {
