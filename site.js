@@ -103,8 +103,13 @@ export const getSite = (localdev=false, uri='', dbClient={}) =>{
         console.log('Match not found', req.query.id)
       }
     }
-    return res.render('match', response)
+        return res.render('match', response)
   })
+
+  const matchDay = (req, res) => {
+    const data = {}
+    return res.render('matchday', data)
+  }
 
   site.get('/', async function (req, res) {
     console.log('main', req.session)

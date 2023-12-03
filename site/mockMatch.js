@@ -18,6 +18,12 @@ export const mockMatch = {
     finished: true,
     isFF: null
   },
+  league: {
+    name: 'GBL',
+    value: '1090959034963742781',
+    emoji: ':___GBL:1091064891034566676',
+    pingRole: '1154064939263213648'
+  },
   homeTeam: {
     _id: new ObjectId("64f384205c53d823389c31f1"),
     id: '1079111791822503936',

@@ -641,7 +641,7 @@ export const matchCmd = {
     type: 3,
     name: 'matchday',
     description: "The matchday, or competition stage",
-    choices: matchDays,
+    choices: matchDays.slice(24),
     required: true
   },{
     type: 3,
@@ -695,7 +695,7 @@ export const internationalMatchCmd = {
     type: 3,
     name: 'matchday',
     description: "The matchday, or competition stage",
-    choices: matchDays,
+    choices: matchDays.slice(24),
     required: true
   },{
     type: 3,
@@ -804,7 +804,7 @@ export const publishMatchCmd = {
       type: 3,
       name: 'matchday',
       description: "The matchday, or competition stage",
-      choices: matchDays,
+      choices: matchDays.slice(24),
       required: true
     },{
       type: 5,

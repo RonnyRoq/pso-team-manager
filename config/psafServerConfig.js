@@ -135,6 +135,16 @@ export const matchDays = [
     name: '3rd Place'
   },{
     name: 'Final'
+  },{
+    name: 'Day 19'
+  },{
+    name: 'Day 20'
+  },{
+    name: 'Day 21'
+  },{
+    name: 'Day 22'
+  },{
+    name: 'Day 23'
   }
 ].map(({name})=> ({name, value:name}))
 
