@@ -1,29 +1,49 @@
 <%- include('header') %>
 
-<h1 class="my-1">Matches</h1>
-<div class="my-10 md:grid-rows-2 lg:grid-cols-2 gap-5 justify-center">
-  <div class="align-middle overflow-hidden rounded-lg shadow shadow-black">
-    <table class="min-w-full">
-      <thead>
-        <tr class="border-b text-slate-200 bg-slate-800 border-slate-700">
-          <th class="border-r px-2 text-left  border-slate-700">Home</th>
-          <th class="border-r text-center px-3.5  border-slate-700">Score</th>
-          <th class="border-r px-2 text-left  border-slate-700">Away</th>
-          <th class="border-r text-center px-3.5  border-slate-700">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% matches.forEach(match => {%>
-          <tr>
-            <td class="text-right"><%= match.homeTeam.name %></td>
-            <td><%= match.homeScore%> : <%= match.awayScore %></td>
-            <td class="text-left"><%= match.awayTeam.name %></td>
-            <td><a href="./match?id=<%= match._id.toString() %>">View</a><a href="./editmatch?id=<%= match._id.toString() %>">Edit</a></td>
-          </tr>
-        <% }); %>
-      </tbody>
-    </table>
+<div class="flex flex-row">
+  <div class="flex-auto"></div>
+  <div class="justify-center mx-10 mt-10 flex flex-col">
+    <h1 class="text-3xl justify-center">Matches</h1>
+    <h1 class="text-xl justify-center">Date placeholder text</h1>
+      <div class="mt-5 ">
+        <div class="w-min overflow-hidden rounded-lg shadow shadow-black">
+          <table class="table-auto">
+            <thead>
+              <tr class="border-b text-slate-200 bg-slate-800 border-slate-700">
+                <th class="border-r text-center px-3.5 border-slate-700">Home</th>
+                <th class="border-r text-center px-3.5  border-slate-700">Score</th>
+                <th class="border-r text-center px-3.5  border-slate-700">Away</th>
+                <th class="border-r text-center border-slate-700">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% matches.forEach(match => {%>
+                <tr class="odd:bg-slate-900 even:bg-slate-800">
+                  <td class="pl-56 text-right"><%= match.homeTeam.name %></td>
+                  <td class="text-center"><%= match.homeScore%> : <%= match.awayScore %></td>
+                  <td class="pr-56 text-left"><%= match.awayTeam.name %></td>
+                  <td class="w-min flex flex-row p-2 gap-2">
+                    <a class="text-center align-middle rounded font-bold 
+                    bg-blue-600 hover:bg-blue-900 border-blue-900 hover:border-blue-600
+                    py-1 hover:pb-2 px-4 border-b-4 hover:border-b-0" 
+                    href="./match?id=<%= match._id.toString() %>">
+                      View
+                    </a>
+                    <a class="text-center align-middle rounded font-bold 
+                    bg-orange-600 hover:bg-orange-900 border-orange-900 hover:border-orange-600
+                    py-1 hover:pb-2 px-4 border-b-4 hover:border-b-0"
+                    href="./editmatch?id=<%= match._id.toString() %>">
+                      Edit
+                    </a>
+                  </td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      </div>
   </div>
+  <div class="flex-auto"></div>
 </div>
 
 <%- include('footer') %>
