@@ -17,7 +17,7 @@ import { help, helpAdmin } from './commands/help.js';
 import { boxLineup, eightLineup, internationalLineup, lineup } from './commands/lineup.js';
 import { allPlayers, autoCompleteNation, editPlayer, player, players } from './commands/player.js';
 import { team } from './commands/team.js';
-import { editInterMatch, editMatch, endMatch, getMatchesOfDay, internationalMatch, match, matchId, matches, pastMatches, publishMatch } from './commands/match.js';
+import { editInterMatch, editMatch, endMatch, getMatchesOfDay, getMatchesSummary, internationalMatch, match, matchId, matches, pastMatches, publishMatch } from './commands/match.js';
 import { blacklistTeam, doubleContracts, emoji, initCountries, systemTeam } from './commands/system.js';
 import { activateTeam, editTeam } from './commands/editTeams.js';
 import { addSelection, allNationalTeams, nationalTeam, postNationalTeams, registerElections, removeSelection, showElectionCandidates, showVotes, voteCoach } from './commands/nationalTeam.js';
@@ -27,7 +27,7 @@ import componentRegister from './componentsRegister.js'
 import commandsRegister from './commandsRegister.js';
 import { freePlayer, renew, setContract, teamTransfer, transfer } from './commands/transfers.js';
 import { innerUpdateTeam, postAllTeams, postTeam, updateTeamPost } from './commands/postTeam.js';
-import { sleep } from './functions/helpers.js';
+import { optionsToObject, sleep } from './functions/helpers.js';
 import { deal, loan } from './commands/confirmations/deal.js';
 import { listDeals } from './commands/confirmations/listDeals.js';
 import { showBlacklist } from './commands/blacklist.js';
@@ -35,12 +35,13 @@ import { emergencyOneSeasonContract, expireContracts, showExpiringContracts, sho
 import { disbandTeam, disbandTeamConfirmed } from './commands/disbandTeam.js';
 import { getCurrentSeasonPhase } from './commands/season.js';
 import { setAllMatchToSeason } from './commands/matches/batchWork.js';
-import { refereeMatch } from './commands/matches/actions.js';
+import { endMatchModalResponse, matchResultPrompt, refereeMatch } from './commands/matches/actions.js';
 import { serverChannels } from './config/psafServerConfig.js';
 import { notifyMatchStart, testDMMatch } from './commands/matches/notifyMatchStart.js';
 import { voteAction } from './commands/nationalTeams/actions.js';
 import { client, uri } from './config/mongoConfig.js';
 import { getSite } from './site.js';
+import { addSteamId } from './commands/player/steamid.js';
 
 const keyPath = process.env.CERTKEY;
 const certPath = process.env.CERT;
@@ -101,9 +102,21 @@ function start() {
         return res.send({ type: InteractionResponseType.PONG });
       }
 
+      if (type === InteractionType.APPLICATION_COMMAND_AUTOCOMPLETE) {
+        if(data.name==="editplayer"){
+          return autoCompleteNation(data, res)
+        }
+        if(data.name === "nationalteam"){
+          return autoCompleteNation(data, res)
+        }
+        return autoCompleteNation(data, res)
+      }
+      console.log(`Interaction ${type} from ${callerId}`)
+
       if(type === InteractionType.MESSAGE_COMPONENT) {
         const { message } = req.body
         const { custom_id } = data
+        console.log(`custom_id ${custom_id}`)
         if(guild_id === process.env.GUILD_ID) {
           const componentOptions = {custom_id, callerId, member, message, interaction_id, application_id, channel_id, token, guild_id, dbClient}
           if(componentRegister[custom_id]) {
@@ -133,6 +146,9 @@ function start() {
           if(custom_id.startsWith("vote_")) {
             return voteAction(componentOptions)
           }
+          if(custom_id.startsWith("match_result_")) {
+            return matchResultPrompt(componentOptions)
+          }
           return res.send({
             type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
@@ -143,18 +159,21 @@ function start() {
         }
       }
 
-      if (type === InteractionType.APPLICATION_COMMAND_AUTOCOMPLETE) {
-        if(data.name==="editplayer"){
-          return autoCompleteNation(data, res)
+      if (type === InteractionType.MODAL_SUBMIT) {
+        const {custom_id, components} = data
+        console.log(custom_id)
+        console.log(JSON.stringify(components))
+        const componentOptions = {custom_id, callerId, member, components, interaction_id, application_id, channel_id, token, guild_id, dbClient}
+        if(custom_id.startsWith('match_result')) {
+          return endMatchModalResponse(componentOptions)
         }
-        if(data.name === "nationalteam"){
-          return autoCompleteNation(data, res)
-        }
-        return autoCompleteNation(data, res)
       }
 
       if (type === InteractionType.APPLICATION_COMMAND) {
         const { name, options } = data;
+        const optionsObj = optionsToObject(options || [])
+        console.log(`command ${name}`)
+        console.log(optionsObj)
 
         const commandOptions = {
           name, options, member, interaction_id, application_id, channel_id, token, guild_id, callerId, res, dbClient
@@ -513,6 +532,10 @@ function start() {
             })
           }
 
+          if(name === "addsteamid") {
+            return addSteamId(commandOptions)
+          }
+
           if(name === "systemteam") {
             return systemTeam(commandOptions)
           }
@@ -642,6 +665,11 @@ function start() {
               label: `Referee`,
               style: 1,
               custom_id: `referee_${matchId}`
+            }, {
+              type: 2,
+              label: `Enter Result`,
+              style: 1,
+              custom_id: `match_result_${matchId}`
             }]
           }]
         } : {
@@ -687,17 +715,16 @@ function start() {
   new CronJob(
     '0 22 * * *',
     async function() {
-      console.log('every day at 22')/*
-      const response = await getMatchesOfDay({date:'today', finished:true, dbClient})
-      await response.forEach(async ({content}) => {
-        const body = {
-          content
-        }
+      console.log('every day at 22')
+      const response = await getMatchesSummary({dbClient})
+      for await(const message of response) {
         await DiscordRequest(`/channels/${serverChannels.dailyResultsChannelId}/messages`, {
           method: 'POST',
-          body
+          body: {
+            content: message
+          }
         })
-      })*/
+      }
     },
     null, 
     true, 

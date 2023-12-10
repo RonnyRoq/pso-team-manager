@@ -50,7 +50,7 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
     }
   })
   const {team, seasons, nationality, extranat} = Object.fromEntries(options.map(({name, value})=> [name, value]))
-
+  
   const response = await dbClient(async ({teams, players, nationalities, confirmations, pendingDeals, pendingLoans})=> {
     const [allTeams, dbPlayer, allCountries, previousConfirmation, pendingDeal, pendingLoan] = await Promise.all([
       teams.find({active: true}).toArray(),
@@ -84,6 +84,12 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
 
     if(!dbPlayer?.nat1 && extranat && extranat === nationality) {
       return 'No need to enter the same nationality as an extra one :)'
+    }
+    if(!dbPlayer?.nat1 && !allCountries.find(({name})=> name === nationality)) {
+      return `Can't find ${nationality}, please select one of the nationalities of the autofill`
+    }
+    if(!dbPlayer?.nat1 && extranat && !allCountries.find(({name})=> name === extranat)) {
+      return `Can't find ${extranat}, please select one of the nationalities of the autofill`
     }
 
     const nat1 = dbPlayer?.nat1 || nationality

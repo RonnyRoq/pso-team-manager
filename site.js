@@ -9,6 +9,7 @@ const MongoDBStore = createMongoStore(session);
 import { getMatch, getMatchesOfDay, saveMatchStats } from './commands/match.js';
 import { authUser, getGuildMember, hasSession, isMemberStaff, isStaff } from './site/siteUtils.js';
 import { mockMatch } from './site/mockMatch.js';
+import mockMatches from './site/mockMatches.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,10 +55,9 @@ export const getSite = (localdev=false, uri='', dbClient={}) =>{
   
   site.get('/matches', async (req, res) => {
     const date = req.query.date || 'today'
-    const matches = localdev ? [] : await getMatchesOfDay({date, dbClient, forSite:true})
+    const matches = localdev ? mockMatches.values : await getMatchesOfDay({date, dbClient, forSite:true})
     console.log(matches)
     return res.render('matches', {matches})
-    //return res.send(response.map(({content})=>content).join('<br >'))
   })
 
   site.post('/editmatch', async (req, res) => {
@@ -106,10 +106,10 @@ export const getSite = (localdev=false, uri='', dbClient={}) =>{
         return res.render('match', response)
   })
 
-  const matchDay = (req, res) => {
+/*  const matchDay = (req, res) => {
     const data = {}
     return res.render('matchday', data)
-  }
+  }*/
 
   site.get('/', async function (req, res) {
     console.log('main', req.session)

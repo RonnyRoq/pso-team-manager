@@ -169,4 +169,5 @@ export const serverChannels = {
   clubsChannelId: '1072206607196360764',
   scheduleChannelId: '1136790176488755303',
   dailyResultsChannelId: '1174360872886489118',
+  lobbiesChannelId: '1081887877274812487'
 }

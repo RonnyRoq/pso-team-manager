@@ -49,7 +49,7 @@ const transferMessage = ({playerId, team, seasons, desc, callerId}) => `# :bust_
 const teamTransferMessage = ({playerId, teamFromId, team, seasons, amount, desc, callerId}) => 
 `# <@&${teamFromId}> :arrow_right: <@&${team}>\r> <:EBit:1128310625873961013> ${new Intl.NumberFormat('en-US').format(amount)} EBits\r> <@${playerId}>\r> for ${seasons} seasons.\r*(from <@${callerId}>)*${desc ? `\r${desc}`: ' '}`
 const loanMessage = ({playerId, team, teamFromId, callerId, amount, phase, until}) => 
-`# <@&${teamFromId}> :arrow_right: <@&${team}>\r> <:EBit:1128310625873961013> ${new Intl.NumberFormat('en-US').format(amount)} EBits\r> <@${playerId}>\r> **LOAN** until seaon ${until}, beginning of ${seasonPhases[phase].desc}.\r*(from <@${callerId}>)*`
+`# <@&${teamFromId}> :arrow_right: <@&${team}>\r> <:EBit:1128310625873961013> ${new Intl.NumberFormat('en-US').format(amount)} EBits\r> <@${playerId}>\r> **LOAN** until season ${until}, beginning of ${seasonPhases[phase].desc}.\r*(from <@${callerId}>)*`
 
 export const transferAction = async ({interaction_id, token, application_id, message, dbClient, callerId, guild_id}) => {
   await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {

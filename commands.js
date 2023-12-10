@@ -20,6 +20,7 @@ import { expireContractsCmd, showExpiringContractsCmd, showNoContractsCmd } from
 import { disbandTeamCmd } from './commands/disbandTeam.js';
 import { getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd } from './commands/season.js';
 import { testDMMatchCmd } from './commands/matches/notifyMatchStart.js';
+import { addSteamIdCmd } from './commands/player/steamid.js';
 
 const TEAMS = {
   name: 'teams',
@@ -103,7 +104,7 @@ const GUILD_COMMANDS = [
   nationalTeamCmd, allNationalTeamsCmd, postNationalTeamsCmd, addSelectionCmd, removeSelectionCmd,
   TEAMS, transferCmd, teamTransferCmd, FREEPLAYER, FINE, BONUS, editTeamCmd,
   internationalLineupCmd, helpAdminCmd, emojiCmd, showBlacklistCmd, showNoContractsCmd, registerElectionsCmd, showElectionCandidatesCmd, voteCoachCmd, showVotesCmd,
-  disbandTeamCmd, expireContractsCmd,
+  disbandTeamCmd, expireContractsCmd, addSteamIdCmd,
   getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd, testDMMatchCmd, pastMatchesCmd,
   systemTeamCmd, initCountriesCmd, postTeamCmd, postAllTeamsCmd, setContractCmd, updateTeamPostCmd, doubleContractsCmd, blacklistTeamCmd, showExpiringContractsCmd,
 ]

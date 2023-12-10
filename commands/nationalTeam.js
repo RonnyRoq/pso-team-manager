@@ -28,7 +28,7 @@ const getNationalTeamPostInsideDb = async (allPlayers, players, nation) => {
 
 const getNationalTeamPost = async ({country, guild_id, dbClient}) => {
   const allPlayers = await getAllPlayers(guild_id)
-  return dbClient(async ({players, nationalities})=>{
+  return await dbClient(async ({players, nationalities})=>{
     const nation = await nationalities.findOne({name: country})
     return await getNationalTeamPostInsideDb(allPlayers, players, nation)
   })

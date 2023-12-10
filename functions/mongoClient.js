@@ -26,6 +26,7 @@ const mongoClient = (client) => {
       throw e
     }
     finally {
+      console.log('close Db')
       db.close()
     }
   }

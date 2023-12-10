@@ -4,12 +4,13 @@ import { getPlayerNick, msToTimestamp, optionsToObject, sleep } from "../functio
 import { countries } from "../config/countriesConfig.js"
 import { getAllPlayers } from "../functions/playersCache.js"
 import { serverRoles } from "../config/psafServerConfig.js"
+import { isMemberStaff } from "../site/siteUtils.js"
 
 const nationalTeamPlayerRole = '1103327647955685536'
 const staffRoles = ['1081886764366573658', '1072210995927339139', '1072201212356726836']
 const autocompleteCountries = countries.map(({name, flag})=> ({name, flag, display: flag+name, search: name.toLowerCase()}))
 
-export const player = async ({options, interaction_id, callerId, guild_id, application_id, token, dbClient}) => {
+export const player = async ({options, interaction_id, callerId, guild_id, application_id, member, token, dbClient}) => {
   const [{value}] = options || [{}]
   const playerId = value || callerId
   
@@ -40,6 +41,9 @@ export const player = async ({options, interaction_id, callerId, guild_id, appli
       const country3 = await nationalities.findOne({name: dbPlayer.nat3})
       if(country){
         response += `${country.flag} ${discPlayer.roles.includes(nationalTeamPlayerRole) ? 'International': ''}${country2? `, ${country2.flag}`: ''}${country3? `, ${country3.flag}`: ''}\r`
+      }
+      if(isMemberStaff(member)) {
+        response += `Steam: ${dbPlayer.steam || 'Not saved'}\r`
       }
       if(dbPlayer.desc) {
         response += `Description: *${dbPlayer.desc}*\r`

@@ -54,46 +54,43 @@ export const formatLineup = ({gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, su
   return response
 }
 
+const saveLineupNextMatch = async ({dbClient, lineup, member }) => {
+  let playerTeam=''
+  const startOfDay = new Date()
+  startOfDay.setUTCHours(startOfDay.getHours()-1,0,0,0)
+  const endOfDay = new Date()
+  endOfDay.setUTCHours(23,59,59,999)
+  const startDateTimestamp = msToTimestamp(Date.parse(startOfDay))
+  const endDateTimestamp = msToTimestamp(Date.parse(endOfDay))
+  await dbClient(async ({teams, matches, lineups})=>{
+    const memberTeam = await getPlayerTeam(member, teams)
+    const nextMatches = await matches.find({dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, finished: {$in: [false, null]}, $or: [{home: memberTeam.id}, {away: memberTeam.id}]}).sort({dateTimestamp:1}).toArray()
+    const nextMatch = nextMatches[0]
+    if(nextMatch) {
+      const teamsOfMatch = await teams.find({active: true, $or:[{id:nextMatch.home}, {id:nextMatch.away}]}).toArray()
+      playerTeam = genericFormatMatch(teamsOfMatch, nextMatch) + '\r'
+      const matchId = nextMatch._id.toString()
+      await lineups.updateOne({matchId, team:memberTeam.id}, {
+        $setOnInsert: {
+          matchId,
+          team: memberTeam.id
+        },
+        $set: {
+          ...lineup
+        }
+      }, {upsert: true})
+    }
+    playerTeam += memberTeam.emoji+' ' + memberTeam.name +' '
+    return playerTeam
+  })
+}
+
 export const lineup = async({options, res, member, guild_id, dbClient}) => {
-  const {gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5, vs} = Object.fromEntries(options.map(({name, value})=> [name, value]))
+  const lineup = optionsToObject(options)
+  const {gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5, vs} = lineup
   let playerTeam = ''
-  if(process.env.GUILD_ID === guild_id) {  
-    const startOfDay = new Date()
-    startOfDay.setUTCHours(startOfDay.getHours()-1,0,0,0)
-    const endOfDay = new Date()
-    endOfDay.setUTCHours(23,59,59,999)
-    const startDateTimestamp = msToTimestamp(Date.parse(startOfDay))
-    const endDateTimestamp = msToTimestamp(Date.parse(endOfDay))
-    await dbClient(async ({teams, matches, lineups})=>{
-      const memberTeam = await getPlayerTeam(member, teams)
-      const nextMatches = await matches.find({dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, finished: {$in: [false, null]}, $or: [{home: memberTeam.id}, {away: memberTeam.id}]}).sort({dateTimestamp:1}).toArray()
-      const nextMatch = nextMatches[0]
-      if(nextMatch) {
-        const teamsOfMatch = await teams.find({active: true, $or:[{id:nextMatch.home}, {id:nextMatch.away}]}).toArray()
-        playerTeam = genericFormatMatch(teamsOfMatch, nextMatch) + '\r'
-        const matchId = nextMatch._id.toString()
-        await lineups.updateOne({matchId, team:memberTeam.id}, {
-          $setOnInsert: {
-            matchId,
-            team: memberTeam.id
-          },
-          $set: {
-            gk,
-            lb,
-            rb,
-            cm,
-            lw,
-            rw,
-            sub1,
-            sub2,
-            sub3,
-            sub4,
-            sub5
-          }
-        }, {upsert: true})
-      }
-      playerTeam += memberTeam.emoji+' ' + memberTeam.name +' '
-    })
+  if(process.env.GUILD_ID === guild_id) {
+    playerTeam = await saveLineupNextMatch({dbClient, lineup, member})
   }
   let response = `${playerTeam}lineup ${vs? `vs ${vs}`: ''}\r`
   response += formatLineup({gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5})
@@ -126,13 +123,11 @@ export const internationalLineup = async ({options, res, callerId, guild_id, dbC
 }
 
 export const eightLineup = async ({options, res, member, guild_id, dbClient}) => {
-  const {gk, lb, cb, rb, lcm, rcm, lst, rst, sub1, sub2, sub3, sub4, sub5, sub6, vs} = optionsToObject(options)
+  const lineup = optionsToObject(options)
+  const {gk, lb, cb, rb, lcm, rcm, lst, rst, sub1, sub2, sub3, sub4, sub5, sub6, vs} = lineup
   let playerTeam = ''
   if(process.env.GUILD_ID === guild_id) {
-    await dbClient(async ({teams})=>{            
-      const memberTeam = await getPlayerTeam(member, teams)
-      playerTeam = memberTeam.emoji+' ' + memberTeam.name +' '
-    })
+    saveLineupNextMatch({dbClient, lineup, member})
   }
   let response = `${playerTeam}lineup ${vs? `vs ${vs}`: ''}\r`
   response += `GK: <@${gk}>\r`;

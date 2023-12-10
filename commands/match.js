@@ -1,7 +1,7 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions";
 import { ObjectId } from "mongodb";
 import { fixturesChannels, matchDays } from "../config/psafServerConfig.js";
-import { getCurrentSeason, getPlayerNick, msToTimestamp, optionsToObject } from "../functions/helpers.js";
+import { getCurrentSeason, getPlayerNick, msToTimestamp, optionsToObject, updateResponse, waitingMsg } from "../functions/helpers.js";
 import { DiscordRequest } from "../utils.js";
 import { sleep } from "../functions/helpers.js";
 import { parseDate } from "./timestamp.js";
@@ -43,6 +43,8 @@ export const formatDMMatch = (league, homeTeam, awayTeam, match, homeLineup, awa
     lobbyEmbed.fields.push({name: 'Password', value: match.password})
     if(match.refs) {
       lobbyEmbed.fields.push({name: 'Referee(s)', value: match.refs.split(',').map(ref=> ref?`<@${ref}>`:'').join(', ')})
+    } else {
+      lobbyEmbed.fields.push({name: 'NO REFEREE', value: `${homeTeam.name} is responsible for creating the lobby`})
     }
     embeds.push(lobbyEmbed)
   }
@@ -163,7 +165,7 @@ export const internationalMatch = async ({interaction_id, token,  options, dbCli
 }
 
 export const matchId = async ({interaction_id, token, options, dbClient}) => {
-  const {home, away} = Object.fromEntries(options.map(({name, value})=> [name, value]))
+  const {home, away} = optionsToObject(options)
   return await dbClient(async ({matches})=> {
     const foundMatches = await matches.find({home, away}).sort({dateTimestamp: 1}).toArray()
     if(foundMatches.length === 0) {
@@ -185,7 +187,16 @@ export const matchId = async ({interaction_id, token, options, dbClient}) => {
         type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
           content: response,
-          flags: 1 << 6
+          flags: 1 << 6,
+          components: [{
+            type: 1,
+            components: [{
+              type: 2,
+              label: `Enter Result`,
+              style: 2,
+              custom_id: `match_result_${foundMatches[0]._id}`
+            }]
+          }]
         }
       }
     })
@@ -284,23 +295,13 @@ export const editInterMatch = async ({interaction_id, token, options, dbClient})
   return editAMatch({interaction_id, token, options, dbClient, isInternational:true})
 }
 
-export const endMatch = async ({interaction_id, token, options, dbClient}) => {
-  const {id, homescore, awayscore, ff} = optionsToObject(options)
 
+export const internalEndMatch = async ({id, homeScore, awayScore, ff, dbClient}) => {
   const matchId = new ObjectId(id)
-  return await dbClient(async ({teams, matches, nationalities}) => {
+  return dbClient(async ({teams, matches, nationalities}) => {
     const match = await matches.findOne(matchId)
     if(!match) {
-      return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-        method: 'POST',
-        body: {
-          type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: {
-            content: `Match ${id} not found`,
-            flags: 1 << 6
-          }
-        }
-      })
+      return `Match ${id} not found`
     }
     
     const [homeTeam, awayTeam] = await Promise.all([
@@ -311,13 +312,13 @@ export const endMatch = async ({interaction_id, token, options, dbClient}) => {
     const currentLeague = fixturesChannels.find(({value})=> value === match.league)
     const channel = currentLeague.channel || currentLeague.value
     await matches.updateOne({"_id": matchId}, {$set: {
-      homeScore: homescore,
-      awayScore: awayscore,
+      homeScore,
+      awayScore,
       isFF: ff,
       finished: true
     }})
-    const post = formatMatch(currentLeague, homeTeam, awayTeam, {...match, homeScore: homescore, awayScore:awayscore, isFF: ff}, false, match.isInternational)
-    const response = formatMatch(currentLeague, homeTeam, awayTeam, {...match, homeScore: homescore, awayScore:awayscore, isFF: ff}, true, match.isInternational)
+    const post = formatMatch(currentLeague, homeTeam, awayTeam, {...match, homeScore, awayScore, isFF: ff}, false, match.isInternational)
+    const response = formatMatch(currentLeague, homeTeam, awayTeam, {...match, homeScore, awayScore, isFF: ff}, true, match.isInternational)
     if(match.messageId) {
       await DiscordRequest(`/channels/${channel}/messages/${match.messageId}`, {
         method: 'PATCH',
@@ -336,17 +337,16 @@ export const endMatch = async ({interaction_id, token, options, dbClient}) => {
         }
       })
     }
-    return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-      method: 'POST',
-      body: {
-        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: `Updated \r`+response,
-          flags: 1 << 6
-        }
-      }
-    })
+    return `Updated \r`+response
   })
+}
+
+export const endMatch = async ({interaction_id, token, application_id, options, dbClient}) => {
+  const {id, homescore, awayscore, ff} = optionsToObject(options)
+  await waitingMsg({interaction_id, token})
+
+  const content = await internalEndMatch({id, homeScore:homescore, awayScore:awayscore, ff, dbClient})
+  return updateResponse({application_id, token, content})
 }
 
 export const publishMatch = async ({interaction_id, token, application_id, options, dbClient}) => {
@@ -368,7 +368,7 @@ export const publishMatch = async ({interaction_id, token, application_id, optio
     const teamsCursor = teams.find({active: true})
     const allTeams = await teamsCursor.toArray()
     const allNationalTeams = await nationalities.find({}).toArray()
-    const matchCursor = matches.find({league, matchday, messageId: null})
+    const matchCursor = matches.find({league, matchday, messageId: null}, {sort: {dateTimestamp: 1}})
     for await (const match of matchCursor) {
       const homeTeam = match.isInternational ? allNationalTeams.find(({name})=> name === match.home) : allTeams.find(({id})=> id === match.home)
       const awayTeam = match.isInternational ? allNationalTeams.find(({name})=> name === match.away) : allTeams.find(({id})=> id === match.away)
@@ -419,6 +419,32 @@ export const publishMatch = async ({interaction_id, token, application_id, optio
   })
 }
 
+export const getMatchesSummary = async({dbClient}) => {
+  const matchesData = await getMatchesOfDay({forSite: true, finished: true, dbClient})
+  const timestamp = msToTimestamp(Date.now())
+  const messages = [`# <t:${timestamp}:d> Results`]
+  const leagues = new Array(fixturesChannels.length)
+  matchesData.forEach((match => {
+    const indexToAdd = fixturesChannels.findIndex((league) => league.name === match.league.name)
+    leagues[indexToAdd] = [...(leagues[indexToAdd]||[]), match]
+  }))
+  
+  leagues.forEach((leagueMatches, index) => {
+    if(leagueMatches?.length > 0) {
+      const message = `## ${fixturesChannels[index].name} <${fixturesChannels[index].emoji}>\r`
+      const matchesMessage = leagueMatches.map(({isInternational, homeTeam, awayTeam, homeScore, awayScore, isFF}) => (
+        isInternational ? (
+          `> ${homeTeam.flag} **${homeTeam.name} ${homeScore} : ${awayScore}${isFF ? ' **ff**': ''} ${awayTeam.name}** ${awayTeam.flag}`
+        ) : (
+          `> ${homeTeam.flag} ${homeTeam.emoji} <@&${homeTeam.id}> ${homeScore} : ${awayScore}${isFF ? ' **ff**': ''} <@&${awayTeam.id}> ${awayTeam.emoji} ${awayTeam.flag}`
+        )
+      )).join('\r')
+      messages.push(message+matchesMessage)
+    }
+  })
+  return messages
+}
+
 export const getMatchesOfDay = async ({date='today', finished=false, dbClient, forSite= false}) => {
   const parsedDate = parseDate(date)
   const startOfDay = new Date(parsedDate)
@@ -428,45 +454,51 @@ export const getMatchesOfDay = async ({date='today', finished=false, dbClient, f
   const startDateTimestamp = msToTimestamp(Date.parse(startOfDay))
   const endDateTimestamp = msToTimestamp(Date.parse(endOfDay))
   
-  return dbClient(async ({teams, matches, nationalities, lineups}) => {
-    const finishedArg = finished ? {finished: true} : {$or: [{finished:false}, {finished:null}]}
-    const allTeams = await teams.find({active: true}).toArray()
-    const allNationalTeams = await nationalities.find({}).toArray()
-    const matchesOfDay = await matches.find({dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, ...finishedArg}).sort({dateTimestamp:1}).toArray()
+  const {allTeams, allNationalTeams, matchesOfDay, lineupsOfDay} = await dbClient(async ({teams, matches, nationalities, lineups}) => {
+    const finishedArg = forSite ? {} : (finished ? {finished: true} : {$or: [{finished:false}, {finished:null}]})
+    let lineupsOfDay = []
+    const [allTeams, allNationalTeams, matchesOfDay] = await Promise.all([
+      teams.find({active: true}).toArray(),
+      nationalities.find({}).toArray(),
+      matches.find({dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, ...finishedArg}).sort({dateTimestamp:1}).toArray(),
+    ])
     if(forSite) {
-      const lineupsOfDay = await lineups.find({matchId: {$in: matchesOfDay.map(match=> match._id.toString())}}).toArray()
-      return matchesOfDay.map(match => {
-        const homeTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.home) : allTeams.find(({id})=> id === match.home)
-        const awayTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.away) : allTeams.find(({id})=> id === match.away)
-        const league = fixturesChannels.find(({value})=> value === match.league)
-        const homeLineup = lineupsOfDay.find(lineup => lineup.matchId === match._id.toString() && match.home === lineup.team)
-        const awayLineup = lineupsOfDay.find(lineup => lineup.matchId === match._id.toString() && match.home === lineup.team)
-        return {
-          ...match,
-          homeLineup,
-          awayLineup,
-          homeTeam,
-          awayTeam,
-          league,
-        }
-      })
-    } else {
-      let response = [{content: `${matchesOfDay.length} match${matchesOfDay.length >1?'es':''} on <t:${startDateTimestamp}:d>.`}]
-      for (const match of matchesOfDay) {
-        const homeTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.home) : allTeams.find(({id})=> id === match.home)
-        const awayTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.away) : allTeams.find(({id})=> id === match.away)
-        const currentLeague = fixturesChannels.find(({value})=> value === match.league)
-        response.push({content: formatMatch(currentLeague, homeTeam, awayTeam, match, true, match.isInternational), matchId: match._id.toString()})
-      }
-      return response
+      lineupsOfDay = await lineups.find({matchId: {$in: matchesOfDay.map(match=> match._id.toString())}}).toArray()
     }
+    return {allTeams, allNationalTeams, matchesOfDay, lineupsOfDay}
   })
+  if(forSite){
+    return matchesOfDay.map(match => {
+      const homeTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.home) : allTeams.find(({id})=> id === match.home)
+      const awayTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.away) : allTeams.find(({id})=> id === match.away)
+      const league = fixturesChannels.find(({value})=> value === match.league)
+      const homeLineup = lineupsOfDay.find(lineup => lineup.matchId === match._id.toString() && match.home === lineup.team)
+      const awayLineup = lineupsOfDay.find(lineup => lineup.matchId === match._id.toString() && match.home === lineup.team)
+      return {
+        ...match,
+        homeLineup,
+        awayLineup,
+        homeTeam,
+        awayTeam,
+        league,
+      }
+    })
+  } else {
+    let response = [{content: `${matchesOfDay.length} match${matchesOfDay.length >1?'es':''} on <t:${startDateTimestamp}:d>.`}]
+    for (const match of matchesOfDay) {
+      const homeTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.home) : allTeams.find(({id})=> id === match.home)
+      const awayTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.away) : allTeams.find(({id})=> id === match.away)
+      const currentLeague = fixturesChannels.find(({value})=> value === match.league)
+      response.push({content: formatMatch(currentLeague, homeTeam, awayTeam, match, true, match.isInternational), matchId: match._id.toString()})
+    }
+    return response
+  }
 }
 
 export const getPastMatches = async ({dbClient}) => {
   const now = msToTimestamp(Date.now())
   
-  return dbClient(async ({teams, matches, nationalities}) => {
+  return await dbClient(async ({teams, matches, nationalities}) => {
     const finishedArg = {$or: [{finished:false}, {finished:null}]}
     const allTeams = await teams.find({active: true}).toArray()
     const allNationalTeams = await nationalities.find({}).toArray()
@@ -501,7 +533,7 @@ const toViewLineup = (rawLineup={}, allPlayers, lineupStats) => (
 
 export const getMatch = async ({id, dbClient}) => {
   const allPlayers = await getAllPlayers(process.env.GUILD_ID)
-  return dbClient(async({teams, matches, nationalities, lineups, playerStats}) => {
+  return await dbClient(async({teams, matches, nationalities, lineups, playerStats}) => {
     const matchId = new ObjectId(id)
     const match = await matches.findOne({_id: matchId})
     const matchLineups = await lineups.find({matchId: id}).toArray()
@@ -609,6 +641,11 @@ export const matches = async ({interaction_id, token, application_id, options=[]
               label: `Referee`,
               style: 1,
               custom_id: `referee_${matchId}`
+            }, {
+              type: 2,
+              label: `Enter Result`,
+              style: 1,
+              custom_id: `match_result_${matchId}`
             }]
           }]
         }
@@ -641,7 +678,7 @@ export const matchCmd = {
     type: 3,
     name: 'matchday',
     description: "The matchday, or competition stage",
-    choices: matchDays.slice(24),
+    choices: matchDays.slice(0,24),
     required: true
   },{
     type: 3,
@@ -695,7 +732,7 @@ export const internationalMatchCmd = {
     type: 3,
     name: 'matchday',
     description: "The matchday, or competition stage",
-    choices: matchDays.slice(24),
+    choices: matchDays.slice(0,24),
     required: true
   },{
     type: 3,
@@ -804,7 +841,7 @@ export const publishMatchCmd = {
       type: 3,
       name: 'matchday',
       description: "The matchday, or competition stage",
-      choices: matchDays.slice(24),
+      choices: matchDays.slice(0,24),
       required: true
     },{
       type: 5,
