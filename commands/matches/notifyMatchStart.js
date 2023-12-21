@@ -1,6 +1,6 @@
 import { InteractionResponseType } from "discord-interactions"
 import { fixturesChannels, serverChannels } from "../../config/psafServerConfig.js"
-import { msToTimestamp, optionsToObject, sleep } from "../../functions/helpers.js"
+import { isNumeric, msToTimestamp, optionsToObject, sleep } from "../../functions/helpers.js"
 import { getAllPlayers } from "../../functions/playersCache.js"
 import { DiscordRequest } from "../../utils.js"
 import { formatDMMatch } from "../match.js"
@@ -8,7 +8,7 @@ import { parseDate } from "../timestamp.js"
 
 export const lineupToArray = (lineup) => {
   // eslint-disable-next-line no-unused-vars
-  const {_id, matchId, team, ...players} = lineup
+  const {_id, matchId, team, vs, ...players} = lineup
   return Object.entries(players).map(([,id])=>id)
 }
 export const notifyMatchStart = async ({dbClient}) => {
@@ -18,7 +18,7 @@ export const notifyMatchStart = async ({dbClient}) => {
     const [allTeams, allNationalTeams, startingMatches] = await Promise.all([
       teams.find({active: true}).toArray(),
       nationalities.find({}).toArray(),
-      matches.find({dateTimestamp: {$gte: now.toString(), $lte: plusTen.toString()}, password: null}).toArray()
+      matches.find({dateTimestamp: {$gte: now.toString(), $lte: plusTen.toString()}, password: null, finished: null}).toArray()
     ])
     const matchLineups = await lineups.find({matchId: {$in: startingMatches.map(match=>match._id.toString())}}).toArray()
     const notifyMatches = await Promise.all(startingMatches.map(async match => {
@@ -64,17 +64,22 @@ export const notifyMatchStart = async ({dbClient}) => {
       for await (const matchRef of matchRefs) {
         console.log(matchRef)
         if(matchRef && !recipients.includes(matchRef)) {
-          const userChannelResp = await DiscordRequest('/users/@me/channels', {
-            method: 'POST',
-            body:{
-              recipient_id: matchRef
-            }
-          })
-          const userChannel = await userChannelResp.json()
-          await DiscordRequest(`/channels/${userChannel.id}/messages`, {
-            method: 'POST',
-            body
-          })
+          try{
+            const userChannelResp = await DiscordRequest('/users/@me/channels', {
+              method: 'POST',
+              body:{
+                recipient_id: matchRef
+              }
+            })
+            const userChannel = await userChannelResp.json()
+            await DiscordRequest(`/channels/${userChannel.id}/messages`, {
+              method: 'POST',
+              body
+            })
+          }
+          catch(e) {
+            console.log(e)
+          }
           recipients.push(matchRef)
           await sleep(500)
         }
@@ -85,21 +90,26 @@ export const notifyMatchStart = async ({dbClient}) => {
       console.log(homeLineup)
       console.log(homeIds)
       if(homeIds[0]) {
-        await Promise.all(homeIds.map(async homePlayer => {
+        await Promise.allSettled(homeIds.map(async homePlayer => {
           console.log(homePlayer)
-          if(homePlayer && !recipients.includes(homePlayer)) {
-            const userChannelResp = await DiscordRequest('/users/@me/channels', {
-              method: 'POST',
-              body:{
-                recipient_id: homePlayer
-              }
-            })
-            const userChannel = await userChannelResp.json()
-            await DiscordRequest(`/channels/${userChannel.id}/messages`, {
-              method: 'POST',
-              body
-            })
-            recipients.push(homePlayer)
+          if(homePlayer && !recipients.includes(homePlayer) && isNumeric(homePlayer)) {
+            try{
+              const userChannelResp = await DiscordRequest('/users/@me/channels', {
+                method: 'POST',
+                body:{
+                  recipient_id: homePlayer
+                }
+              })
+              const userChannel = await userChannelResp.json()
+              await DiscordRequest(`/channels/${userChannel.id}/messages`, {
+                method: 'POST',
+                body
+              })
+              recipients.push(homePlayer)
+            }
+            catch(e){
+              console.log(e)
+            }
             return sleep(500)
           }
           return Promise.resolve({})
@@ -109,21 +119,26 @@ export const notifyMatchStart = async ({dbClient}) => {
     if(awayLineup) {
       const awayIds = lineupToArray(awayLineup)
       if(awayIds[0]) {
-        await Promise.all(awayIds.map(async awayPlayer => {
+        await Promise.allSettled(awayIds.map(async awayPlayer => {
           console.log(awayPlayer)
-          if(awayPlayer && !recipients.includes(awayPlayer)) {
-            const userChannelResp = await DiscordRequest('/users/@me/channels', {
-              method: 'POST',
-              body:{
-                recipient_id: awayPlayer
-              }
-            })
-            const userChannel = await userChannelResp.json()
-            await DiscordRequest(`/channels/${userChannel.id}/messages`, {
-              method: 'POST',
-              body
-            })
-            recipients.push(awayPlayer)
+          if(awayPlayer && !recipients.includes(awayPlayer) && isNumeric(awayPlayer)) {
+            try{
+              const userChannelResp = await DiscordRequest('/users/@me/channels', {
+                method: 'POST',
+                body:{
+                  recipient_id: awayPlayer
+                }
+              })
+              const userChannel = await userChannelResp.json()
+              await DiscordRequest(`/channels/${userChannel.id}/messages`, {
+                method: 'POST',
+                body
+              })
+              recipients.push(awayPlayer)
+            }
+            catch(e){
+              console.log(e)
+            }
             return sleep(500)
           }
           return Promise.resolve({})

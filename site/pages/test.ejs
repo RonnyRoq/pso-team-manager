@@ -1,0 +1,78 @@
+<html>
+  <body>
+    <canvas height="800" width="800"></canvas>
+    <script type="text/javascript">
+      const canvas = document.querySelector("canvas");
+      const ctx = canvas.getContext("2d");
+      const gradient = ctx.createLinearGradient(0, 0, 800, 800);
+
+      // Add three color stops
+      gradient.addColorStop(0, "#000080");
+      gradient.addColorStop(1, "#4848c0");
+      ctx.fillStyle = gradient
+      // Add a rectangle at (10, 10) with size 100x100 pixels
+      ctx.fillRect(10, 10, 790, 790);
+      ctx.textAlign = 'left'
+      ctx.fillStyle = '#f0f0f0'
+      ctx.roundRect(50, 50, 700, 700, 15)
+      ctx.fill()
+
+      ctx.fillStyle = '#101010'
+      ctx.font = 'bold 24px sans-serif'
+      ctx.fillText("GBL", 65, 80);
+      ctx.font = 'bold 16px sans-serif'
+
+      ctx.fillStyle = '#101040'
+      ctx.fillRect(65, 90, 655, 50)
+
+      ctx.fillStyle = '#f0f0f0'
+      ctx.fillText('#', 78, 120)
+      ctx.fillText('Team', 100, 120)
+      ctx.textAlign = 'center'
+      ctx.fillText('Pts', 320, 120)
+      ctx.fillText('M', 355, 120)
+      ctx.fillText('W', 385, 120)
+      ctx.fillText('D', 415, 120)
+      ctx.fillText('L', 445, 120)
+      ctx.fillText('G', 475, 120)
+      ctx.fillText('A', 505, 120)
+      ctx.fillText('GA', 535, 120)
+      ctx.fillText('FFs', 575, 120)
+
+      ctx.fillStyle = '#101010'
+      ctx.font = 'bold 16px sans-serif'
+      ctx.textAlign = 'right'
+      ctx.fillText('1', 85, 165)
+      
+      ctx.textAlign = 'left'
+      ctx.fillText('Luton Town FC', 100, 165)
+      ctx.textAlign = 'right'
+      ctx.fillText('12', 330, 165)
+      ctx.fillText('4', 365, 165)
+      ctx.fillText('4', 395, 165)
+      ctx.fillText('0', 425, 165)
+      ctx.fillText('0', 455, 165)
+      ctx.fillText('27', 485, 165)
+      ctx.fillText('8', 515, 165)
+      ctx.fillText('19', 545, 165)
+      ctx.fillText('0', 580, 165)
+
+      
+      ctx.fillText('2', 85, 195)
+      ctx.textAlign = 'left'
+      ctx.fillText('Leeds United', 100, 195)
+      ctx.textAlign = 'right'
+      ctx.fillText('10', 330, 195)
+      ctx.fillText('4', 365, 195)
+      ctx.fillText('3', 395, 195)
+      ctx.fillText('1', 425, 195)
+      ctx.fillText('0', 455, 195)
+      ctx.fillText('22', 485, 195)
+      ctx.fillText('5', 515, 195)
+      ctx.fillText('17', 545, 195)
+      ctx.fillText('0', 580, 195)
+
+      
+    </script>
+  </body>
+</html>

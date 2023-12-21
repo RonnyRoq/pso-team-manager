@@ -45,7 +45,7 @@ export const listDeals = async({dbClient, interaction_id, token, application_id,
       flags: InteractionResponseFlags.EPHEMERAL,
     }
   })
-  await Promise.all([...teamsDeals.map(({playerId, teamFrom, destTeam, amount, expiresOn})=>{
+  await Promise.all([...teamsDeals.map(({_id, playerId, teamFrom, destTeam, amount, expiresOn})=>{
     const content = `TRANSFER: <@${playerId}> from <@&${teamFrom}> to <@&${destTeam}> for ${new Intl.NumberFormat('en-US').format(amount)} (expires on <t:${msToTimestamp(expiresOn)}:F>)` 
     return DiscordRequest(`/webhooks/${application_id}/${token}`, {
       method: 'POST',
@@ -58,19 +58,19 @@ export const listDeals = async({dbClient, interaction_id, token, application_id,
             type: 2,
             label: "Approve",
             style: 3,
-            custom_id: "approve_deal_"+playerId,
+            custom_id: "approve_deal_"+_id.toString(),
           }, {
             type: 2,
             label: "Decline",
             style: 4,
-            custom_id: "decline_deal_"+playerId,
+            custom_id: "decline_deal_"+_id.toString(),
           }]
         }],
         flags: InteractionResponseFlags.EPHEMERAL,
       }
     })
   }), 
-  ...teamsLoans.map(({playerId, teamFrom, destTeam,  amount, expiresOn, until, phase})=>{
+  ...teamsLoans.map(({_id, playerId, teamFrom, destTeam,  amount, expiresOn, until, phase})=>{
     const content = `LOAN: <@${playerId}> from <@&${teamFrom}> to <@&${destTeam}> for ${new Intl.NumberFormat('en-US').format(amount)}\rLoan would end on: Season ${until}, ${phase}\r (expires on <t:${msToTimestamp(expiresOn)}:F>)` 
     return DiscordRequest(`/webhooks/${application_id}/${token}`, {
       method: 'POST',
@@ -83,12 +83,12 @@ export const listDeals = async({dbClient, interaction_id, token, application_id,
             type: 2,
             label: "Approve",
             style: 3,
-            custom_id: "approve_loan_"+playerId,
+            custom_id: "approve_loan_"+_id.toString(),
           }, {
             type: 2,
             label: "Decline",
             style: 4,
-            custom_id: "decline_loan_"+playerId,
+            custom_id: "decline_loan_"+_id.toString(),
           }]
         }],
         flags: InteractionResponseFlags.EPHEMERAL,

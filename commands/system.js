@@ -115,7 +115,7 @@ export const doubleContracts = async ({interaction_id, token, application_id, db
   })
 }*/
 
-export const blacklistTeam = async ({interaction_id, application_id, token, guild_id, options}) => {
+export const blacklistTeam = async ({interaction_id, application_id, token, guild_id, options, dbClient}) => {
   await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
     method: 'POST',
     body: {
@@ -126,6 +126,9 @@ export const blacklistTeam = async ({interaction_id, application_id, token, guil
     }
   })
   const {team} = optionsToObject(options)
+  await dbClient(({teams})=> 
+    teams.updateOne({id:team}, {$set: {disqualified: true}})
+  )
   const allPlayers = await getAllPlayers(guild_id)
   const teamPlayers = allPlayers.filter(({roles})=> roles.includes(team))
   await Promise.all(teamPlayers.map(({user, roles}) => (

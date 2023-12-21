@@ -35,13 +35,17 @@ import { emergencyOneSeasonContract, expireContracts, showExpiringContracts, sho
 import { disbandTeam, disbandTeamConfirmed } from './commands/disbandTeam.js';
 import { getCurrentSeasonPhase } from './commands/season.js';
 import { setAllMatchToSeason } from './commands/matches/batchWork.js';
-import { endMatchModalResponse, matchResultPrompt, refereeMatch } from './commands/matches/actions.js';
-import { serverChannels } from './config/psafServerConfig.js';
+import { endMatchModalResponse, enterRatingsModal, matchResultPrompt, refereeMatch } from './commands/matches/actions.js';
+import { fixturesChannels, serverChannels } from './config/psafServerConfig.js';
 import { notifyMatchStart, testDMMatch } from './commands/matches/notifyMatchStart.js';
 import { voteAction } from './commands/nationalTeams/actions.js';
 import { client, uri } from './config/mongoConfig.js';
 import { getSite } from './site.js';
 import { addSteamId } from './commands/player/steamid.js';
+import { addToLeague } from './commands/league/addToLeague.js';
+import { leagueTeams } from './commands/league/leagueTeams.js';
+import { imageLeagueTable, leagueTable, postLeagueTable, updateLeagueTable } from './commands/league/leagueTable.js';
+import { generateMatchday } from './commands/matches/matchday.js';
 
 const keyPath = process.env.CERTKEY;
 const certPath = process.env.CERT;
@@ -148,6 +152,9 @@ function start() {
           }
           if(custom_id.startsWith("match_result_")) {
             return matchResultPrompt(componentOptions)
+          }
+          if(custom_id.startsWith("matchratings_")) {
+            return enterRatingsModal(componentOptions)
           }
           return res.send({
             type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -536,6 +543,30 @@ function start() {
             return addSteamId(commandOptions)
           }
 
+          if(name === "addtoleague") {
+            return addToLeague(commandOptions)
+          }
+
+          if(name === "leagueteams") {
+            return leagueTeams(commandOptions)
+          }
+
+          if(name === "leaguetable") {
+            return leagueTable(commandOptions)
+          }
+
+          if(name === "postleaguetable") {
+            return postLeagueTable(commandOptions)
+          }
+
+          if(name === "imgleaguetable") {
+            return imageLeagueTable(commandOptions)
+          }
+
+          if(name === "generatematchday") {
+            return generateMatchday(commandOptions)
+          }
+
           if(name === "systemteam") {
             return systemTeam(commandOptions)
           }
@@ -670,6 +701,11 @@ function start() {
               label: `Enter Result`,
               style: 1,
               custom_id: `match_result_${matchId}`
+            }, {
+              type: 2,
+              label: `Enter stats`,
+              style: 5,
+              url: `https://pso.shinmugen.net/site/editmatch?id=${matchId}`
             }]
           }]
         } : {
@@ -713,7 +749,7 @@ function start() {
     'Europe/London'
   )
   new CronJob(
-    '0 22 * * *',
+    '1 22 * * *',
     async function() {
       console.log('every day at 22')
       const response = await getMatchesSummary({dbClient})
@@ -725,6 +761,46 @@ function start() {
           }
         })
       }
+    },
+    null, 
+    true, 
+    'Europe/London'
+  )
+  new CronJob(
+    '31 22 * * *',
+    async function() {
+      const league = fixturesChannels.find(chan=> chan.name === 'GBL')
+      await updateLeagueTable({dbClient, league: league.value})
+    },
+    null,
+    true,
+    'Europe/London'
+  )
+  new CronJob(
+    '33 22 * * *',
+    async function() {
+      const league = fixturesChannels.find(chan=> chan.name === 'MSL')
+      await updateLeagueTable({dbClient, league: league.value})
+    },
+    null, 
+    true, 
+    'Europe/London'
+  )
+  new CronJob(
+    '35 22 * * *',
+    async function() {
+      const league = fixturesChannels.find(chan=> chan.name === 'ENCEL')
+      await updateLeagueTable({dbClient, league: league.value})
+    },
+    null, 
+    true, 
+    'Europe/London'
+  )
+  new CronJob(
+    '37 22 * * *',
+    async function() {
+      const league = fixturesChannels.find(chan=> chan.name === 'WEL')
+      await updateLeagueTable({dbClient, league: league.value})
     },
     null, 
     true, 

@@ -238,7 +238,7 @@ export const players = async ({guild_id, interaction_id, application_id, token, 
   const response = await dbClient(async ({players, nationalities, contracts})=> {
     const [allNations, teamContracts] = await Promise.all([
       nationalities.find({}).toArray(),
-      contracts.find({team}).toArray()
+      contracts.find({team, endedAt: null}).toArray()
     ])
     const displayCountries = Object.fromEntries(allNations.map(({name, flag})=> ([name, flag])))
     return getPlayersList(totalPlayers, team, displayCountries, players, teamContracts)

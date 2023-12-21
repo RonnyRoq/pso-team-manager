@@ -14,7 +14,7 @@ const innerTransferAction = async ({teams, contracts, seasonsCollect, guild_id, 
     DiscordRequest(`/guilds/${guild_id}/members/${playerId}`, {}),
   ])
   if(!pendingLoan){
-    await contracts.updateMany({playerId}, {$set: {endedAt: Date.now()}})
+    await contracts.updateMany({playerId, endedAt:null}, {$set: {endedAt: Date.now()}})
   }
   const currentSeason = await getCurrentSeason(seasonsCollect)
   const playerTransfer = await playerResp.json();

@@ -22,19 +22,19 @@
       <%- include('lineupposition', {prefix, posName: 'CM', pos:'cm', player: lineup.cm, bg: "bg-slate-800"}) %>
       <%- include('lineupposition', {prefix, posName: 'LW', pos:'lw', player: lineup.lw, bg: "bg-slate-900"}) %>
       <%- include('lineupposition', {prefix, posName: 'RW', pos:'rw', player: lineup.rw, bg: "bg-slate-800"}) %>
-      <% if(lineup.sub1.id) { %>
+      <% if(lineup.sub1?.id) { %>
         <%- include('lineupposition', {prefix, posName: 'Sub 1', pos:'sub1', player: lineup.sub1, bg: "bg-slate-900"}) %>
       <% } %>
-      <% if(lineup.sub2.id) { %>
+      <% if(lineup.sub2?.id) { %>
         <%- include('lineupposition', {prefix, posName: 'Sub 2', pos:'sub2', player: lineup.sub2, bg: "bg-slate-800"}) %>
       <% } %>
-      <% if(lineup.sub3.id) { %>
+      <% if(lineup.sub3?.id) { %>
         <%- include('lineupposition', {prefix, posName: 'Sub 3', pos:'sub3', player: lineup.sub3, bg: "bg-slate-900"}) %>
       <% } %>
-      <% if(lineup.sub4.id) { %>
+      <% if(lineup.sub4?.id) { %>
         <%- include('lineupposition', {prefix, posName: 'Sub 4', pos:'sub4', player: lineup.sub4, bg: "bg-slate-800"}) %>
       <% } %>
-      <% if(lineup.sub5.id) { %>
+      <% if(lineup.sub5?.id) { %>
         <%- include('lineupposition', {prefix, posName: 'Sub 5', pos:'sub5', player: lineup.sub5, bg: "bg-slate-900"}) %>
       <% } %>
     </tbody>

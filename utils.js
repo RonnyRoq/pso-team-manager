@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import fetch from 'node-fetch';
+import formData from 'form-data';
 import { verifyKey } from 'discord-interactions';
 import { sleep } from './functions/helpers.js';
 
@@ -14,6 +15,48 @@ export function VerifyDiscordRequest(clientKey) {
       throw new Error('Bad request signature');
     }
   };
+}
+export const DiscordUploadRequest = async (endpoint, options={}) => {
+  // append endpoint to root API URL
+  const url = 'https://discord.com/api/v10/' + endpoint;
+  let payload = {...options}
+  // Stringify payloads
+  const {files, ...body} = options.body
+
+  if (options.body) payload.body = JSON.stringify(body);
+  // Use node-fetch to make requests
+  const headers = {
+    Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
+    'Content-Type': 'application/json; charset=UTF-8',
+    'User-Agent': 'PSAF Team Manager',
+  }
+  const form = new formData();
+  options.body.attachments.forEach(({filename}, index) => {
+    form.append(filename, JSON.stringify(files[index]))
+  });
+  let res = await fetch(url, {
+    'body': form,
+    headers: {
+      ...headers,
+      ...form.getHeaders()
+    },
+    ...payload
+  });
+  // throw API errors
+  if (!res.ok) {
+    const data = await res.json();
+    console.log(endpoint);
+    //console.log(JSON.stringify(options))
+    console.log(JSON.stringify(data))
+    if(data.retry_after) {
+      await sleep(data.retry_after*1000)
+      res = await DiscordRequest(endpoint, options)
+    } else {
+      throw new Error(JSON.stringify(data));
+    }
+  }
+  // return original response
+  return res;
 }
 
 export async function DiscordRequest(endpoint, options={}) {

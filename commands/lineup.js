@@ -4,13 +4,26 @@ import {
 import { getPlayerTeam, getPlayerNick, optionsToObject, msToTimestamp, genericFormatMatch } from '../functions/helpers.js';
 import { getAllPlayers } from '../functions/playersCache.js';
 
-export const formatDMLineup = ({gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5}) => {
+export const formatDMLineup = ({gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5, cb, lcm, rcm, lst, rst}) => {
   let response = `**GK:** ${gk.name} (<@${gk.id}>)\r`;
   response += `**LB:** ${lb.name} (<@${lb.id}>)\r`;
+  if(cb) {
+    response += `**CB:** ${cb.name} (<@${cb.id}>)\r`;
+  }
   response += `**RB:** ${rb.name} (<@${rb.id}>)\r`;
-  response += `**CM:** ${cm.name} (<@${cm.id}>)\r`;
-  response += `**LW:** ${lw.name} (<@${lw.id}>)\r`;
-  response += `**RW:** ${rw.name} (<@${rw.id}>)`;
+  if(lcm) {
+    response += `**LCM:** ${lcm.name} (<@${lcm.id}>)\r`;
+    response += `**RCM:** ${rcm.name} (<@${rcm.id}>)\r`;
+  } else {
+    response += `**CM:** ${cm.name} (<@${cm.id}>)\r`;
+  }
+  if(lst) {
+    response += `**LST:** ${lst.name} (<@${lst.id}>)\r`;
+    response += `**RST:** ${rst.name} (<@${rst.id}>)`;
+  } else {
+    response += `**LW:** ${lw.name} (<@${lw.id}>)\r`;
+    response += `**RW:** ${rw.name} (<@${rw.id}>)`;
+  }
   if(sub1?.id) {
     response += `\r**Subs:** ${sub1.name} (<@${sub1.id}>)`;
   }
@@ -81,8 +94,8 @@ const saveLineupNextMatch = async ({dbClient, lineup, member }) => {
       }, {upsert: true})
     }
     playerTeam += memberTeam.emoji+' ' + memberTeam.name +' '
-    return playerTeam
   })
+  return playerTeam
 }
 
 export const lineup = async({options, res, member, guild_id, dbClient}) => {
@@ -127,7 +140,7 @@ export const eightLineup = async ({options, res, member, guild_id, dbClient}) =>
   const {gk, lb, cb, rb, lcm, rcm, lst, rst, sub1, sub2, sub3, sub4, sub5, sub6, vs} = lineup
   let playerTeam = ''
   if(process.env.GUILD_ID === guild_id) {
-    saveLineupNextMatch({dbClient, lineup, member})
+    playerTeam = await saveLineupNextMatch({dbClient, lineup, member})
   }
   let response = `${playerTeam}lineup ${vs? `vs ${vs}`: ''}\r`
   response += `GK: <@${gk}>\r`;

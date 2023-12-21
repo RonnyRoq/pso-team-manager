@@ -2,22 +2,27 @@ export const fixturesChannels = [
   { name: 'GBL',
     value: '1090959034963742781',
     emoji: ':___GBL:1091064891034566676',
-    pingRole: '1154064939263213648'
+    pingRole: '1154064939263213648',
+    standingsMsg: '1185321840047038514'
   },{
     name: 'MSL',
     value: '1112413187489411072',
     emoji: ':___MSL:1109239585701101588',
-    pingRole: '1154065063360069763'
+    pingRole: '1154065063360069763',
+    standingsMsg: '1185321632194105494'
   },{
     name:'ENCEL',
     value: '1090959133668294666',
     emoji: ':___ENCEL:1091064847212494989',
-    pingRole: '1154065149888561162'
+    pingRole: '1154065149888561162',
+    standingsMsg: '1185322055089000500'
   },{
     name:'WEL',
     value: '1177013563974500513',
     emoji: ':__PSAF:1095732362400247838',
-    pingRole: '1154065149888561162'
+    pingRole: '1177014748856991755',
+    standingsMsg: '1185330583514132550',
+    players: 8
   },{
     name: 'Challengers League (Group A)',
     value: '1101999929171394653-a',
@@ -169,5 +174,6 @@ export const serverChannels = {
   clubsChannelId: '1072206607196360764',
   scheduleChannelId: '1136790176488755303',
   dailyResultsChannelId: '1174360872886489118',
-  lobbiesChannelId: '1081887877274812487'
+  lobbiesChannelId: '1081887877274812487',
+  standingsChannelId: '1185321370977050775'
 }

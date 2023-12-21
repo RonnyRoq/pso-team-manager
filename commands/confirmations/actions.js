@@ -5,11 +5,12 @@ import { serverChannels, serverRoles } from "../../config/psafServerConfig.js"
 import { getPlayerNick, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { seasonPhases } from "../season.js"
 import { twoWeeksMs } from "../../config/constants.js"
+import { ObjectId } from "mongodb"
 
 export const removeConfirmation = async ({dbClient, interaction_id, token, message }) => {
   const content = await dbClient(async({confirmations, pendingDeals, pendingLoans})=> {
     const confirmation = await confirmations.findOne({adminMessage: message.id})
-    return innerRemoveConfirmation({reason: 'Denied by admin', ...confirmation, confirmations, pendingDeals, pendingLoans})
+    return innerRemoveConfirmation({reason: 'Denied by admin', ...confirmation, confirmations, pendingDeals, pendingLoans, messageId: message.id})
   })
   
   return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
@@ -78,9 +79,10 @@ export const declineDealAction =  async ({member, application_id, interaction_id
       }
     })
   }
-  const playerId = custom_id.substr("decline_deal_".length)
+  const dealId = custom_id.substr("decline_deal_".length)
+  const _id = new ObjectId(dealId)
   const content = await dbClient(async ({pendingDeals}) => {
-    const pendingDeal = await pendingDeals.findOne({playerId, approved: null})
+    const pendingDeal = await pendingDeals.findOne({_id, approved: null})
     if(!pendingDeal) {
       return "Can't find the deal you're trying to decline."
     }
@@ -90,7 +92,7 @@ export const declineDealAction =  async ({member, application_id, interaction_id
     }
 
     await innerRemoveDeal({reason: `Declined by <@${callerId}>`, ...pendingDeal})
-    await pendingDeals.deleteOne({playerId})
+    await pendingDeals.deleteOne({_id})
     return 'Deal declined'
   })
   return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
@@ -121,9 +123,10 @@ export const declineLoanAction =  async ({member, application_id, interaction_id
       }
     })
   }
-  const playerId = custom_id.substr("decline_loan_".length)
+  const loanId = custom_id.substr("decline_loan_".length)
+  const _id = new ObjectId(loanId)
   const content = await dbClient(async ({pendingLoans}) => {
-    const pendingDeal = await pendingLoans.findOne({playerId, approved: null})
+    const pendingDeal = await pendingLoans.findOne({_id, approved: null})
     if(!pendingDeal) {
       return "Can't find the loan you're trying to decline."
     }
@@ -133,7 +136,7 @@ export const declineLoanAction =  async ({member, application_id, interaction_id
     }
 
     await innerRemoveDeal({reason: `Declined by <@${callerId}>`, ...pendingDeal})
-    await pendingLoans.deleteOne({playerId})
+    await pendingLoans.deleteOne({_id})
     return 'Loan declined'
   })
   return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
@@ -164,9 +167,10 @@ export const approveDealAction = async ({member, application_id, interaction_id,
       }
     })
   }
-  const playerId = custom_id.substr("approve_deal_".length)
+  const dealId = custom_id.substr("approve_deal_".length)
+  const _id = new ObjectId(dealId)
   const content = await dbClient(async ({pendingDeals}) => {
-    const pendingDeal = await pendingDeals.findOne({playerId, approved: null})
+    const pendingDeal = await pendingDeals.findOne({_id, approved: null})
     if(!pendingDeal) {
       return "Can't find the deal you're trying to approve."
     }
@@ -177,7 +181,7 @@ export const approveDealAction = async ({member, application_id, interaction_id,
     }
 
     await innerRemoveDeal({reason: `Approved by <@${callerId}>`, ...pendingDeal, dbClient})
-    await pendingDeals.updateOne({playerId}, {$set: {approved: true}})
+    await pendingDeals.updateOne({_id}, {$set: {approved: true}})
     return 'Deal approved'
   })
   return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
@@ -209,9 +213,10 @@ export const approveLoanAction = async ({member, application_id, interaction_id,
       }
     })
   }
-  const playerId = custom_id.substr("approve_loan_".length)
+  const loanId = custom_id.substr("approve_loan_".length)
+  const _id = new ObjectId(loanId)
   const content = await dbClient(async ({pendingLoans}) => {
-    const pendingDeal = await pendingLoans.findOne({playerId, approved: null})
+    const pendingDeal = await pendingLoans.findOne({_id, approved: null})
     if(!pendingDeal) {
       return "Can't find the loan you're trying to approve."
     }
@@ -222,7 +227,7 @@ export const approveLoanAction = async ({member, application_id, interaction_id,
     }
 
     await innerRemoveDeal({reason: `Approved by <@${callerId}>`, ...pendingDeal, dbClient})
-    await pendingLoans.updateOne({playerId}, {$set: {approved: true}})
+    await pendingLoans.updateOne({_id}, {$set: {approved: true}})
     return 'Loan approved'
   })
   return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {

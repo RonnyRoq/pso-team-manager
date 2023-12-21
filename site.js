@@ -111,6 +111,10 @@ export const getSite = (localdev=false, uri='', dbClient={}) =>{
     return res.render('matchday', data)
   }*/
 
+  site.get('/test', async (req, res)=> {
+    return res.render('test')
+  })
+
   site.get('/', async function (req, res) {
     console.log('main', req.session)
     return res.send('<p>no thank you</p>')

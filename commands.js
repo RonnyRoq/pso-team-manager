@@ -21,6 +21,10 @@ import { disbandTeamCmd } from './commands/disbandTeam.js';
 import { getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd } from './commands/season.js';
 import { testDMMatchCmd } from './commands/matches/notifyMatchStart.js';
 import { addSteamIdCmd } from './commands/player/steamid.js';
+import { addToLeagueCmd } from './commands/league/addToLeague.js';
+import { leagueTeamsCmd } from './commands/league/leagueTeams.js';
+import { imageLeagueTableCmd, leagueTableCmd, postLeagueTableCmd } from './commands/league/leagueTable.js';
+import { generateMatchdayCmd } from './commands/matches/matchday.js';
 
 const TEAMS = {
   name: 'teams',
@@ -104,7 +108,8 @@ const GUILD_COMMANDS = [
   nationalTeamCmd, allNationalTeamsCmd, postNationalTeamsCmd, addSelectionCmd, removeSelectionCmd,
   TEAMS, transferCmd, teamTransferCmd, FREEPLAYER, FINE, BONUS, editTeamCmd,
   internationalLineupCmd, helpAdminCmd, emojiCmd, showBlacklistCmd, showNoContractsCmd, registerElectionsCmd, showElectionCandidatesCmd, voteCoachCmd, showVotesCmd,
-  disbandTeamCmd, expireContractsCmd, addSteamIdCmd,
+  disbandTeamCmd, expireContractsCmd, addSteamIdCmd, 
+  addToLeagueCmd, leagueTeamsCmd, leagueTableCmd, imageLeagueTableCmd, postLeagueTableCmd, generateMatchdayCmd,
   getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd, testDMMatchCmd, pastMatchesCmd,
   systemTeamCmd, initCountriesCmd, postTeamCmd, postAllTeamsCmd, setContractCmd, updateTeamPostCmd, doubleContractsCmd, blacklistTeamCmd, showExpiringContractsCmd,
 ]

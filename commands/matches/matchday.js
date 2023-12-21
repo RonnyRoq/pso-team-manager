@@ -1,7 +1,45 @@
-import { InteractionResponseType } from "discord-interactions"
-import { DiscordRequest } from "../../utils"
+import { fixturesChannels, matchDays } from "../../config/psafServerConfig.js"
+import { getCurrentSeason, msToTimestamp, optionsToObject, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { parseDate } from "chrono-node"
+import { editAMatchInternal } from "../match.js"
 
-export const matchDay = async ({interaction_id, token, dbClient}) => {
+const thirtyMinutes = 30*60
+
+export const generateMatchday = async ({interaction_id, token, application_id, dbClient, options}) => {
+  const {league, matchday, date} = optionsToObject(options)
+  const parsedDate = parseDate(date)
+  const startOfDay = new Date(parsedDate)
+  startOfDay.setUTCHours(17,0,0,0)
+  const endOfDay = new Date(parsedDate)
+  endOfDay.setUTCHours(20,30,0,0)
+  const startDateTimestamp = msToTimestamp(Date.parse(startOfDay))
+  const endDateTimestamp = msToTimestamp(Date.parse(endOfDay))
+
+  const leagueObj = fixturesChannels.find(fixtureChan=> fixtureChan.value === league)
+  let currentTimestamp = startDateTimestamp
+  await waitingMsg({interaction_id, token})
+  let processedMatchesIds = []
+  const content = await dbClient(async({matches, seasonsCollect, teams, nationalities})=> {
+    const currentSeason = await getCurrentSeason(seasonsCollect)
+    const matchesOfDay = matches.find({season: currentSeason, league, matchday, finished: null})
+    for await (const match of matchesOfDay) {
+      await matches.updateOne({_id: match._id}, {$set: {dateTimestamp: currentTimestamp}})
+      processedMatchesIds.push(match._id.toString())
+      currentTimestamp = (parseInt(currentTimestamp) + thirtyMinutes).toString()
+      if(currentTimestamp > endDateTimestamp) {
+        currentTimestamp = startDateTimestamp
+      }
+    }
+    await Promise.allSettled(processedMatchesIds.map(id => editAMatchInternal({id, teams, nationalities, matches})))
+    return `${leagueObj.name} ${matchday}: ${processedMatchesIds.length} matches set between <t:${startDateTimestamp}:F> and <t:${endDateTimestamp}:F>`
+  })
+
+
+
+  return await updateResponse({application_id, token, content})
+}
+
+/*export const matchDay = async ({interaction_id, token, dbClient}) => {
   const {allTeams} = await dbClient(({teams})=> {
     return teams.find({active:true}).toArray()
   })
@@ -22,14 +60,18 @@ export const matchDay = async ({interaction_id, token, dbClient}) => {
     },{
       type: 1,
       components: [{
-        type: 4,
-        custom_id: "away_score",
-        label: "",
+        type: 3,
+        custom_id: "select_matchday",
+        label: "Match Day",
         style: 1,
-        min_length: 1,
-        max_length: 3,
-        value: awayScore,
-        required: true
+        required: true,
+        min_values: 1,
+        max_values: 1,
+        options: matchDays.slice(0,24).map((matchDay,index)=> ({
+          label: matchDay.name,
+          description: ' ',
+          value: index,
+        }))
       }]
     },{
       type: 1,
@@ -52,4 +94,27 @@ export const matchDay = async ({interaction_id, token, dbClient}) => {
       data: modal
     }
   })
+}*/
+
+export const generateMatchdayCmd = {
+  type: 1,
+  name: 'generatematchday',
+  description: 'Generate the fixtures for a matchday',
+  options: [{
+    type: 3,
+    name: 'league',
+    description: 'League',
+    required: true,
+    choices: fixturesChannels.map(({name, value})=> ({name, value}))
+  },{
+    type: 3,
+    name: 'matchday',
+    description: "The matchday, or competition stage",
+    choices: matchDays.slice(0,24),
+    required: true
+  },{
+    type: 3,
+    name: 'date',
+    description: "The day you're looking for (UK timezone)"
+  }]
 }
