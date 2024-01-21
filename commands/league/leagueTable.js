@@ -15,20 +15,20 @@ const internalLeagueTable = async ({dbClient, league}) => {
     return {allTeams, leagueMatches, leagueTeams}
   })
   const leagueTeamsId = leagueTeams.map(leagueTeam=> leagueTeam.team)
-  const currentTeams = allTeams.filter(team=> leagueTeamsId.includes(team.id)).map(team=> ({...team, wins:0, draws: 0, losses: 0, ffs: 0, goals: 0, against:0, played:0, wonAgainst:[]}))
+  const currentTeams = allTeams.filter(team=> leagueTeamsId.includes(team.id)).map(team=> ({...team, wins:0, draws: 0, losses: 0, ffs: 0, goals: 0, against:0, played:0, ffDraws:0, wonAgainst:[]}))
   leagueMatches.forEach(({isFF, homeScore, awayScore, home, away}) => {
     const hScore = Number.parseInt(homeScore)
     const aScore = Number.parseInt(awayScore)
     const homeTeamIndex = currentTeams.findIndex(team=>team.id === home)
     const awayTeamIndex = currentTeams.findIndex(team=>team.id === away)
-    //console.log(currentTeams[homeTeamIndex].name, currentTeams[awayTeamIndex].name)
-    //console.log(hScore, aScore)
     if(hScore === aScore) {
       currentTeams[homeTeamIndex].draws = (currentTeams[homeTeamIndex].draws || 0) + 1
       currentTeams[awayTeamIndex].draws = (currentTeams[awayTeamIndex].draws || 0) + 1
       if(isFF) {
         currentTeams[homeTeamIndex].ffs = (currentTeams[homeTeamIndex].ffs || 0) + 1
         currentTeams[awayTeamIndex].ffs = (currentTeams[awayTeamIndex].ffs || 0) + 1
+        currentTeams[homeTeamIndex].ffDraws = (currentTeams[homeTeamIndex].ffDraws || 0) + 1
+        currentTeams[awayTeamIndex].ffDraws = (currentTeams[awayTeamIndex].ffDraws || 0) + 1
       }
     } else if(hScore > aScore) {
       currentTeams[homeTeamIndex].wins = (currentTeams[homeTeamIndex].wins || 0) + 1
@@ -53,7 +53,7 @@ const internalLeagueTable = async ({dbClient, league}) => {
     currentTeams[awayTeamIndex].played = (currentTeams[awayTeamIndex].played || 0) + 1
   });
 
-  const sortedTeams = currentTeams.map(team=> ({...team, points: (team.wins*3)+team.draws-team.ffs, goalDifference: team.goals-team.against})).sort((a, b)=> {
+  const sortedTeams = currentTeams.map(team=> ({...team, points: (team.wins*3)+team.draws-team.ffs-team.ffDraws, goalDifference: team.goals-team.against})).sort((a, b)=> {
     if(a.points !== b.points) {
       return b.points - a.points
     } else {
@@ -170,9 +170,10 @@ export const leagueTable = async ({interaction_id, token, application_id, dbClie
 export const updateLeagueTable = async ({league, dbClient}) => {
   const sortedTeams = await internalLeagueTable({dbClient, league})
   const content = `${fixturesChannels.find(chan=> chan.value === league)?.name} standings:\r` +
-    `> Pos | Name | Points (Games) | Wins - Draws - Losses | GA | FFs \r` +
-    sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name}** | ${team.points}Pts (${team.played}) | ${team.wins} - ${team.draws} - ${team.losses} | ${team.goalDifference} | ${team.ffs} `).join('\r') + '\r--'
+    `> Pos | Name | Pts (Games) | Win - Draw - Loss | GA | FFs \r` +
+    sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name.substring(0, 25)}** | ${team.points}Pts (${team.played}) | ${team.wins} - ${team.draws} - ${team.losses} | ${team.goalDifference} | ${team.ffs} `).join('\r')
   const leagueObj = fixturesChannels.find(({value})=> value === league)
+  console.log(content.length)
   return await DiscordRequest(`/channels/${serverChannels.standingsChannelId}/messages/${leagueObj.standingsMsg}`, {
     method: 'PATCH',
     body: {

@@ -85,65 +85,68 @@ export const notifyMatchStart = async ({dbClient}) => {
         }
       }
     }
+    let homeIds =[]
     if(homeLineup){
-      const homeIds = lineupToArray(homeLineup)
-      console.log(homeLineup)
-      console.log(homeIds)
-      if(homeIds[0]) {
-        await Promise.allSettled(homeIds.map(async homePlayer => {
-          console.log(homePlayer)
-          if(homePlayer && !recipients.includes(homePlayer) && isNumeric(homePlayer)) {
-            try{
-              const userChannelResp = await DiscordRequest('/users/@me/channels', {
-                method: 'POST',
-                body:{
-                  recipient_id: homePlayer
-                }
-              })
-              const userChannel = await userChannelResp.json()
-              await DiscordRequest(`/channels/${userChannel.id}/messages`, {
-                method: 'POST',
-                body
-              })
-              recipients.push(homePlayer)
-            }
-            catch(e){
-              console.log(e)
-            }
-            return sleep(500)
-          }
-          return Promise.resolve({})
-        }))
-      }
+      homeIds = lineupToArray(homeLineup)
+    } else {
+      homeIds = allPlayers.filter(player => player.roles.includes(startingMatch.home)).map(player=> player?.user?.id)
     }
-    if(awayLineup) {
-      const awayIds = lineupToArray(awayLineup)
-      if(awayIds[0]) {
-        await Promise.allSettled(awayIds.map(async awayPlayer => {
-          console.log(awayPlayer)
-          if(awayPlayer && !recipients.includes(awayPlayer) && isNumeric(awayPlayer)) {
-            try{
-              const userChannelResp = await DiscordRequest('/users/@me/channels', {
-                method: 'POST',
-                body:{
-                  recipient_id: awayPlayer
-                }
-              })
-              const userChannel = await userChannelResp.json()
-              await DiscordRequest(`/channels/${userChannel.id}/messages`, {
-                method: 'POST',
-                body
-              })
-              recipients.push(awayPlayer)
-            }
-            catch(e){
-              console.log(e)
-            }
-            return sleep(500)
+    if(homeIds[0]) {
+      await Promise.allSettled(homeIds.map(async homePlayer => {
+        if(homePlayer && !recipients.includes(homePlayer) && isNumeric(homePlayer)) {
+          try{
+            const userChannelResp = await DiscordRequest('/users/@me/channels', {
+              method: 'POST',
+              body:{
+                recipient_id: homePlayer
+              }
+            })
+            const userChannel = await userChannelResp.json()
+            await DiscordRequest(`/channels/${userChannel.id}/messages`, {
+              method: 'POST',
+              body
+            })
+            recipients.push(homePlayer)
           }
-          return Promise.resolve({})
-        }))
-      }
+          catch(e){
+            console.log(e)
+          }
+          return sleep(500)
+        }
+        return Promise.resolve({})
+      }))
+    }
+    
+    let awayIds = []
+    if(awayLineup) {
+      awayIds = lineupToArray(awayLineup)
+    } else {
+      awayIds = allPlayers.filter(player => player.roles.includes(startingMatch.away)).map(player=> player?.user?.id)
+    }
+    if(awayIds[0]) {
+      await Promise.allSettled(awayIds.map(async awayPlayer => {
+        if(awayPlayer && !recipients.includes(awayPlayer) && isNumeric(awayPlayer)) {
+          try{
+            const userChannelResp = await DiscordRequest('/users/@me/channels', {
+              method: 'POST',
+              body:{
+                recipient_id: awayPlayer
+              }
+            })
+            const userChannel = await userChannelResp.json()
+            await DiscordRequest(`/channels/${userChannel.id}/messages`, {
+              method: 'POST',
+              body
+            })
+            recipients.push(awayPlayer)
+          }
+          catch(e){
+            console.log(e)
+          }
+          return sleep(500)
+        }
+        return Promise.resolve({})
+      }))
     }
     console.log('lobby sent to:')
     console.log(recipients)
@@ -193,5 +196,6 @@ export const testDMMatchCmd = {
     type: 3,
     name: 'date',
     description: "The date planned for the match (UK timezone)",
+    required: true,
   }]
 }

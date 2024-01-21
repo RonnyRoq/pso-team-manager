@@ -1,6 +1,6 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions";
-import { ObjectId } from "mongodb";
-import { fixturesChannels, matchDays } from "../config/psafServerConfig.js";
+import { ObjectId, ReturnDocument } from "mongodb";
+import { fixturesChannels, matchDays, serverChannels } from "../config/psafServerConfig.js";
 import { getCurrentSeason, getPlayerNick, msToTimestamp, optionsToObject, updateResponse, waitingMsg } from "../functions/helpers.js";
 import { DiscordRequest } from "../utils.js";
 import { sleep } from "../functions/helpers.js";
@@ -9,7 +9,6 @@ import { formatDMLineup } from "./lineup.js";
 import { getAllPlayers } from "../functions/playersCache.js";
 
 const matchLogChannelId = '1151131972568092702'
-//const botTestingId = '1150376229178978377'
 
 export const formatMatch = (league, homeTeam, awayTeam, match, showId, isInternational) => {
   let response = `<${league.emoji}> **| ${league.name} ${match.matchday}** - ${match.dateTimestamp ? `<t:${match.dateTimestamp}:F>` : 'No date'}`
@@ -22,6 +21,39 @@ export const formatMatch = (league, homeTeam, awayTeam, match, showId, isInterna
   if(showId)
     response += `\rID: ${match._id}`
   return response
+}
+
+export const formatMatchResult = (homeTeam, awayTeam, match) => {
+  let content = '# '
+  if(match.isInternational) {
+    content += `${homeTeam.flag} **${homeTeam.name} ${match.homeScore} - ${match.awayScore} ${awayTeam.name}** ${awayTeam.flag}`
+  } else {
+    content += `${homeTeam.emoji} ${homeTeam.name} ${match.homeScore} - ${match.awayScore} ${awayTeam.name} ${awayTeam.emoji}`
+  }
+  const {homeStats, homeScore, awayStats, awayScore} = match
+  const matchStatEmbed = {
+    timestamp: match.dateOfMatch,
+    name: 'Match Stats',
+    fields: [{
+      name: homeTeam.name,
+      value: Object.values(homeStats).join('\r'),
+      inline: true,
+    }, {
+      name: `${homeScore} - ${awayScore}`,
+      value: Object.keys(homeStats).map(value=> `**${value}**`).join('\r'),
+      inline: true,
+    },{
+      name: awayTeam.name,
+      value: Object.values(awayStats).join('\r'),
+      inline: true,
+    }]
+  }
+  return {
+    content,
+    embeds: [
+      matchStatEmbed
+    ]
+  }
 }
 
 export const formatDMMatch = (league, homeTeam, awayTeam, match, homeLineup, awayLineup, isInternational, allPlayers) => {
@@ -195,6 +227,11 @@ export const matchId = async ({interaction_id, token, options, dbClient}) => {
               label: `Enter Result`,
               style: 2,
               custom_id: `match_result_${foundMatches[0]._id}`
+            },{
+              type: 2,
+              label: `Enter Exported Stats`,
+              style: 2,
+              custom_id: `match_stats_${foundMatches[0]._id}`
             }]
           }]
         }
@@ -291,7 +328,6 @@ export const editInterMatch = async ({interaction_id, token, options, dbClient})
   return editAMatch({interaction_id, token, options, dbClient})
 }
 
-
 export const internalEndMatch = async ({id, homeScore, awayScore, ff, dbClient}) => {
   const matchId = new ObjectId(id)
   return dbClient(async ({teams, matches, nationalities}) => {
@@ -336,12 +372,140 @@ export const internalEndMatch = async ({id, homeScore, awayScore, ff, dbClient})
     return `Updated \r`+response
   })
 }
+export const internalEndMatchStats = async ({id, matchDetails, dbClient}) => {
+  const matchId = new ObjectId(id)
+  return dbClient(async ({teams, matches, nationalities}) => {
+    const match = await matches.findOne(matchId)
+    if(!match) {
+      return `Match ${id} not found`
+    }
+    
+    const [homeTeam, awayTeam] = await Promise.all([
+      match.isInternational ? nationalities.findOne({name: match.home}) : teams.findOne({active: true, id: match.home}),
+      match.isInternational ? nationalities.findOne({name: match.away}) : teams.findOne({active: true, id: match.away})
+    ])
+
+    const shortHome = matchDetails.home.trim().toLowerCase().substring(0, 6)
+    const shortAway = matchDetails.away.trim().toLowerCase().substring(0, 6)
+    const isSwapped = homeTeam.name.toLowerCase().includes(shortAway) || awayTeam.name.toLowerCase().includes(shortHome)
+    const homeScore = isSwapped ? matchDetails.awayScore : matchDetails.homeScore
+    const awayScore = isSwapped ? matchDetails.homeScore : matchDetails.awayScore
+    const homeStats = isSwapped ? matchDetails.awayStats : matchDetails.homeStats
+    const awayStats = isSwapped ? matchDetails.homeStats : matchDetails.awayStats
+    
+    
+    const currentLeague = fixturesChannels.find(({value})=> value === match.league)
+    const channel = currentLeague.channel || currentLeague.value
+    const updatedMatch = await matches.findOneAndUpdate({"_id": matchId}, {$set: {
+      homeScore,
+      awayScore,
+      homeStats,
+      awayStats,
+      dateOfMatch: matchDetails.dateOfMatch,
+      isFF: false,
+      finished: true
+    }}, {returnDocument: ReturnDocument.AFTER})
+    console.log(updatedMatch)
+    const post = formatMatch(currentLeague, homeTeam, awayTeam, {...updatedMatch, homeScore, awayScore}, false, match.isInternational)
+    const response = formatMatch(currentLeague, homeTeam, awayTeam, {...updatedMatch, homeScore, awayScore}, true, match.isInternational)
+    const {content, embeds} = formatMatchResult(homeTeam, awayTeam, updatedMatch)
+    if(match.messageId) {
+      await DiscordRequest(`/channels/${channel}/messages/${match.messageId}`, {
+        method: 'PATCH',
+        body: {
+          type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          content: post
+        }
+      })
+    }
+    if(match.logId) {
+      await DiscordRequest(`/channels/${matchLogChannelId}/messages/${match.logId}`, {
+        method: 'PATCH',
+        body: {
+          type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          content: response
+        }
+      })
+    }
+    if(match.resultId) {
+      await DiscordRequest(`/channels/${serverChannels.matchResultsChannelId}/messages/${match.resultId}`, {
+        method: 'PATCH',
+        body: {
+          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          content,
+          embeds
+        }
+      })
+    } else {
+      await DiscordRequest(`/channels/${serverChannels.botTestingChannelId}/messages`, {
+        method: 'POST',
+        body: {
+          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          content,
+          embeds
+        }
+      })
+    }
+    return `Updated \r`+response
+  })
+}
 
 export const endMatch = async ({interaction_id, token, application_id, options, dbClient}) => {
   const {id, homescore, awayscore, ff} = optionsToObject(options)
   await waitingMsg({interaction_id, token})
 
   const content = await internalEndMatch({id, homeScore:homescore, awayScore:awayscore, ff, dbClient})
+  return updateResponse({application_id, token, content})
+}
+
+export const resetMatch = async ({interaction_id, token, application_id, options, dbClient}) => {
+  const {id} = optionsToObject(options)
+  await waitingMsg({interaction_id, token})
+
+  const matchId = new ObjectId(id)
+  const content = await dbClient(async ({teams, matches, nationalities}) => {
+    const match = await matches.findOne(matchId)
+    if(!match) {
+      return `Match ${id} not found`
+    }
+    
+    const [homeTeam, awayTeam] = await Promise.all([
+      match.isInternational ? nationalities.findOne({name: match.home}) : teams.findOne({active: true, id: match.home}),
+      match.isInternational ? nationalities.findOne({name: match.away}) : teams.findOne({active: true, id: match.away})
+    ])
+    
+    const currentLeague = fixturesChannels.find(({value})=> value === match.league)
+    const channel = currentLeague.channel || currentLeague.value
+    const resetValues = {
+      homeScore: '?',
+      awayScore: '?',
+      isFF: null,
+      finished: null
+    }
+    const updatedMatch = await matches.findOneAndUpdate({"_id": matchId}, {$set: resetValues})
+    console.log(updatedMatch)
+    const post = formatMatch(currentLeague, homeTeam, awayTeam, {...updatedMatch, ...resetValues}, false, match.isInternational)
+    const response = formatMatch(currentLeague, homeTeam, awayTeam, {...updatedMatch, ...resetValues}, true, match.isInternational)
+    if(match.messageId) {
+      await DiscordRequest(`/channels/${channel}/messages/${match.messageId}`, {
+        method: 'PATCH',
+        body: {
+          type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          content: post
+        }
+      })
+    }
+    if(match.logId) {
+      await DiscordRequest(`/channels/${matchLogChannelId}/messages/${match.logId}`, {
+        method: 'PATCH',
+        body: {
+          type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          content: response
+        }
+      })
+    }
+    return `Match has been reset \r`+response
+  })
   return updateResponse({application_id, token, content})
 }
 
@@ -579,6 +743,54 @@ export const saveMatchStats = async ({id, dbClient, callerId, matchStats}) => {
   console.log('done')
 }
 
+export const remindMissedMatches = async ({dbClient}) => {
+  const response = await getPastMatches({dbClient})
+  if(response.length>0) {
+    await DiscordRequest(`/channels/${serverChannels.scheduleChannelId}/messages`, {
+      method: 'POST',
+      body: {
+        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        content: `# The following matches have been missed and needs to be updated/filled in:`,
+        flags: 0
+      }
+    })
+    for await (const match of response) {
+      await DiscordRequest(`/channels/${serverChannels.scheduleChannelId}/messages`, {
+        method: 'POST',
+        body: {
+          content: match.content,
+          components: match.matchId ? [{
+            type: 1,
+            components: [{
+              type: 2,
+              label: `Enter Result`,
+              style: 1,
+              custom_id: `match_result_${match.matchId}`
+            }, {
+              type: 2,
+              label: `Enter stats`,
+              style: 5,
+              url: `https://pso.shinmugen.net/site/editmatch?id=${match.matchId}`
+            }]
+          }]: [],
+          flags: 0
+        }
+      })
+    }
+  } else {
+    await DiscordRequest(`/channels/${serverChannels.scheduleChannelId}/messages`, {
+      method: 'POST',
+      body: {
+        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+          content: `## All the matches for today are filled, thanks!`,
+          flags: 0
+        }
+      }
+    })
+  }
+}
+
 export const pastMatches = async ({interaction_id, token, application_id, dbClient}) => {
   const response = await getPastMatches({dbClient})
   console.log(response.length)
@@ -645,8 +857,9 @@ export const matches = async ({interaction_id, token, application_id, options=[]
             }, {
               type: 2,
               label: `Enter stats`,
-              style: 5,
-              url: `https://pso.shinmugen.net/site/editmatch?id=${matchId}`
+              style: 3,
+              custom_id: `match_stats_${matchId}`
+              //url: `https://pso.shinmugen.net/site/editmatch?id=${matchId}`
             }]
           }]
         }
@@ -778,6 +991,42 @@ export const editMatchCmd = {
   ]
 }
 
+export const moveTheMatchCmd = {
+  name: 'movethematch',
+  description: 'Update a match date',
+  type: 1,
+  options: [
+    {
+      type: 3,
+      name: 'id',
+      description: "The Match ID to modify",
+      required: true
+    },{
+      type: 3,
+      name: 'date',
+      description: "The date/time planned for the match (UK timezone by default), you can do Tomorrow 18:00",
+    },{
+      type: 4,
+      name: 'timezone',
+      description: "Which timezone to apply",
+      choices: [{
+        name: "UK",
+        value: "0"
+      }, {
+        name: "Central Europe",
+        value: "1"
+      }, {
+        name: "Turkey",
+        value: "2"
+      }]
+    },{
+      type: 3,
+      name: 'timestamp',
+      description: "The exact timestamp for the game (use either date or this)",
+    }
+  ]
+}
+
 export const editInternationalMatchCmd = {
   name: 'editintermatch',
   description: 'Update an international match',
@@ -823,6 +1072,20 @@ export const endMatchCmd = {
       type: 5,
       name: 'ff',
       description: "Was the match a FF?"
+    }
+  ]
+}
+
+export const resetMatchCmd = {
+  name: 'resetmatch',
+  description: 'Reset a match',
+  type: 1,
+  options: [
+    {
+      type: 3,
+      name: 'id',
+      description: "The Match ID to modify",
+      required: true
     }
   ]
 }

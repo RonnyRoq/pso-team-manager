@@ -163,7 +163,8 @@ export const serverRoles = {
   presidentRole: '1072201212356726836',
   clubPlayerRole: '1072620805600592062',
   psafManagementRole: '1072210995927339139',
-  trialStaffRole: '1093846550226149437'
+  trialStaffRole: '1093846550226149437',
+  verifiedRole: '1184943462261469325',
 }
 
 export const serverChannels = {
@@ -175,5 +176,9 @@ export const serverChannels = {
   scheduleChannelId: '1136790176488755303',
   dailyResultsChannelId: '1174360872886489118',
   lobbiesChannelId: '1081887877274812487',
-  standingsChannelId: '1185321370977050775'
+  standingsChannelId: '1185321370977050775',
+  ratingsChannelId: '1120629390699667542',
+  moveMatchChannelId: '1091692461409173544',
+  nameChangesChannelId: '1198359043153068092',
+  matchResultsChannelId: '1081954664347615352'
 }

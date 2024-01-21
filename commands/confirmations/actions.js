@@ -10,7 +10,7 @@ import { ObjectId } from "mongodb"
 export const removeConfirmation = async ({dbClient, interaction_id, token, message }) => {
   const content = await dbClient(async({confirmations, pendingDeals, pendingLoans})=> {
     const confirmation = await confirmations.findOne({adminMessage: message.id})
-    return innerRemoveConfirmation({reason: 'Denied by admin', ...confirmation, confirmations, pendingDeals, pendingLoans, messageId: message.id})
+    return innerRemoveConfirmation({reason: 'Denied by admin', ...confirmation, confirmations, pendingDeals, pendingLoans})
   })
   
   return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {

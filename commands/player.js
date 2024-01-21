@@ -5,6 +5,7 @@ import { countries } from "../config/countriesConfig.js"
 import { getAllPlayers } from "../functions/playersCache.js"
 import { serverRoles } from "../config/psafServerConfig.js"
 import { isMemberStaff } from "../site/siteUtils.js"
+import { seasonPhases } from "./season.js"
 
 const nationalTeamPlayerRole = '1103327647955685536'
 const staffRoles = ['1081886764366573658', '1072210995927339139', '1072201212356726836']
@@ -36,6 +37,9 @@ export const player = async ({options, interaction_id, callerId, guild_id, appli
     const team = discPlayer.roles.find(role => allTeamIds.includes(role))
     response = `<@${playerId}> - ${team ? `<@&${team}>` : 'Free Agent'}\r`
     if(dbPlayer) {
+      if(dbPlayer.ingamename) {
+        response+= `In game name: ${dbPlayer.ingamename}\r`
+      }
       const country = await nationalities.findOne({name: dbPlayer.nat1})
       const country2 = await nationalities.findOne({name: dbPlayer.nat2})
       const country3 = await nationalities.findOne({name: dbPlayer.nat3})
@@ -50,7 +54,7 @@ export const player = async ({options, interaction_id, callerId, guild_id, appli
       }
       if(playerContracts.length > 0){
         response += 'Known contracts:\r'
-        const contractsList = playerContracts.sort((a, b)=> b.at - a.at).map(({team, at, endedAt, until})=> `<@&${team}> from: <t:${msToTimestamp(at)}:F> ${endedAt ? `to: <t:${msToTimestamp(endedAt)}:F>`: (discPlayer.roles.includes(serverRoles.clubManagerRole) ? ' - :crown: Manager' : `until end of season ${until-1}`)}`)
+        const contractsList = playerContracts.sort((a, b)=> b.at - a.at).map(({team, at, isLoan, phase, endedAt, until})=> `<@&${team}> from: <t:${msToTimestamp(at)}:F> ${endedAt ? `to: <t:${msToTimestamp(endedAt)}:F>`: (discPlayer.roles.includes(serverRoles.clubManagerRole) ? ' - :crown: Manager' : (isLoan ? `LOAN until season ${until}, beginning of ${seasonPhases[phase].desc}`: `until end of season ${until-1}`))}`)
         response += contractsList.join('\r')
       }
     }
@@ -66,7 +70,7 @@ export const player = async ({options, interaction_id, callerId, guild_id, appli
 }
 
 export const editPlayer = async ({options=[], member, callerId, interaction_id, guild_id, application_id, token, dbClient}) => {
-  const {player = callerId, nat1, nat2, nat3, desc, steam} = optionsToObject(options)
+  const {player = callerId, nat1, nat2, nat3, desc, steam, ingamename} = optionsToObject(options)
   
   await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
     method: 'POST',
@@ -106,6 +110,7 @@ export const editPlayer = async ({options=[], member, callerId, interaction_id, 
       nat3: nat3 || dbPlayer.nat3,
       desc: desc || dbPlayer.desc,
       steam: steam || dbPlayer.steam,
+      ingamename: ingamename || dbPlayer.ingamename,
     }}, {upsert: true})
     const updatedPlayer = await players.findOne({id: player}) || {}
     const team = discPlayer.roles.find(role => allTeamIds.includes(role))
@@ -152,14 +157,14 @@ export const getPlayersList = async (totalPlayers, teamToList, displayCountries,
     return({
       ...player,
       ...foundPlayer,
-      contract: contract?.until,
+      contract,
       isManager: player.roles.includes(serverRoles.clubManagerRole),
       isBlackListed: player.roles.includes(serverRoles.matchBlacklistRole)
     })
   })
   let response = `<@&${teamToList}> players: ${displayPlayers.length}/30${displayPlayers.length>30? '\r## Too many players':''}\r`
   response += `${displayPlayers.map(({ user, nat1, nat2, nat3, contract, isManager, isBlackListed }) => 
-    `${isManager?':crown: ':''}${isBlackListed?':no_entry_sign: ':''}${nat1?displayCountries[nat1]:''}${nat2?displayCountries[nat2]:''}${nat3?displayCountries[nat3]:''} <@${user.id}>${contract && !isManager? ` - Season ${contract-1}`: ''}`
+    `${isManager?':crown: ':''}${isBlackListed?':no_entry_sign: ':''}${nat1?displayCountries[nat1]:''}${nat2?displayCountries[nat2]:''}${nat3?displayCountries[nat3]:''} <@${user.id}>${contract?.until && !isManager? (contract?.isLoan ? ` - LOAN Season ${contract?.until}, beginning of ${seasonPhases[contract?.phase].desc}`: ` - Season ${contract?.until-1}`) : ''}`
   ).join('\r')}`
   return response
 }
@@ -333,5 +338,9 @@ export const editPlayerCmd = {
     type: 3,
     name: 'steam',
     description: 'Steam Account'
+  }, {
+    type: 3,
+    name: 'ingamename',
+    description: 'In Game name'
   }]
 }

@@ -49,6 +49,16 @@ export const addPlayerPrefix = (teamShortName, playerName) => {
   return `${prefix}${teamShortName} | ${displayName}`
 }
 
+export const updatePlayerRating = (playerName, rating) => {
+  const ratingRegExp = /\[(\d){1,2}\]$/
+  const previousRatingMatch = playerName.match(ratingRegExp)
+  console.log(previousRatingMatch)
+  if(previousRatingMatch !== null) {
+    return {name: playerName.replace(ratingRegExp, `[${rating}]`), previousRating:previousRatingMatch[0]}
+  }
+  return {name: `${playerName} [${rating}]`}
+}
+
 export const setInternational = (playerName) => playerName.startsWith('⭐ ') ? playerName : `⭐ ${playerName}`
 
 export const removeInternational = (playerName) => playerName.startsWith('⭐ ') ? playerName.substring(2) : playerName
@@ -92,6 +102,18 @@ export const waitingMsg = async ({interaction_id, token}) =>
       type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
         flags: InteractionResponseFlags.EPHEMERAL
+      }
+    }
+  })
+
+export const quickResponse = async ({interaction_id, token, content, isEphemeral}) =>
+  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+    method: 'POST',
+    body: {
+      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        content,
+        flags: isEphemeral ? InteractionResponseFlags.EPHEMERAL : 0
       }
     }
   })

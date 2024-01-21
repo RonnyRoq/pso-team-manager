@@ -26,9 +26,9 @@ const innerTransferAction = async ({teams, contracts, seasonsCollect, guild_id, 
   const updatedPlayerName = addPlayerPrefix(dbTeam.shortName, displayName)
   const payload = {
     nick: updatedPlayerName,
-    roles: [...new Set([...playerTransfer.roles.filter(role => !(role ===clubPlayerRole || role === teamFrom?.id)), team, clubPlayerRole])]
+    roles: [...new Set([...playerTransfer.roles.filter(role => !(role === clubPlayerRole || role === teamFrom?.id)), team, clubPlayerRole])]
   }
-  const loanDetails = pendingLoan ? {phase: pendingLoan.phase, until: pendingLoan.until} : {}
+  const loanDetails = pendingLoan ? {phase: pendingLoan.phase, until: pendingLoan.until, originalTeam: teamFrom?.id} : {}
   await Promise.all([
     contracts.insertOne({id: Date.now(), at: Date.now(), playerId, team, until: currentSeason+seasons, desc, ...loanDetails, isLoan: !!pendingLoan}),
     teams.updateOne({id: dbTeam?.id}, {$set: {budget: dbTeam.budget-transferAmount}}),
@@ -50,6 +50,8 @@ const teamTransferMessage = ({playerId, teamFromId, team, seasons, amount, desc,
 `# <@&${teamFromId}> :arrow_right: <@&${team}>\r> <:EBit:1128310625873961013> ${new Intl.NumberFormat('en-US').format(amount)} EBits\r> <@${playerId}>\r> for ${seasons} seasons.\r*(from <@${callerId}>)*${desc ? `\r${desc}`: ' '}`
 const loanMessage = ({playerId, team, teamFromId, callerId, amount, phase, until}) => 
 `# <@&${teamFromId}> :arrow_right: <@&${team}>\r> <:EBit:1128310625873961013> ${new Intl.NumberFormat('en-US').format(amount)} EBits\r> <@${playerId}>\r> **LOAN** until season ${until}, beginning of ${seasonPhases[phase].desc}.\r*(from <@${callerId}>)*`
+const endOfLoanMessage = ({playerId, team, teamFromId, callerId}) =>
+`# <@&${teamFromId}> :arrow_right: <@&${team}>\r> <@${playerId}>\r> **LOAN ENDED** Player is returning to his club.\r*(from <@${callerId}>)*`
 
 export const transferAction = async ({interaction_id, token, application_id, message, dbClient, callerId, guild_id}) => {
   await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
@@ -64,6 +66,7 @@ export const transferAction = async ({interaction_id, token, application_id, mes
   const {done, content} = await dbClient(async ({teams, contracts, seasonsCollect, confirmations, pendingDeals, pendingLoans}) => {
     const confirmation = await confirmations.findOne({adminMessage: message.id})
     if(confirmation) {
+      console.log(confirmation)
       const {playerId, team, seasons} = confirmation
       const pendingDeal = await pendingDeals.findOne({playerId, destTeam:team, approved: true})
       if(pendingDeal && pendingDeal.destTeam !== team) {
@@ -286,6 +289,25 @@ export const freePlayer = async ({interaction_id, token, guild_id, callerId, opt
       }
     }
   })
+}
+
+export const endLoan = async ({callerId, guild_id, player, teamToReturn, endLoanTeam, contracts}) => {
+  const playerId = player?.user?.id
+  const playerName = getPlayerNick(player);
+  const displayName = endLoanTeam ? removePlayerPrefix(endLoanTeam.shortName, playerName) : playerName
+  const updatedPlayerName = addPlayerPrefix(teamToReturn.shortName, displayName)
+  const payload = {
+    nick: updatedPlayerName,
+    roles: [...new Set([...player.roles.filter(role => !(role ===clubPlayerRole || role === endLoanTeam?.id)), teamToReturn?.id, clubPlayerRole])]
+  }
+  await Promise.all([
+    contracts.updateOne({playerId, team: endLoanTeam.id, endedAt: null, isLoan: true}, {$set: {endedAt: Date.now()}}),
+    DiscordRequest(`guilds/${guild_id}/members/${playerId}`, {
+      method: 'PATCH',
+      body: payload
+    })
+  ])
+  return endOfLoanMessage({playerId, team: teamToReturn.id, teamFromId: endLoanTeam.id, callerId})
 }
 
 componentsRegister.confirm_transfer = transferAction

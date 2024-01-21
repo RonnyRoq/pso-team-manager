@@ -16,22 +16,20 @@
       </tr>
     </thead>
     <tbody>
-      <%- include('editlineupposition', {prefix, posName: 'GK', pos:'gk', player: lineup.gk, bg: "bg-slate-900"}) %>
-      <%- include('editlineupposition', {prefix, posName: 'LB', pos:'lb', player: lineup.lb, bg: "bg-slate-800"}) %>
-      <% if(lineup.cb?.id) { %>
-        <%- include('editlineupposition', {prefix, posName: 'CB', pos:'cb', player: lineup.cb, bg: "bg-slate-900"}) %>
-      <% } %>
-      <%- include('editlineupposition', {prefix, posName: 'RB', pos:'rb', player: lineup.rb, bg: "bg-slate-900"}) %>
       <% if(lineup.lcm?.id) { %>
-        <%- include('editlineupposition', {prefix, posName: 'LCM', pos:'lcm', player: lineup.lcm, bg: "bg-slate-800"}) %>
+        <%- include('editlineupposition', {prefix, posName: 'GK', pos:'gk', player: lineup.gk, bg: "bg-slate-900"}) %>
+        <%- include('editlineupposition', {prefix, posName: 'LB', pos:'lb', player: lineup.lb, bg: "bg-slate-800"}) %>
+        <%- include('editlineupposition', {prefix, posName: 'CB', pos:'cb', player: lineup.cb, bg: "bg-slate-900"}) %>
+        <%- include('editlineupposition', {prefix, posName: 'RB', pos:'rb', player: lineup.rb, bg: "bg-slate-800"}) %>
+        <%- include('editlineupposition', {prefix, posName: 'LCM', pos:'lcm', player: lineup.lcm, bg: "bg-slate-900"}) %>
         <%- include('editlineupposition', {prefix, posName: 'RCM', pos:'rcm', player: lineup.rcm, bg: "bg-slate-800"}) %>
-      <% } else { %>
-        <%- include('editlineupposition', {prefix, posName: 'CM', pos:'cm', player: lineup.cm, bg: "bg-slate-800"}) %>
-      <% } %>
-      <% if(lineup.lst?.id) { %>
         <%- include('editlineupposition', {prefix, posName: 'LST', pos:'lst', player: lineup.lst, bg: "bg-slate-900"}) %>
         <%- include('editlineupposition', {prefix, posName: 'RST', pos:'rst', player: lineup.rst, bg: "bg-slate-800"}) %>
       <% } else { %>
+        <%- include('editlineupposition', {prefix, posName: 'GK', pos:'gk', player: lineup.gk, bg: "bg-slate-900"}) %>
+        <%- include('editlineupposition', {prefix, posName: 'LB', pos:'lb', player: lineup.lb, bg: "bg-slate-800"}) %>
+        <%- include('editlineupposition', {prefix, posName: 'RB', pos:'rb', player: lineup.rb, bg: "bg-slate-900"}) %>
+        <%- include('editlineupposition', {prefix, posName: 'CM', pos:'cm', player: lineup.cm, bg: "bg-slate-800"}) %>
         <%- include('editlineupposition', {prefix, posName: 'LW', pos:'lw', player: lineup.lw, bg: "bg-slate-900"}) %>
         <%- include('editlineupposition', {prefix, posName: 'RW', pos:'rw', player: lineup.rw, bg: "bg-slate-800"}) %>
       <% } %>

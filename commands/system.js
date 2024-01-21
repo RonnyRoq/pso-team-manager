@@ -3,6 +3,7 @@ import { DiscordRequest } from "../utils.js"
 import { countries } from '../config/countriesConfig.js'
 import { getAllPlayers } from "../functions/playersCache.js"
 import { optionsToObject, updateResponse, waitingMsg } from "../functions/helpers.js"
+import { serverRoles } from "../config/psafServerConfig.js"
 
 const matchBlacklistRole = '1095055617703543025'
 
@@ -115,7 +116,7 @@ export const doubleContracts = async ({interaction_id, token, application_id, db
   })
 }*/
 
-export const blacklistTeam = async ({interaction_id, application_id, token, guild_id, options, dbClient}) => {
+export const blacklistTeam = async ({interaction_id, application_id, token, guild_id, member, options, dbClient}) => {
   await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
     method: 'POST',
     body: {
@@ -125,6 +126,9 @@ export const blacklistTeam = async ({interaction_id, application_id, token, guil
       }
     }
   })
+  if(!member.roles.includes(serverRoles.presidentRole)) {
+    return updateResponse({application_id, token, content: 'This command is only available to presidents.'})
+  }
   const {team} = optionsToObject(options)
   await dbClient(({teams})=> 
     teams.updateOne({id:team}, {$set: {disqualified: true}})

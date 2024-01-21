@@ -1,7 +1,7 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { DiscordRequest } from "../utils.js"
 import { msToTimestamp, getPlayerNick, sleep } from "../functions/helpers.js"
-import { serverChannels } from "../config/psafServerConfig.js"
+import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
 import commandsRegister from "../commandsRegister.js"
 import { seasonPhases } from "./season.js"
 
@@ -71,6 +71,12 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
       if(deal.destTeam !== team) {
         return `You can only confirm for <@&${deal.destTeam}> as your club has agreed a deal with them.`
       }
+    }
+    if(member.roles.includes(serverRoles.matchBlacklistRole)) {
+      return 'Can\'t join a team while blacklisted.'
+    }
+    if(!member.roles.includes(serverRoles.verifiedRole)){
+      return 'Please verify before confirming.'
     }
     if(!teamToJoin) {
       return 'Please select an active team.'
@@ -152,6 +158,9 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
 
 export const innerRemoveConfirmation = async ({reason, messageId, adminMessage, playerId, pendingDeals, pendingLoans, confirmations, isDeal}) => {
   const channelId = isDeal ? serverChannels.dealsChannelId : serverChannels.confirmationChannelId
+  console.log(`isDeal? ${isDeal}`)
+  console.log(channelId, messageId)
+  console.log(serverChannels.confirmationTransferChannel, adminMessage)
   const [baseMessageResp, adminMessageResp] = await Promise.all([
     DiscordRequest(`/channels/${channelId}/messages/${messageId}`, {method: 'GET'}),
     DiscordRequest(`/channels/${serverChannels.confirmationTransferChannel}/messages/${adminMessage}`, {method: 'GET'})
@@ -185,22 +194,25 @@ export const innerRemoveDeal = async ({reason, messageId, adminMessage}) => {
     DiscordRequest(`/channels/${serverChannels.confirmationTransferChannel}/messages/${adminMessage}`, {method: 'GET'})
   ])
   const [baseMessage, confAdmin] = await Promise.all([baseMessageResp.json(), adminMessageResp.json()])
-  
-  await Promise.all([
-    DiscordRequest(`/channels/${serverChannels.dealsChannelId}/messages/${messageId}`, {
-      method: 'PATCH',
-      body: {
-        content: baseMessage.content + `\r${reason}`
-      }
-    }),
-    DiscordRequest(`/channels/${serverChannels.confirmationTransferChannel}/messages/${adminMessage}`, {
-      method: 'PATCH',
-      body: {
-        ...getDealComponents({isActive: false}),
-        content: confAdmin.content +`\r${reason}`,
-      }
-    })
-  ]);
+  try{
+    await Promise.all([
+      DiscordRequest(`/channels/${serverChannels.dealsChannelId}/messages/${messageId}`, {
+        method: 'PATCH',
+        body: {
+          content: baseMessage.content + `\r${reason}`
+        }
+      }),
+      DiscordRequest(`/channels/${serverChannels.confirmationTransferChannel}/messages/${adminMessage}`, {
+        method: 'PATCH',
+        body: {
+          ...getDealComponents({isActive: false}),
+          content: confAdmin.content +`\r${reason}`,
+        }
+      })
+    ]);
+  } catch (e) {
+    console.log(e)
+  }
 }
 
 export const checkConfirmations = async({dbClient}) => {

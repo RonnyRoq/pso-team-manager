@@ -5,6 +5,13 @@ import { editAMatchInternal } from "../match.js"
 
 const thirtyMinutes = 30*60
 
+function shuffle(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    let j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+}
+
 export const generateMatchday = async ({interaction_id, token, application_id, dbClient, options}) => {
   const {league, matchday, date} = optionsToObject(options)
   const parsedDate = parseDate(date)
@@ -21,7 +28,8 @@ export const generateMatchday = async ({interaction_id, token, application_id, d
   let processedMatchesIds = []
   const content = await dbClient(async({matches, seasonsCollect, teams, nationalities})=> {
     const currentSeason = await getCurrentSeason(seasonsCollect)
-    const matchesOfDay = matches.find({season: currentSeason, league, matchday, finished: null})
+    const matchesOfDay = await matches.find({season: currentSeason, league, matchday, finished: null}).toArray()
+    shuffle(matchesOfDay)
     for await (const match of matchesOfDay) {
       await matches.updateOne({_id: match._id}, {$set: {dateTimestamp: currentTimestamp}})
       processedMatchesIds.push(match._id.toString())
@@ -33,8 +41,6 @@ export const generateMatchday = async ({interaction_id, token, application_id, d
     await Promise.allSettled(processedMatchesIds.map(id => editAMatchInternal({id, teams, nationalities, matches})))
     return `${leagueObj.name} ${matchday}: ${processedMatchesIds.length} matches set between <t:${startDateTimestamp}:F> and <t:${endDateTimestamp}:F>`
   })
-
-
 
   return await updateResponse({application_id, token, content})
 }

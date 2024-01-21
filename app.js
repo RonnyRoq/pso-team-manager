@@ -17,7 +17,7 @@ import { help, helpAdmin } from './commands/help.js';
 import { boxLineup, eightLineup, internationalLineup, lineup } from './commands/lineup.js';
 import { allPlayers, autoCompleteNation, editPlayer, player, players } from './commands/player.js';
 import { team } from './commands/team.js';
-import { editInterMatch, editMatch, endMatch, getMatchesOfDay, getMatchesSummary, internationalMatch, match, matchId, matches, pastMatches, publishMatch } from './commands/match.js';
+import { editInterMatch, editMatch, endMatch, getMatchesOfDay, getMatchesSummary, internationalMatch, match, matchId, matches, pastMatches, publishMatch, remindMissedMatches, resetMatch } from './commands/match.js';
 import { blacklistTeam, doubleContracts, emoji, initCountries, systemTeam } from './commands/system.js';
 import { activateTeam, editTeam } from './commands/editTeams.js';
 import { addSelection, allNationalTeams, nationalTeam, postNationalTeams, registerElections, removeSelection, showElectionCandidates, showVotes, voteCoach } from './commands/nationalTeam.js';
@@ -33,19 +33,21 @@ import { listDeals } from './commands/confirmations/listDeals.js';
 import { showBlacklist } from './commands/blacklist.js';
 import { emergencyOneSeasonContract, expireContracts, showExpiringContracts, showNoContracts } from './commands/contracts.js';
 import { disbandTeam, disbandTeamConfirmed } from './commands/disbandTeam.js';
-import { getCurrentSeasonPhase } from './commands/season.js';
+import { getCurrentSeasonPhase, progressCurrentSeasonPhase } from './commands/season.js';
 import { setAllMatchToSeason } from './commands/matches/batchWork.js';
-import { endMatchModalResponse, enterRatingsModal, matchResultPrompt, refereeMatch } from './commands/matches/actions.js';
+import { endMatchModalResponse, enterRatingsModal, matchResultPrompt, matchStatsModalResponse, matchStatsPrompt, refereeMatch } from './commands/matches/actions.js';
 import { fixturesChannels, serverChannels } from './config/psafServerConfig.js';
 import { notifyMatchStart, testDMMatch } from './commands/matches/notifyMatchStart.js';
 import { voteAction } from './commands/nationalTeams/actions.js';
 import { client, uri } from './config/mongoConfig.js';
 import { getSite } from './site.js';
-import { addSteamId } from './commands/player/steamid.js';
+import { addSteam, addSteamId, setName } from './commands/player/steamid.js';
 import { addToLeague } from './commands/league/addToLeague.js';
 import { leagueTeams } from './commands/league/leagueTeams.js';
 import { imageLeagueTable, leagueTable, postLeagueTable, updateLeagueTable } from './commands/league/leagueTable.js';
 import { generateMatchday } from './commands/matches/matchday.js';
+import { setRating } from './commands/player/rating.js';
+import { approveMoveMatch, declineMoveMatch, listMatchMoves, moveMatch, moveMatchModalResponse, moveMatchPrompt } from './commands/matches/moveMatch.js';
 
 const keyPath = process.env.CERTKEY;
 const certPath = process.env.CERT;
@@ -153,8 +155,20 @@ function start() {
           if(custom_id.startsWith("match_result_")) {
             return matchResultPrompt(componentOptions)
           }
+          if(custom_id.startsWith("match_stats_")) {
+            return matchStatsPrompt(componentOptions)
+          }
           if(custom_id.startsWith("matchratings_")) {
             return enterRatingsModal(componentOptions)
+          }
+          if(custom_id.startsWith("movematch_")) {
+            return moveMatchPrompt(componentOptions)
+          }
+          if(custom_id.startsWith("approve_matchmove_")) {
+            return approveMoveMatch(componentOptions)
+          }
+          if(custom_id.startsWith("decline_matchmove_")) {
+            return declineMoveMatch(componentOptions)
           }
           return res.send({
             type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -173,6 +187,14 @@ function start() {
         const componentOptions = {custom_id, callerId, member, components, interaction_id, application_id, channel_id, token, guild_id, dbClient}
         if(custom_id.startsWith('match_result')) {
           return endMatchModalResponse(componentOptions)
+        }
+
+        if(custom_id.startsWith('match_stats_')) {
+          return matchStatsModalResponse(componentOptions)
+        }
+
+        if(custom_id.startsWith('move_the_match_')) {
+          return moveMatchModalResponse(componentOptions)
         }
       }
 
@@ -246,6 +268,10 @@ function start() {
             return editMatch(commandOptions)
           }
 
+          if (name === "movethematch") {
+            return editMatch(commandOptions) //movethematch has less options and is aimed at non admin staff
+          }
+
           if (name === "endmatch") {
             return endMatch(commandOptions)
           }
@@ -264,6 +290,10 @@ function start() {
 
           if (name === "matchid") {
             return matchId(commandOptions)
+          }
+
+          if (name === "resetmatch") {
+            return resetMatch(commandOptions)
           }
 
           if (name === "matches") {
@@ -332,6 +362,10 @@ function start() {
 
           if(name === "emergencyoneseasoncontract") {
             return emergencyOneSeasonContract(commandOptions)
+          }
+
+          if(name=== "setname") {
+            return setName(commandOptions)
           }
 
           if(name === "teams") {
@@ -499,12 +533,20 @@ function start() {
             return getCurrentSeasonPhase(commandOptions)
           }
 
+          if (name === "progresscurrentseasonphase") {
+            return progressCurrentSeasonPhase(commandOptions)
+          }
+
           if (name === "loan") {
             return loan(commandOptions)
           }
 
           if(name === "votecoach") {
             return voteCoach(commandOptions)
+          }
+
+          if(name === "setrating") {
+            return setRating(commandOptions)
           }
 
           if (name === "initteam") {
@@ -541,6 +583,9 @@ function start() {
 
           if(name === "addsteamid") {
             return addSteamId(commandOptions)
+          }
+          if(name === "addsteam") {
+            return addSteam(commandOptions)
           }
 
           if(name === "addtoleague") {
@@ -605,6 +650,14 @@ function start() {
 
           if(name === 'showvotes') {
             return showVotes(commandOptions)
+          }
+
+          if(name === 'movematch') {
+            return moveMatch(commandOptions)
+          }
+
+          if(name === 'listmoves') {
+            return listMatchMoves(commandOptions)
           }
 
           if (name ==='emojis') {
@@ -797,13 +850,22 @@ function start() {
     'Europe/London'
   )
   new CronJob(
-    '37 22 * * *',
+    '3 23 * * *',
     async function() {
       const league = fixturesChannels.find(chan=> chan.name === 'WEL')
       await updateLeagueTable({dbClient, league: league.value})
     },
-    null, 
-    true, 
+    null,
+    true,
+    'Europe/London'
+  )
+  new CronJob(
+    '34 21 * * *',
+    async function() {
+      await remindMissedMatches({dbClient})
+    },
+    null,
+    true,
     'Europe/London'
   )
 }

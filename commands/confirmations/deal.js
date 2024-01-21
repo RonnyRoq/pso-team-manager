@@ -7,15 +7,19 @@ import { seasonPhases } from "../season.js"
 
 const twoWeeksMs = 1209600033
 
-const preDealChecks = async({guild_id, player, member, teams, confirmations}) => {
+const preDealChecks = async({guild_id, player, member, contracts, teams, confirmations}) => {
   if(!member.roles.includes(serverRoles.clubManagerRole)) {
     return {message: 'This command is restricted to Club Managers'}
   }
-  const [discPlayerResp, destTeam, ongoingConfirmation] = await Promise.all([
+  const [discPlayerResp, destTeam, ongoingLoan, ongoingConfirmation] = await Promise.all([
     DiscordRequest(`/guilds/${guild_id}/members/${player}`, {}),
     teams.findOne({active: true, $or: member.roles.map(id=>({id}))}),
+    contracts.findOne({isLoan: true, endedAt: null, playerId: player}),
     confirmations.findOne({playerId: player})
   ])
+  if(ongoingLoan) {
+    return {message: `<@${player}> is on loan with <@&${ongoingLoan.team}>, you can't make a deal with this player.`}
+  }
   if(ongoingConfirmation) {
     return {message: `<@${player}> is already confirming for <@&${ongoingConfirmation.team}>.`}
   }
@@ -35,8 +39,8 @@ export const deal = async ({dbClient, options, guild_id, interaction_id, token, 
   await waitingMsg({interaction_id, token})
   const {player, amount, desc} = optionsToObject(options)
   
-  const response = await dbClient(async ({teams, confirmations, pendingDeals})=> {
-    const {message, sourceTeam, destTeam} = await preDealChecks({guild_id, player, member, teams, confirmations})
+  const response = await dbClient(async ({teams, confirmations, contracts, pendingDeals})=> {
+    const {message, sourceTeam, destTeam} = await preDealChecks({guild_id, player, member, contracts, teams, confirmations})
     if(message) {
       //If the checks returned a message, we stop here and return it.
       return message
@@ -96,8 +100,8 @@ export const loan = async ({interaction_id, guild_id, application_id, token, mem
   if(!member.roles.includes(serverRoles.clubManagerRole)) {
     return updateResponse({application_id, token, content: 'This command is restricted to Club Managers'})
   }
-  const message = await dbClient(async ({pendingLoans, teams, seasonsCollect, confirmations}) => {
-    const {message, sourceTeam, destTeam} = await preDealChecks({guild_id, player, member, teams, confirmations})
+  const message = await dbClient(async ({pendingLoans, teams, seasonsCollect, contracts, confirmations}) => {
+    const {message, sourceTeam, destTeam} = await preDealChecks({guild_id, player, member, contracts, teams, confirmations})
     if(message) {
       //If the checks returned a message, we stop here and return it.
       return message

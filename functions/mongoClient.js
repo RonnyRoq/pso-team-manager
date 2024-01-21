@@ -20,7 +20,8 @@ const mongoClient = (client) => {
         lineups: psoDb.collection("Lineups"),
         playerStats: psoDb.collection("PlayerStats"),
         votes: psoDb.collection("Votes"),
-        leagues: psoDb.collection("Leagues")
+        leagues: psoDb.collection("Leagues"),
+        moveRequest: psoDb.collection("MoveRequest"),
       }
       return await callback(collections)
     }
@@ -29,10 +30,7 @@ const mongoClient = (client) => {
       throw e
     }
     finally {
-      console.log('close Db')
-      console.trace()
       connections--
-      console.log(connections)
       if(connections<=0)
         db.close()
     }
