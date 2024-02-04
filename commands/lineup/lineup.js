@@ -3,6 +3,7 @@ import {
 } from 'discord-interactions';
 import { getPlayerTeam, getPlayerNick, optionsToObject, msToTimestamp, genericFormatMatch } from '../functions/helpers.js';
 import { getAllPlayers } from '../functions/playersCache.js';
+import { serverRoles } from '../config/psafServerConfig.js';
 
 export const formatDMLineup = ({gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5, cb, lcm, rcm, lst, rst}) => {
   let response = `**GK:** ${gk.name} (<@${gk.id}>)\r`;
@@ -67,7 +68,32 @@ export const formatLineup = ({gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, su
   return response
 }
 
-const saveLineupNextMatch = async ({dbClient, lineup, member }) => {
+export const formatVerifiedLineup = ({gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5}) => {
+  let response = `**GK:** <@${gk.id}>\r`;
+  response += `**LB:** <@${lb.id}>\r`;
+  response += `**RB:** <@${rb.id}>\r`;
+  response += `**CM:** <@${cm.id}>\r`;
+  response += `**LW:** <@${lw.id}>\r`;
+  response += `**RW:** <@${rw.id}>`;
+  if(sub1) {
+    response += `\r**Subs:** <@${sub1.id}>`;
+  }
+  if(sub2) {
+    response += `, <@${sub2.id}>`;
+  }
+  if(sub3) {
+    response += `, <@${sub3.id}>`;
+  }
+  if(sub4) {
+    response += `, <@${sub4.id}>`;
+  }
+  if(sub5) {
+    response += `, <@${sub5.id}>`;
+  }
+  return response
+}
+
+const saveLineupNextMatch = async ({dbClient, lineup, member, allPlayers, isInternational=false}) => {
   let playerTeam=''
   const startOfDay = new Date()
   startOfDay.setUTCHours(startOfDay.getHours()-1,0,0,0)
@@ -109,8 +135,10 @@ export const lineup = async({options, res, member, guild_id, dbClient}) => {
   const lineup = optionsToObject(options)
   const {gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5, vs} = lineup
   let playerTeam = ''
-    if(process.env.GUILD_ID === guild_id) {
-    playerTeam = await saveLineupNextMatch({dbClient, lineup, member})
+  
+  if(process.env.GUILD_ID === guild_id) {
+    const allPlayers = await getAllPlayers(guild_id)
+    playerTeam = await saveLineupNextMatch({dbClient, lineup, member, allPlayers})
   }
   let response = `${playerTeam}lineup ${vs? `vs ${vs}`: ''}\r`
   response += formatLineup({gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5})

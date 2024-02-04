@@ -1,8 +1,8 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
-import { innerRemoveConfirmation, innerRemoveDeal } from "../confirm.js"
+import { innerRemoveConfirmation, innerRemoveDeal, innerRemoveRelease } from "../confirm.js"
 import { DiscordRequest } from "../../utils.js"
 import { serverChannels, serverRoles } from "../../config/psafServerConfig.js"
-import { getPlayerNick, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { getPlayerNick, quickResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { seasonPhases } from "../season.js"
 import { twoWeeksMs } from "../../config/constants.js"
 import { ObjectId } from "mongodb"
@@ -23,6 +23,14 @@ export const removeConfirmation = async ({dbClient, interaction_id, token, messa
       }
     }
   })
+}
+
+export const removeRelease = async ({dbClient, interaction_id, token, message }) => {
+  const content = await dbClient(async({pendingReleases})=> {
+    const release = await pendingReleases.findOne({adminMessage: message.id})
+    return innerRemoveRelease({reason: 'Denied by admin', ...release, pendingReleases})
+  })
+  return quickResponse({interaction_id, token, content, isEphemeral: true})
 }
 
 export const removeDeal = async ({dbClient, message, interaction_id, token }) => {

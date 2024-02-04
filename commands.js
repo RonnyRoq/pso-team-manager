@@ -10,7 +10,7 @@ import { blacklistTeamCmd, doubleContractsCmd, emojiCmd, initCountriesCmd, syste
 import { activateTeamCmd, editTeamCmd } from './commands/editTeams.js';
 import { allPlayersCmd, editPlayerCmd, myPlayerCmd, playerCmd, playersCmd } from './commands/player.js';
 import { addSelectionCmd, allNationalTeamsCmd, nationalTeamCmd, postNationalTeamsCmd, registerElectionsCmd, removeSelectionCmd, showElectionCandidatesCmd, showVotesCmd, voteCoachCmd } from './commands/nationalTeam.js';
-import { confirmCmd, updateConfirmCmd } from './commands/confirm.js';
+import { confirmCmd, releaseCmd, updateConfirmCmd } from './commands/confirm.js';
 import { dealCmd, loanCmd } from './commands/confirmations/deal.js';
 import { listDealsCmd } from './commands/confirmations/listDeals.js';
 import { renewCmd, setContractCmd, teamTransferCmd, transferCmd } from './commands/transfers.js';
@@ -20,7 +20,7 @@ import { expireContractsCmd, showExpiringContractsCmd, showNoContractsCmd } from
 import { disbandTeamCmd } from './commands/disbandTeam.js';
 import { getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd } from './commands/season.js';
 import { testDMMatchCmd } from './commands/matches/notifyMatchStart.js';
-import { addSteamCmd, addSteamIdCmd, setNameCmd } from './commands/player/steamid.js';
+import { addSteamCmd, addSteamIdCmd, manualDoubleSteamCmd, setNameCmd } from './commands/player/steamid.js';
 import { addToLeagueCmd } from './commands/league/addToLeague.js';
 import { leagueTeamsCmd } from './commands/league/leagueTeams.js';
 import { imageLeagueTableCmd, leagueTableCmd, postLeagueTableCmd } from './commands/league/leagueTable.js';
@@ -104,9 +104,10 @@ export const emojisCmd = {
 const ALL_COMMANDS = [nowCmd, timestampCmd, lineupCmd, boxLineupcmd, eightLineupCmd, helpCmd];
 
 const GUILD_COMMANDS = [
-  teamCmd, emojisCmd, matchCmd, editMatchCmd, moveTheMatchCmd, endMatchCmd, publishMatchCmd, matchIdCmd, matchesCmd, internationalMatchCmd, editInternationalMatchCmd, resetMatchCmd,
+  teamCmd, emojisCmd, matchCmd, editMatchCmd, moveTheMatchCmd, endMatchCmd, publishMatchCmd,
+  matchIdCmd, matchesCmd, internationalMatchCmd, editInternationalMatchCmd, resetMatchCmd,
   playerCmd, editPlayerCmd, allPlayersCmd, playersCmd, myPlayerCmd,
-  confirmCmd, updateConfirmCmd, renewCmd, dealCmd, activateTeamCmd, listDealsCmd, loanCmd,
+  confirmCmd, updateConfirmCmd, renewCmd, dealCmd, activateTeamCmd, listDealsCmd, loanCmd, releaseCmd,
   nationalTeamCmd, allNationalTeamsCmd, postNationalTeamsCmd, addSelectionCmd, removeSelectionCmd,
   TEAMS, transferCmd, teamTransferCmd, FREEPLAYER, FINE, BONUS, editTeamCmd,
   internationalLineupCmd, helpAdminCmd, emojiCmd, showBlacklistCmd, showNoContractsCmd, registerElectionsCmd, showElectionCandidatesCmd, voteCoachCmd, showVotesCmd,
@@ -114,6 +115,7 @@ const GUILD_COMMANDS = [
   addToLeagueCmd, leagueTeamsCmd, leagueTableCmd, imageLeagueTableCmd, postLeagueTableCmd, generateMatchdayCmd,
   getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd, testDMMatchCmd, pastMatchesCmd, moveMatchCmd, listMovesCmd,
   systemTeamCmd, initCountriesCmd, postTeamCmd, postAllTeamsCmd, setContractCmd, updateTeamPostCmd, doubleContractsCmd, blacklistTeamCmd, showExpiringContractsCmd,
+  manualDoubleSteamCmd,
 ]
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);

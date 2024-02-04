@@ -21,11 +21,10 @@ import { editInterMatch, editMatch, endMatch, getMatchesOfDay, getMatchesSummary
 import { blacklistTeam, doubleContracts, emoji, initCountries, systemTeam } from './commands/system.js';
 import { activateTeam, editTeam } from './commands/editTeams.js';
 import { addSelection, allNationalTeams, nationalTeam, postNationalTeams, registerElections, removeSelection, showElectionCandidates, showVotes, voteCoach } from './commands/nationalTeam.js';
-import { confirm, pendingConfirmations } from './commands/confirm.js';
-import { approveDealAction, approveLoanAction, declineDealAction, declineLoanAction, finishLoanRequest } from './commands/confirmations/actions.js';
-import componentRegister from './componentsRegister.js'
+import { confirm, pendingConfirmations, releasePlayer } from './commands/confirm.js';
+import { approveDealAction, approveLoanAction, declineDealAction, declineLoanAction, finishLoanRequest, removeConfirmation, removeDeal, removeLoan, removeRelease } from './commands/confirmations/actions.js';
 import commandsRegister from './commandsRegister.js';
-import { freePlayer, renew, setContract, teamTransfer, transfer } from './commands/transfers.js';
+import { freePlayer, releaseAction, renew, setContract, teamTransfer, transfer, transferAction } from './commands/transfers.js';
 import { innerUpdateTeam, postAllTeams, postTeam, updateTeamPost } from './commands/postTeam.js';
 import { optionsToObject, sleep } from './functions/helpers.js';
 import { deal, loan } from './commands/confirmations/deal.js';
@@ -35,19 +34,20 @@ import { emergencyOneSeasonContract, expireContracts, showExpiringContracts, sho
 import { disbandTeam, disbandTeamConfirmed } from './commands/disbandTeam.js';
 import { getCurrentSeasonPhase, progressCurrentSeasonPhase } from './commands/season.js';
 import { setAllMatchToSeason } from './commands/matches/batchWork.js';
-import { endMatchModalResponse, enterRatingsModal, matchResultPrompt, matchStatsModalResponse, matchStatsPrompt, refereeMatch } from './commands/matches/actions.js';
+import { endMatchModalResponse, matchResultPrompt, matchStatsModalResponse, matchStatsPrompt, refereeMatch } from './commands/matches/actions.js';
 import { fixturesChannels, serverChannels } from './config/psafServerConfig.js';
 import { notifyMatchStart, testDMMatch } from './commands/matches/notifyMatchStart.js';
 import { voteAction } from './commands/nationalTeams/actions.js';
 import { client, uri } from './config/mongoConfig.js';
 import { getSite } from './site.js';
-import { addSteam, addSteamId, setName } from './commands/player/steamid.js';
+import { addSteam, addSteamId, manualDoubleSteam, setName } from './commands/player/steamid.js';
 import { addToLeague } from './commands/league/addToLeague.js';
 import { leagueTeams } from './commands/league/leagueTeams.js';
 import { imageLeagueTable, leagueTable, postLeagueTable, updateLeagueTable } from './commands/league/leagueTable.js';
 import { generateMatchday } from './commands/matches/matchday.js';
 import { setRating } from './commands/player/rating.js';
 import { approveMoveMatch, declineMoveMatch, listMatchMoves, moveMatch, moveMatchModalResponse, moveMatchPrompt } from './commands/matches/moveMatch.js';
+import { getApi } from './api.js';
 
 const keyPath = process.env.CERTKEY;
 const certPath = process.env.CERT;
@@ -94,6 +94,7 @@ function start() {
   app.use(express.json({ verify: VerifyDiscordRequest(process.env.PUBLIC_KEY) }));
   
   app.use('/site', getSite(false, uri, dbClient))
+  app.use('/api', getApi(false, dbClient))
   /**
    * Interactions endpoint URL where Discord will send HTTP requests
    */
@@ -120,6 +121,15 @@ function start() {
       console.log(`Interaction ${type} from ${callerId}`)
 
       if(type === InteractionType.MESSAGE_COMPONENT) {
+        const componentRegister = {
+          cancel_transfer: removeConfirmation,
+          cancel_deal: removeDeal,
+          cancel_loan: removeLoan,
+          confirm_transfer: transferAction,
+          confirm_release: releaseAction,
+          cancel_release: removeRelease,
+        }
+        
         const { message } = req.body
         const { custom_id } = data
         console.log(`custom_id ${custom_id}`)
@@ -157,9 +167,6 @@ function start() {
           }
           if(custom_id.startsWith("match_stats_")) {
             return matchStatsPrompt(componentOptions)
-          }
-          if(custom_id.startsWith("matchratings_")) {
-            return enterRatingsModal(componentOptions)
           }
           if(custom_id.startsWith("movematch_")) {
             return moveMatchPrompt(componentOptions)
@@ -428,6 +435,10 @@ function start() {
             return deal(commandOptions)
           }
 
+          if(name === "releaseplayer") {
+            return releasePlayer(commandOptions)
+          }
+
           if(name === "listdeals") {
             return listDeals(commandOptions)
           }
@@ -660,6 +671,10 @@ function start() {
             return listMatchMoves(commandOptions)
           }
 
+          if(name === 'checkdoublesteam') {
+            return manualDoubleSteam(commandOptions)
+          }
+
           if (name ==='emojis') {
             const emojisResp = await DiscordRequest(`/guilds/${guild_id}/emojis`, { method: 'GET' })
             const emojis = await emojisResp.json()
@@ -737,38 +752,7 @@ function start() {
   new CronJob(
     '1 9 * * *',
     async function() {
-      const response = await getMatchesOfDay({date:'today', dbClient})
-      for await (const match of response) {
-        const {matchId, content} = match
-        const body = matchId ? {
-          content,
-          components: [{
-            type: 1,
-            components: [{
-              type: 2,
-              label: `Referee`,
-              style: 1,
-              custom_id: `referee_${matchId}`
-            }, {
-              type: 2,
-              label: `Enter Result`,
-              style: 1,
-              custom_id: `match_result_${matchId}`
-            }, {
-              type: 2,
-              label: `Enter stats`,
-              style: 5,
-              url: `https://pso.shinmugen.net/site/editmatch?id=${matchId}`
-            }]
-          }]
-        } : {
-          content
-        }
-        await DiscordRequest(`/channels/${serverChannels.scheduleChannelId}/messages`, {
-          method: 'POST',
-          body
-        })
-      }
+      getMatchesOfDay({date:'today', dbClient, isSchedule: true})
     },
     null,
     true,

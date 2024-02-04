@@ -26,53 +26,78 @@ export const fixturesChannels = [
   },{
     name: 'Challengers League (Group A)',
     value: '1101999929171394653-a',
-    emoji: ':___ChallengersLeague:1085657554845171822',
+    emoji: ':___ChallengersLeague:1199341222444158986',
     channel: '1101999929171394653'
   },{
     name: 'Challengers League (Group B)',
     value: '1101999929171394653-b',
-    emoji: ':___ChallengersLeague:1085657554845171822',
+    emoji: ':___ChallengersLeague:1199341222444158986',
     channel: '1101999929171394653'
   },{
     name: 'Challengers League (Group C)',
     value: '1101999929171394653-c',
-    emoji: ':___ChallengersLeague:1085657554845171822',
+    emoji: ':___ChallengersLeague:1199341222444158986',
     channel: '1101999929171394653'
   },{
     name: 'Challengers League (Group D)',
     value: '1101999929171394653-d',
-    emoji: ':___ChallengersLeague:1085657554845171822',
+    emoji: ':___ChallengersLeague:1199341222444158986',
     channel: '1101999929171394653'
   },{
     name: 'Challengers League',
     value: '1101999929171394653-k',
-    emoji: ':___ChallengersLeague:1085657554845171822',
+    emoji: ':___ChallengersLeague:1199341222444158986',
     channel: '1101999929171394653'
   },{
     name: 'Masters League (Group A)',
     value: '1101999952483328140-a',
-    emoji: ':___MastersLeague:1085657551879815249',
+    emoji: ':___MastersLeague:1199341225472425984',
     channel: '1101999952483328140'
   },{
     name: 'Masters League (Group B)',
     value: '1101999952483328140-b',
-    emoji: ':___MastersLeague:1085657551879815249',
+    emoji: ':___MastersLeague:1199341225472425984',
     channel: '1101999952483328140'
   },{
     name: 'Masters League (Group C)',
     value: '1101999952483328140-c',
-    emoji: ':___MastersLeague:1085657551879815249',
+    emoji: ':___MastersLeague:1199341225472425984',
     channel: '1101999952483328140'
   },{
     name: 'Masters League (Group D)',
     value: '1101999952483328140-d',
-    emoji: ':___MastersLeague:1085657551879815249',
+    emoji: ':___MastersLeague:1199341225472425984',
     channel: '1101999952483328140'
   },{
     name: 'Masters League',
     value: '1101999952483328140-k',
-    emoji: ':___MastersLeague:1085657551879815249',
+    emoji: ':___MastersLeague:1199341225472425984',
     channel: '1101999952483328140'
+  },{
+    name: 'Redemption League (Group A)',
+    value: '1202650816197034025-a',
+    emoji: ':___RedemptionLeague:1201545169393168514',
+    channel: '1202650816197034025'
+  },{
+    name: 'Redemption League (Group B)',
+    value: '1202650816197034025-b',
+    emoji: ':___RedemptionLeague:1201545169393168514',
+    channel: '1202650816197034025'
+  },{
+    name: 'Redemption League (Group C)',
+    value: '1202650816197034025-c',
+    emoji: ':___RedemptionLeague:1201545169393168514',
+    channel: '1202650816197034025'
+  },{
+    name: 'Redemption League (Group D)',
+    value: '1202650816197034025-d',
+    emoji: ':___RedemptionLeague:1201545169393168514',
+    channel: '1202650816197034025'
+  },{
+    name: 'Redemption League',
+    value: '1202650816197034025-k',
+    emoji: ':___RedemptionLeague:1201545169393168514',
+    channel: '1202650816197034025'
   },{
     name: 'Nations League',
     value: '1162009301402001418',

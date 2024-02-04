@@ -1,6 +1,6 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { DiscordRequest } from "../utils.js"
-import { msToTimestamp, getPlayerNick, sleep } from "../functions/helpers.js"
+import { msToTimestamp, getPlayerNick, sleep, waitingMsg, optionsToObject, updateResponse, quickResponse } from "../functions/helpers.js"
 import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
 import commandsRegister from "../commandsRegister.js"
 import { seasonPhases } from "./season.js"
@@ -21,6 +21,24 @@ const getConfirmTransferComponents = ({isValidated, isActive}={}) => ({
       label: "Cancel",
       style: 4,
       custom_id: "cancel_transfer",
+      disabled: !isActive
+    }]
+  }]
+})
+const getReleaseComponents = ({isValidated, isActive}={}) => ({
+  components: [{
+    type: 1,
+    components: [{
+      type: 2,
+      label: "Confirm",
+      style: 3,
+      custom_id: "confirm_release",
+      disabled: !isValidated
+    },{
+      type: 2,
+      label: "Cancel",
+      style: 4,
+      custom_id: "cancel_release",
       disabled: !isActive
     }]
   }]
@@ -85,7 +103,7 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
       return `You already sent a confirmation to <@&${previousConfirmation.team}>, confirmation will expire after two weeks on <t:${msToTimestamp(previousConfirmation.expiresOn)}:F>`
     }
     if(!dbPlayer?.nat1 && !nationality) {
-      return 'Please enter a nationality'
+      return 'First time player, please select a nationality when using /confirm'
     }
 
     if(!dbPlayer?.nat1 && extranat && extranat === nationality) {
@@ -154,6 +172,105 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
       flags: InteractionResponseFlags.EPHEMERAL
     }
   })
+}
+
+export const releasePlayer = async ({member, callerId, interaction_id, application_id, channel_id, guild_id, token, options, dbClient}) => {
+  const {team, player, reason} = optionsToObject(options)
+  if(!member.roles.includes(serverRoles.clubManagerRole)) {
+    return quickResponse({interaction_id, token, content: 'This command is restricted to Club Managers', isEphemeral: true})
+  }
+  if(!member.roles.includes(team)) {
+    return quickResponse({interaction_id, token, content: 'You can only release your own players :) Select the correct team', isEphemeral: true})
+  }
+  await waitingMsg({interaction_id, token})
+  const playerResp = await DiscordRequest(`/guilds/${guild_id}/members/${player}`, { method: 'GET' })
+  const discPlayer = await playerResp.json()
+
+  const response = await dbClient(async ({teams, pendingReleases, contracts})=> {
+    const [dbTeam, pendingRelease, activeLoanContract] = await Promise.all([
+      teams.findOne({active: true, id: team}),
+      pendingReleases.findOne({playerId: player, team}),
+      contracts.findOne({playerId: player, endedAt: null, isLoan: true})
+    ])
+    if(!dbTeam) {
+      return `Can't find the team <@&${team}> you're trying to release <@${player}> from.`
+    }
+    if(!discPlayer.roles.includes(team)) {
+      return `<@${player}> doesn't play in <@&${team}>.`
+    }
+    if(activeLoanContract) {
+      return `<@${player}> is on loan, you can't release him.`
+    }
+    if(discPlayer.roles.includes(serverRoles.clubManagerRole)) {
+      return `<@${player}> is a Club Manager, please open a ticket if you're trying to release him.`
+    }
+    if(pendingRelease) {
+      return `You already requested for <@${player}> to be released.`
+    }
+    if(discPlayer.roles.includes(serverRoles.matchBlacklistRole)) {
+      return 'Can\'t release a blacklisted player.'
+    }
+    
+    const response = `<@${callerId}> wants to release <@${player}> from <@&${team}>`
+    const [postResponse, adminResponse] = await Promise.all([
+      DiscordRequest(`/channels/${channel_id}/messages`, {
+        method: 'POST',
+        body: {
+          content: response
+        }
+      }),
+      DiscordRequest(`/channels/${serverChannels.confirmationTransferChannel}/messages`, {
+        method: 'POST',
+        body: {
+          ...getReleaseComponents({isActive:true, isValidated: true}),
+          content: response + `\rReason: ${reason}`
+        }
+      })
+    ])
+    const [message, adminMessage] = await Promise.all([postResponse.json(), adminResponse.json()])
+    
+    await pendingReleases.insertOne({
+      playerId: player,
+      playerName: getPlayerNick(player),
+      team,
+      teamName: dbTeam.name,
+      expiresOn: Date.now()+twoWeeksMs,
+      messageId: message.id,
+      adminMessage: adminMessage.id
+    })
+    return 'Request posted'
+  })
+
+  return updateResponse({application_id, token, content: response})
+}
+
+export const innerRemoveRelease =  async ({reason, messageId, adminMessage, playerId, pendingReleases}) => {
+  const channelId = serverChannels.confirmationChannelId
+  console.log(channelId, messageId)
+  console.log(serverChannels.confirmationTransferChannel, adminMessage)
+  const [baseMessageResp, adminMessageResp] = await Promise.all([
+    DiscordRequest(`/channels/${channelId}/messages/${messageId}`, {method: 'GET'}),
+    DiscordRequest(`/channels/${serverChannels.confirmationTransferChannel}/messages/${adminMessage}`, {method: 'GET'})
+  ])
+  const [baseMessage, confAdmin] = await Promise.all([baseMessageResp.json(), adminMessageResp.json()])
+  
+  await Promise.all([
+    pendingReleases.deleteMany({playerId}),
+    DiscordRequest(`/channels/${channelId}/messages/${messageId}`, {
+      method: 'PATCH',
+      body: {
+        content: baseMessage.content + `\r${reason}`
+      }
+    }),
+    DiscordRequest(`/channels/${serverChannels.confirmationTransferChannel}/messages/${adminMessage}`, {
+      method: 'PATCH',
+      body: {
+        ...getReleaseComponents({isActive:false}),
+        content: confAdmin.content +`\r${reason}`,
+      }
+    })
+  ]);
+  return 'Done.'
 }
 
 export const innerRemoveConfirmation = async ({reason, messageId, adminMessage, playerId, pendingDeals, pendingLoans, confirmations, isDeal}) => {
@@ -301,6 +418,28 @@ export const confirmCmd = {
     name: 'extranat',
     description: 'Extra Nationality',
     autocomplete: true
+  }]
+}
+
+export const releaseCmd = {
+  name: 'releaseplayer',
+  description: 'Release a player from your team',
+  type: 1,
+  options: [{
+    type: 6,
+    name: 'player',
+    description: 'Player',
+    required: true,
+  },{
+    type: 8,
+    name: 'team',
+    description: 'Team',
+    required: true,
+  },{
+    type: 3,
+    name: 'reason',
+    description: 'Tell the admins why you want to release this player.',
+    required: true,
   }]
 }
 

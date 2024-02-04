@@ -1,5 +1,5 @@
 import { InteractionResponseType } from "discord-interactions"
-import { fixturesChannels, serverChannels } from "../../config/psafServerConfig.js"
+import { fixturesChannels, serverChannels, serverRoles } from "../../config/psafServerConfig.js"
 import { isNumeric, msToTimestamp, optionsToObject, sleep } from "../../functions/helpers.js"
 import { getAllPlayers } from "../../functions/playersCache.js"
 import { DiscordRequest } from "../../utils.js"
@@ -14,20 +14,25 @@ export const lineupToArray = (lineup) => {
 export const notifyMatchStart = async ({dbClient}) => {
   const now = Math.floor(Date.now() / 1000)
   const plusTen = now + 10*60
-  const {allTeams, allNationalTeams, notifyMatches, matchLineups} = await dbClient(async ({matches, teams, nationalities, lineups})=> {
+  const {allTeams, allNationalTeams, notifyMatches, matchLineups} = await dbClient(async ({matches, teams, nationalities, lineups, players})=> {
     const [allTeams, allNationalTeams, startingMatches] = await Promise.all([
       teams.find({active: true}).toArray(),
       nationalities.find({}).toArray(),
-      matches.find({dateTimestamp: {$gte: now.toString(), $lte: plusTen.toString()}, password: null, finished: null}).toArray()
+      matches.find({dateTimestamp: {$gte: now.toString(), $lte: plusTen.toString()}, password: null, finished: null}).toArray(),
     ])
     const matchLineups = await lineups.find({matchId: {$in: startingMatches.map(match=>match._id.toString())}}).toArray()
     const notifyMatches = await Promise.all(startingMatches.map(async match => {
+      let interPlayers = []
+      if(match.isInternational) {
+        interPlayers = await players.find({nat1: {$in: [match.home, match.away]}}).toArray()
+      }
       if(!match.password){
         const password = Math.random().toString(36).slice(-4)
         await matches.updateOne({_id: match._id}, {$set: {password}})
         return Promise.resolve({
           ...match,
-          password
+          password,
+          interPlayers
         })
       }
       return Promise.resolve(match)
@@ -56,7 +61,7 @@ export const notifyMatchStart = async ({dbClient}) => {
     await DiscordRequest(`/channels/${serverChannels.lobbiesChannelId}/messages`, {
       method: 'POST',
       body: {
-        content: `<@&${startingMatch.home}> <@&${startingMatch.away}>\r`+body.content,
+        content: (startingMatch.isInternational ? '' : `<@&${startingMatch.home}> <@&${startingMatch.away}>\r`)+body.content,
         embeds: body.embeds
       }
     })
@@ -88,6 +93,9 @@ export const notifyMatchStart = async ({dbClient}) => {
     let homeIds =[]
     if(homeLineup){
       homeIds = lineupToArray(homeLineup)
+    } else if(startingMatch.isInternational) {
+      //Special case we actually get ALL international players for the match here
+      homeIds = allPlayers.filter(player=> player.roles.includes(serverRoles.nationalTeamPlayerRole) && startingMatch.interPlayers.includes(player.user.id)).map(player=> player?.user?.id)
     } else {
       homeIds = allPlayers.filter(player => player.roles.includes(startingMatch.home)).map(player=> player?.user?.id)
     }
@@ -120,6 +128,9 @@ export const notifyMatchStart = async ({dbClient}) => {
     let awayIds = []
     if(awayLineup) {
       awayIds = lineupToArray(awayLineup)
+    } else if(startingMatch.isInternational) {
+      //Special case we actually get ALL international players for the match here
+      awayIds = []
     } else {
       awayIds = allPlayers.filter(player => player.roles.includes(startingMatch.away)).map(player=> player?.user?.id)
     }

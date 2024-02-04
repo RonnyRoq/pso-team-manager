@@ -10,6 +10,8 @@ import { getMatch, getMatchesOfDay, saveMatchStats } from './commands/match.js';
 import { authUser, getGuildMember, hasSession, isMemberStaff, isStaff } from './site/siteUtils.js';
 import { mockMatch } from './site/mockMatch.js';
 import mockMatches from './site/mockMatches.js';
+import { getTeam, getTeamAndPlayers, getTeams } from './commands/teams/getTeam.js';
+import { getPlayers } from './commands/player/api.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -106,8 +108,31 @@ export const getSite = (localdev=false, uri='', dbClient={}) =>{
     return res.render('match', response)
   })
 
-  site.get('/team', async (req, res) => {
-    
+  site.get('/api/teams', async(req, res) => {
+    console.log(req.url)
+    const response = await getTeams({dbClient})
+    res.json(response)
+  })
+
+
+  site.get('/api/team', async (req, res) => {
+    console.log(req.url)
+    console.log(req.query)
+    const response = await getTeam({id: req.query.id, dbClient})
+    res.json(response)
+  })
+  site.get('/api/teamplayers', async (req, res) => {
+    console.log(req.url)
+    console.log(req.query)
+    const response = await getTeamAndPlayers({id: req.query.id, dbClient, guild_id: process.env.GUILD_ID})
+    res.json(response)
+  })
+
+  site.get('/api/players', async (req, res) => {
+    console.log(req.url)
+    console.log(req.query)
+    const response = await getPlayers({getParams: req.query, dbClient})
+    res.json(response)
   })
 
 /*  const matchDay = (req, res) => {

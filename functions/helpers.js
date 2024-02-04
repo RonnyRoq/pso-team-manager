@@ -79,7 +79,7 @@ export const genericFormatMatch = (teams, match) => {
   const homeTeam = teams.find(({id})=> id === match.home)
   const awayTeam = teams.find(({id})=> id === match.away)
   let response = `\r<${league.emoji}> **| ${league.name} ${match.matchday}** - <t:${match.dateTimestamp}:F>`
-    response += `\r> ${homeTeam.flag} ${homeTeam.emoji} <@&${homeTeam.id}> :vs: <@&${awayTeam.id}> ${awayTeam.emoji} ${awayTeam.flag}`
+    response += `\r> ${homeTeam.flag} ${homeTeam.emoji} <@&${homeTeam.id}> ${match.finished ? `**${match.homeScore} - ${match.awayScore}**`: ' :vs: '} <@&${awayTeam.id}> ${awayTeam.emoji} ${awayTeam.flag}`
   return response
 }
 

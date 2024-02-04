@@ -73,6 +73,14 @@ const internalLeagueTable = async ({dbClient, league}) => {
   return sortedTeams
 }
 
+export const apiLeagueTable = async ({dbClient, league}) => {
+  const leagueIds = fixturesChannels.map(chan => chan.value)
+  if(leagueIds.includes(league)){
+    return internalLeagueTable({dbClient, league})
+  }
+  return {}
+}
+
 export const imageLeagueTable = async ({interaction_id, token, application_id, dbClient, options}) => {
   const {league} = optionsToObject(options)
   await waitingMsg({interaction_id, token})
@@ -161,17 +169,18 @@ export const leagueTable = async ({interaction_id, token, application_id, dbClie
   const {league} = optionsToObject(options)
   await waitingMsg({interaction_id, token})
   const sortedTeams = await internalLeagueTable({dbClient, league})
-  const content = `${fixturesChannels.find(chan=> chan.value === league)?.name} standings:\r` +
-    `> Pos | Name | Points (Games) | Wins - Draws - Losses | GA | FFs \r` +
-    sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name}** | ${team.points}Pts (${team.played}) | ${team.wins} - ${team.draws} - ${team.losses} | ${team.goalDifference} | ${team.ffs} `).join('\r')
+  const content = //`${fixturesChannels.find(chan=> chan.value === league)?.name} standings:\r` +
+    `> Pos | Name | Points (Games) | Wins - Draws - Losses | GA | FF \r` +
+    sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name.substring(0, 19)}** | ${team.points}Pts (${team.played}) | ${team.wins} - ${team.draws} - ${team.losses} | ${team.goalDifference} | ${team.ffs} `).join('\r')
+  console.log(content.length)
   return updateResponse({application_id, token, content})
 }
 
 export const updateLeagueTable = async ({league, dbClient}) => {
   const sortedTeams = await internalLeagueTable({dbClient, league})
-  const content = `${fixturesChannels.find(chan=> chan.value === league)?.name} standings:\r` +
-    `> Pos | Name | Pts (Games) | Win - Draw - Loss | GA | FFs \r` +
-    sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name.substring(0, 25)}** | ${team.points}Pts (${team.played}) | ${team.wins} - ${team.draws} - ${team.losses} | ${team.goalDifference} | ${team.ffs} `).join('\r')
+  const content = //`${fixturesChannels.find(chan=> chan.value === league)?.name} standings:\r` +
+    `> Pos | Name | Pts (Games) | Win - Draw - Loss | GA | FF \r` +
+    sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name.substring(0, 19)}** | ${team.points}Pts (${team.played}) | ${team.wins} - ${team.draws} - ${team.losses} | ${team.goalDifference} | ${team.ffs} `).join('\r')
   const leagueObj = fixturesChannels.find(({value})=> value === league)
   console.log(content.length)
   return await DiscordRequest(`/channels/${serverChannels.standingsChannelId}/messages/${leagueObj.standingsMsg}`, {

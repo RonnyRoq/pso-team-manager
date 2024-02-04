@@ -1,5 +1,5 @@
-import { fixturesChannels, matchDays } from "../../config/psafServerConfig.js"
-import { getCurrentSeason, msToTimestamp, optionsToObject, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { fixturesChannels, matchDays, serverRoles } from "../../config/psafServerConfig.js"
+import { getCurrentSeason, msToTimestamp, optionsToObject, quickResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { parseDate } from "chrono-node"
 import { editAMatchInternal } from "../match.js"
 
@@ -12,7 +12,10 @@ function shuffle(array) {
   }
 }
 
-export const generateMatchday = async ({interaction_id, token, application_id, dbClient, options}) => {
+export const generateMatchday = async ({interaction_id, token, application_id, dbClient, member, options}) => {
+  if(!member.roles.includes(serverRoles.presidentRole)) {
+    return quickResponse({interaction_id, token, content: 'This command is only available to presidents.', isEphemeral:true})
+  }
   const {league, matchday, date} = optionsToObject(options)
   const parsedDate = parseDate(date)
   const startOfDay = new Date(parsedDate)

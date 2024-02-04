@@ -163,8 +163,8 @@ export const getPlayersList = async (totalPlayers, teamToList, displayCountries,
     })
   })
   let response = `<@&${teamToList}> players: ${displayPlayers.length}/30${displayPlayers.length>30? '\r## Too many players':''}\r`
-  response += `${displayPlayers.map(({ user, nat1, nat2, nat3, contract, isManager, isBlackListed }) => 
-    `${isManager?':crown: ':''}${isBlackListed?':no_entry_sign: ':''}${nat1?displayCountries[nat1]:''}${nat2?displayCountries[nat2]:''}${nat3?displayCountries[nat3]:''} <@${user.id}>${contract?.until && !isManager? (contract?.isLoan ? ` - LOAN Season ${contract?.until}, beginning of ${seasonPhases[contract?.phase].desc}`: ` - Season ${contract?.until-1}`) : ''}`
+  response += `${displayPlayers.map(({ user, nat1, nat2, nat3, contract, steam, isManager, isBlackListed }) => 
+    `${isManager?':crown: ':''}${isBlackListed?':no_entry_sign: ':''}${nat1?displayCountries[nat1]:''}${nat2?displayCountries[nat2]:''}${nat3?displayCountries[nat3]:''} <@${user.id}>${steam? '<:steam:1201620242015719454>': ''}${contract?.until && !isManager? (contract?.isLoan ? ` - LOAN Season ${contract?.until}, beginning of ${seasonPhases[contract?.phase].desc}`: ` - Season ${contract?.until-1}`) : ''}`
   ).join('\r')}`
   return response
 }

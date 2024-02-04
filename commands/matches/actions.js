@@ -1,10 +1,8 @@
 import { ObjectId } from "mongodb"
-import { getPlayerNick, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { DiscordRequest } from "../../utils.js"
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { internalEndMatch, internalEndMatchStats } from "../match.js"
-//import { fixturesChannels } from "../../config/psafServerConfig.js"
-import { getAllPlayers } from "../../functions/playersCache.js"
 
 export const refereeMatch = async ({interaction_id, token, custom_id, application_id, message, callerId, dbClient}) => {
   await waitingMsg({interaction_id, token})
@@ -167,146 +165,6 @@ export const matchStatsPrompt = async ({interaction_id, token, custom_id, dbClie
   })
 }
 
-export const enterRatingsModal = async ({interaction_id, token, custom_id, guild_id, dbClient}) => {
-  const [,homeAway,id] = custom_id.split('_')
-  const matchId = new ObjectId(id)
-  const allPlayers = await getAllPlayers(guild_id)
-  await dbClient(async ({matches, nationalities, teams, lineups})=> {
-    const match = await matches.findOne(matchId)
-    const {isInternational, home, away} = match || {}
-    let homeTeam, awayTeam
-    let homeLineup, awayLineup
-    if(isInternational) {
-      [homeTeam, awayTeam] = await Promise.all([
-        nationalities.findOne({name: home}),
-        nationalities.findOne({name: away})
-      ])
-    } else {
-      [homeTeam, awayTeam] = await Promise.all([
-        teams.findOne({active:true, id: home}),
-        teams.findOne({active:true, id: away})
-      ]);
-      [homeLineup, awayLineup] = await Promise.all([
-        lineups.findOne({matchId, team: home}),
-        lineups.findOne({matchId, team: away})
-      ]);
-    }
-
-    let team = awayTeam
-    let lineup = awayLineup
-    if(homeAway === "home") {
-      team = homeTeam
-      lineup = homeLineup
-    }
-
-    //const eightPlayers = fixturesChannels.find(league=> league.value === match.league).players === 8
-
-    const eightModal = [{
-      type: 1,
-      components :[{
-        type: 4,
-        custom_id: "gk_rating",
-        label: `GK: ${getPlayerNick(allPlayers.find(player=> player.user.id === lineup?.gk))}`,
-        style: 1,
-        max_length: 1,
-        required:true
-      }]
-    },{
-      type: 1,
-      components :[{
-        type: 4,
-        custom_id: "dl_rating",
-        label: `DL: ${getPlayerNick(allPlayers.find(player=> player.user.id === lineup?.dl))}`,
-        style: 1,
-        max_length: 1,
-        required:true
-      }]
-    },{
-      type: 1,
-      components :[{
-        type: 4,
-        custom_id: "dc_rating",
-        label: `DC: ${getPlayerNick(allPlayers.find(player=> player.user.id === lineup?.dc))}`,
-        style: 1,
-        max_length: 1,
-        required:true
-      }]
-    },{
-      type: 1,
-      components :[{
-        type: 4,
-        custom_id: "dr_rating",
-        label: `DR: ${getPlayerNick(allPlayers.find(player=> player.user.id === lineup?.dr))}`,
-        style: 1,
-        max_length: 1,
-        required:true
-      }]
-    },{
-      type: 1,
-      components :[{
-        type: 4,
-        custom_id: "lcm_rating",
-        label: `LCM: ${getPlayerNick(allPlayers.find(player=> player.user.id === lineup?.lcm))}`,
-        style: 1,
-        max_length: 1,
-        required:true
-      }]
-    },{
-      type: 1,
-      components :[{
-        type: 4,
-        custom_id: "rcm_rating",
-        label: `RCM: ${getPlayerNick(allPlayers.find(player=> player.user.id === lineup?.rcm))}`,
-        style: 1,
-        max_length: 1,
-        required:true
-      }]
-    },{
-      type: 1,
-      components :[{
-        type: 4,
-        custom_id: "lst_rating",
-        label: `LST: ${getPlayerNick(allPlayers.find(player=> player.user.id === lineup?.lst))}`,
-        style: 1,
-        max_length: 1,
-        required:true
-      }]
-    },{
-      type: 1,
-      components :[{
-        type: 4,
-        custom_id: "rst_rating",
-        label: `RST: ${getPlayerNick(allPlayers.find(player=> player.user.id === lineup?.rst))}`,
-        style: 1,
-        max_length: 1,
-        required:true
-      }]
-    },{
-      type: 1,
-      components: [{
-        type: 2,
-        custom_id: "submit",
-        label: "Submit",
-        style: 3
-      }]
-    }]
-
-    const data = {
-      content: `Ratings ${team.name}`.substring(0, 44),
-      components: eightModal,
-      flags: InteractionResponseFlags.EPHEMERAL
-    }
-    
-    await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-      method: 'POST',
-      body: {
-        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data
-      }
-    })
-  })
-}
-
 export const endMatchModalResponse = async ({interaction_id, token, custom_id, components, dbClient}) => {
   const [,,id] = custom_id.split('_')
   const entries = components.map(({components})=> components[0])
@@ -324,10 +182,11 @@ export const endMatchModalResponse = async ({interaction_id, token, custom_id, c
   })
 }
 
-export const matchStatsModalResponse = async ({interaction_id, token, custom_id, components, dbClient}) => {
+export const matchStatsModalResponse = async ({interaction_id, token, application_id, custom_id, guild_id, callerId, components, dbClient}) => {
   const [,,id] = custom_id.split('_')
   const entries = components.map(({components})=> components[0])
   const {all_stats/*, extra_stats*/} = Object.fromEntries(entries.map(entry=> [entry.custom_id, entry.value]))
+  await waitingMsg({interaction_id, token})
 
   //function parseMatchStats() {}
 
@@ -336,11 +195,13 @@ export const matchStatsModalResponse = async ({interaction_id, token, custom_id,
       .split("\n")
       .filter((stats) => !(stats.match(/\(.+\)$/) || !stats));
     const playerStatsRegexp =
-    /^(GK|LB|RB|CB|LCB|RCB|LCM|RCM|CM|LW|RW|ST|LST|RST|Sub 1|Sub 2|Sub 3|Sub 4|Sub 5) (.+) (\D+): (\d+) (\D+): (\d+) (\D+): (\d+) (\D+): (\d+) (\D+): (\d+) (\D+): (\d+) (\D+): (\d+) (\D+): (\d+) (\D+): (\d+)$/gm;
+    /^(GK|LB|RB|CB|LCB|RCB|LCM|RCM|CM|LW|RW|ST|LST|RST|LF|RF|Sub \d) (.+) (\D+): ([\d|,]+) (\D+): (\d+) (\D+): (\d+) (\D+): (\d+) (\D+): (\d+) (\D+): (\d+) (\D+): (\d+) (\D+): (\d+) (\D+): (\d+)$/gm;
     const homeLineup = {};
     for (const playerStats of homePlayerStats) {
       const playerRegexp = new RegExp(playerStatsRegexp);
-      const [, ...parsedPlayerValues] = playerRegexp.exec(playerStats);
+      console.log(playerStats)
+      const parsedPlayerStats = playerRegexp.exec(playerStats);
+      const [, ...parsedPlayerValues] = parsedPlayerStats
       let playerEntries = [];
       for (let i = 2; i < parsedPlayerValues.length; i += 2) {
         playerEntries.push([parsedPlayerValues[i], parsedPlayerValues[i + 1]]);
@@ -353,7 +214,7 @@ export const matchStatsModalResponse = async ({interaction_id, token, custom_id,
     return homeLineup;
   }
 
-  const data = all_stats.split("\n\n");
+  const data = all_stats.replace('\r\n', '\n').split("\n\n");
   const dataEntries = [];
   for (let i = 0; i < data.length; i += 2) {
     dataEntries.push([data[i].trimStart(), data[i + 1]]);
@@ -387,7 +248,6 @@ export const matchStatsModalResponse = async ({interaction_id, token, custom_id,
   const statsRegexp = /(\d+)\D+(\d+%)\D+\W+(\d+) Passes\W+(\d+) Assists\W+(\d+) Shots\W+(\d+) Tackles\W+(\d+) Interceptions\W+(\d+ \/ \d+)\D+(\d+) Free Kicks\D+(\d+) Penalties\D+(\d+)\D+(\d+)\D+(\d+)\D+(\d+)\D+(\d+)/gm;
   const statsRegexp2 = new RegExp(statsRegexp);
   const [, ...homeStatsValues] = statsRegexp.exec(dataEntries[1][1]);
-  console.log(homeStatsValues)
   const homeStats = Object.fromEntries(
     matchStatsBase.map((attribute, index) => [attribute, homeStatsValues[index]])
   );
@@ -414,17 +274,7 @@ export const matchStatsModalResponse = async ({interaction_id, token, custom_id,
     awayLineup,
     dateOfMatch,
   };
-  console.log(matchDetails);
   
-  const endMatchResponse = await internalEndMatchStats({id, matchDetails, dbClient})
-  return await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        flags: InteractionResponseFlags.EPHEMERAL,
-        content: endMatchResponse
-      }
-    }
-  })
+  const endMatchResponse = await internalEndMatchStats({id, matchDetails, guild_id, callerId, dbClient})
+  return await updateResponse({application_id, token, content:endMatchResponse})
 }

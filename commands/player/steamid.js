@@ -63,6 +63,27 @@ export const setName = async ({dbClient, interaction_id, token, callerId, member
   return quickResponse({interaction_id, token, content, isEphemeral: true})
 }
 
+export const alertDoubleSteamIds = async({dbClient}) => {
+  return dbClient(async ({players})=> {
+    const doubleSteam = await players.aggregate([
+      {
+        '$match': {
+          'steam': {'$ne': null}
+        }
+      }, { '$sortByCount': '$steam' }, {
+        '$match': { 'count': { '$gt': 1 } }
+      }
+    ]).toArray()
+    const doublePlayers = await players.find({steam: {$in: doubleSteam.map(agg=>agg._id)}}, {sort: {steam: 1}}).toArray()
+    return doublePlayers.map(player => `<@${player.id}> - ${player.steam}`)
+  })
+}
+
+export const manualDoubleSteam = async({interaction_id, token, dbClient}) => {
+  const doubleSteamIds = await alertDoubleSteamIds({dbClient})
+  return quickResponse({interaction_id, token, content: doubleSteamIds.join('\r'), isEphemeral: true})
+}
+
 export const addSteamIdCmd = {
   name: 'addsteamid',
   description: 'Add a steam Id for a player',
@@ -78,6 +99,12 @@ export const addSteamIdCmd = {
     description: 'Steam Account (full url)',
     required: true,
   }]
+}
+
+export const manualDoubleSteamCmd = {
+  name: 'checkdoublesteam',
+  description: 'check if we have duplicate steam IDs',
+  type: 1
 }
 
 export const addSteamCmd = {

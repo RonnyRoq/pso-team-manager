@@ -1,8 +1,7 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { DiscordRequest } from "../utils.js"
-import componentsRegister from "../componentsRegister.js"
-import { addPlayerPrefix, removePlayerPrefix, getCurrentSeason, getPlayerNick, optionsToObject, msToTimestamp } from "../functions/helpers.js"
-import { innerRemoveConfirmation } from "./confirm.js"
+import { addPlayerPrefix, removePlayerPrefix, getCurrentSeason, getPlayerNick, optionsToObject, msToTimestamp, waitingMsg, updateResponse } from "../functions/helpers.js"
+import { innerRemoveConfirmation, innerRemoveRelease } from "./confirm.js"
 import { seasonPhases } from "./season.js"
 
 const logWebhook = process.env.WEBHOOK
@@ -247,6 +246,50 @@ export const setContract = async ({dbClient, guild_id, options, res, callerId}) 
   })
 }
 
+export const releaseAction = async ({interaction_id, token, application_id, guild_id, message, callerId, dbClient}) => {
+  await waitingMsg({interaction_id, token})
+
+  const {done, content} = await dbClient(async ({teams, contracts, pendingReleases}) => {
+    const release = await pendingReleases.findOne({adminMessage: message.id})
+    if(release) {
+      console.log(release)
+      const {playerId, team} = release
+      const [dbTeam, playerResp] = await Promise.all([
+        teams.findOne({id: team}),
+        DiscordRequest(`/guilds/${guild_id}/members/${playerId}`, {}),
+        contracts.updateMany({playerId, endedAt: null}, {$set: {endedAt: Date.now()}})
+      ])
+      const discPlayer = await playerResp.json();
+      if(!dbTeam) {
+        return "No transfer happened"
+      }
+  
+      const playerName = getPlayerNick(discPlayer)
+      let updatedPlayerName = removePlayerPrefix(dbTeam.shortName, playerName)
+      const payload= {
+        nick: updatedPlayerName,
+        roles: discPlayer.roles.filter(playerRole=> ![team, clubPlayerRole].includes(playerRole))
+      }
+      await DiscordRequest(`guilds/${guild_id}/members/${playerId}`, {
+        method: 'PATCH',
+        body: payload
+      })
+      await innerRemoveRelease({reason: `Approved by <@${callerId}>`, ...release, pendingReleases})
+      
+      const content = `# <@&${team}> :arrow_right: Free agent\r> <@${playerId}>\r*(from <@${callerId}>)*`
+      return {content, done: true}
+    }
+    return {content: 'No pending release found for transfer.'}
+  })
+  if(done){
+    await DiscordRequest(logWebhook, {
+      method: 'POST',
+      body: {content}
+    })
+  }
+  return updateResponse({application_id, token, content})
+}
+
 export const freePlayer = async ({interaction_id, token, guild_id, callerId, options, dbClient}) => {
   const {player, team} = optionsToObject(options)
   const content = await dbClient(async ({teams, contracts})=>{
@@ -291,26 +334,29 @@ export const freePlayer = async ({interaction_id, token, guild_id, callerId, opt
   })
 }
 
-export const endLoan = async ({callerId, guild_id, player, teamToReturn, endLoanTeam, contracts}) => {
-  const playerId = player?.user?.id
+export const endLoan = async ({callerId, guild_id, player, playerId, teamToReturn, endLoanTeam, contracts}) => {
   const playerName = getPlayerNick(player);
   const displayName = endLoanTeam ? removePlayerPrefix(endLoanTeam.shortName, playerName) : playerName
   const updatedPlayerName = addPlayerPrefix(teamToReturn.shortName, displayName)
-  const payload = {
-    nick: updatedPlayerName,
-    roles: [...new Set([...player.roles.filter(role => !(role ===clubPlayerRole || role === endLoanTeam?.id)), teamToReturn?.id, clubPlayerRole])]
-  }
-  await Promise.all([
-    contracts.updateOne({playerId, team: endLoanTeam.id, endedAt: null, isLoan: true}, {$set: {endedAt: Date.now()}}),
-    DiscordRequest(`guilds/${guild_id}/members/${playerId}`, {
+  let playerUpdatePromise
+  if(player) {
+    const payload = {
+      nick: updatedPlayerName,
+      roles: [...new Set([...player.roles.filter(role => !(role ===clubPlayerRole || role === endLoanTeam?.id)), teamToReturn?.id, clubPlayerRole])]
+    }
+    playerUpdatePromise = DiscordRequest(`guilds/${guild_id}/members/${playerId}`, {
       method: 'PATCH',
       body: payload
     })
+  } else {
+    playerUpdatePromise = Promise.resolve()
+  }
+  await Promise.all([
+    contracts.updateOne({playerId, team: endLoanTeam.id, endedAt: null, isLoan: true}, {$set: {endedAt: Date.now()}}),
+    playerUpdatePromise
   ])
   return endOfLoanMessage({playerId, team: teamToReturn.id, teamFromId: endLoanTeam.id, callerId})
 }
-
-componentsRegister.confirm_transfer = transferAction
 
 export const transferCmd = {
   name: 'transfer',

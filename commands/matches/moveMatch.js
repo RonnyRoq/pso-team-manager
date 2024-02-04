@@ -101,7 +101,8 @@ export const moveMatchPrompt = async ({interaction_id, token, custom_id, dbClien
           type: 4,
           custom_id: "timezone",
           label: 'Your timezone: UK/CET/Turkey (UK by default)',
-          style: 1
+          style: 1,
+          required: false
         }]
       }]
     }
@@ -119,7 +120,7 @@ export const moveMatchPrompt = async ({interaction_id, token, custom_id, dbClien
 export const moveMatchModalResponse = async ({interaction_id, token, callerId, member, custom_id, components, dbClient}) => {
   const [,,,id] = custom_id.split('_')
   const entries = components.map(({components})=> components[0])
-  const {match_time, timezone='UK'} = Object.fromEntries(entries.map(entry=> [entry.custom_id, entry.value]))
+  const {match_time, timezone='UK'} = Object.fromEntries(entries.map(entry=> [entry.custom_id, entry.value.trim()]))
   let timezoneOption
   //await waitingMsg({interaction_id, token})
   switch(timezone.toLowerCase()) {
@@ -134,11 +135,24 @@ export const moveMatchModalResponse = async ({interaction_id, token, callerId, m
       timezoneOption = 0
   }
   console.log(match_time)
-  const suggestedTime = parseDate(match_time, timezoneOption)
+  const timestampRegExp = /<t:(\d+):F>/
+  const numberRegExp = /^(\d+)$/
+  let dateTimestamp = ''
+  if(timestampRegExp.test(match_time)) {
+    dateTimestamp = timestampRegExp.exec(match_time)?.[1]
+  } else if(numberRegExp.test(match_time)) {
+    dateTimestamp = match_time
+  } else {
+    const suggestedTime = parseDate(match_time, timezoneOption)
+    console.log(suggestedTime)
+    dateTimestamp = msToTimestamp(Date.parse(suggestedTime))
+  }
   const timeOfTheRequest = Date.now()
   const expiryTime = Date.now() + twoWeeksMs
-  const dateTimestamp = msToTimestamp(Date.parse(suggestedTime))
-  console.log(dateTimestamp)
+  
+  if(!numberRegExp.test(dateTimestamp)) {
+    return quickResponse({interaction_id, token, content: `${match_time} was interpreted as <t:${dateTimestamp}:F> which is not a valid option. Try again`, isEphemeral: true})
+  }
   await dbClient(async ({moveRequest, teams, matches})=> {
     const requesterTeamObj = await teams.findOne({active:true, $or: member.roles.map(id=> ({id}))})
     const requesterTeam = requesterTeamObj.id
@@ -155,12 +169,12 @@ export const moveMatchModalResponse = async ({interaction_id, token, callerId, m
     const message = await resp.json()
     await moveRequest.updateOne({id, requesterTeam, destinationTeam}, {$set: {message: message.id}})
   })
-  await quickResponse({interaction_id, token, content: `Request posted`, isEphemeral: true})
+  return quickResponse({interaction_id, token, content: `Request posted`, isEphemeral: true})
 }
 
 export const listMatchMoves = async ({interaction_id, token, application_id, member, dbClient}) => {
   if(!member.roles.includes(serverRoles.clubManagerRole)) {
-    return quickResponse({interaction_id, token, content: 'Only Club Managers can list deals.', isEphemeral:true})
+    return quickResponse({interaction_id, token, content: 'Only Club Managers can list moves.', isEphemeral:true})
   }
   await waitingMsg({interaction_id, token})
   
@@ -245,7 +259,7 @@ export const approveMoveMatch = async ({interaction_id, token, application_id, c
         content: `Match moved, requested by <@${matchToMove.requester}> accepted by <@${callerId}>.\r${updatedMatch}`
       }
     })
-    await matchToMove.deleteOne(matchToMoveId)
+    await moveRequest.deleteOne({_id: matchToMove._id})
     return updatedMatch
   })
   
@@ -266,7 +280,7 @@ export const declineMoveMatch = async ({interaction_id, token, application_id, c
         content: moveRequestMessage.content+`\rDECLINED by <@${callerId}>.`
       }
     })    
-    await matchToMove.deleteOne(matchToMoveId)
+    await moveRequest.deleteOne(matchToMoveId)
   })
 
   return await updateResponse({application_id, token, content: `Move declined.`})

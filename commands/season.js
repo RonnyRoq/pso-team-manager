@@ -61,7 +61,7 @@ export const progressCurrentSeasonPhase = async ({interaction_id, token, guild_i
       const initialContract = initialContracts.find(contract => contract.playerId === loan.playerId)
       if(initialContract) {
         const teamToReturn = await teams.findOne({id: initialContract.team})
-        const content = await endLoan({callerId, guild_id, player, teamToReturn, endLoanTeam, contracts})
+        const content = await endLoan({callerId, guild_id, player, playerId:loan.playerId, teamToReturn, endLoanTeam, contracts})
         await DiscordRequest(logWebhook, {
           method: 'POST',
           body: {content}

@@ -1,5 +1,5 @@
 import { serverRoles } from "../config/psafServerConfig.js"
-import { getCurrentSeason, getPlayerNick, optionsToObject, removePlayerPrefix, sleep, updateResponse, waitingMsg } from "../functions/helpers.js"
+import { getCurrentSeason, getPlayerNick, optionsToObject, quickResponse, removePlayerPrefix, sleep, updateResponse, waitingMsg } from "../functions/helpers.js"
 import { getAllPlayers } from "../functions/playersCache.js"
 import { DiscordRequest } from "../utils.js"
 
@@ -61,7 +61,9 @@ export const showExpiringContracts = async ({guild_id, interaction_id, token, ap
   await updateResponse({application_id, token, content: JSON.stringify(result)})
 }*/
 
-export const emergencyOneSeasonContract = async ({guild_id, interaction_id, token, application_id, dbClient}) => {
+export const emergencyOneSeasonContract = async ({guild_id, interaction_id, token, callerId, application_id, dbClient}) => {
+  if(callerId !== '269565950154506243')
+    return quickResponse({interaction_id, token, content: 'No', isEphemeral: true})
   await waitingMsg({interaction_id, token})
   const totalPlayers = await getAllPlayers(guild_id)
   const at = Date.now()

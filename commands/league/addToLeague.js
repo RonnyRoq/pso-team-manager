@@ -40,3 +40,21 @@ export const addToLeagueCmd = {
     required: true
   }]
 }
+
+export const removeFromLeagueCmd = {
+  name: 'removefromleague',
+  description: 'Remove a team from a league',
+  type: 1,
+  options: [{
+    type: 3,
+    name: 'league',
+    description: 'League',
+    required: true,
+    choices: fixturesChannels.map(({name, value})=> ({name, value}))
+  },{
+    type: 8,
+    name: 'team',
+    description: 'Team',
+    required: true
+  }]
+}
