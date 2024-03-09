@@ -17,6 +17,17 @@ export const fixturesChannels = [
     pingRole: '1154065149888561162',
     standingsMsg: '1185322055089000500'
   },{
+    name:'PG6',
+    value: '1209539443271270452',
+    emoji: ':__PSAF:1095732362400247838',
+    pingRole: '1209230709542223912'
+  },{
+    name:'PG8',
+    value: '1209539443271270452-8',
+    emoji: ':__PSAF:1095732362400247838',
+    pingRole: '1209230709542223912',
+    channel: '1209539443271270452',
+  },{
     name:'WEL',
     value: '1177013563974500513',
     emoji: ':__PSAF:1095732362400247838',
@@ -27,22 +38,16 @@ export const fixturesChannels = [
     name: 'Challengers League (Group A)',
     value: '1101999929171394653-a',
     emoji: ':___ChallengersLeague:1199341222444158986',
-    channel: '1101999929171394653'
+    channel: '1101999929171394653',
+    standingsChannel: '1101657533229322300',
+    standingsMsg: '1208862935456284734'
   },{
     name: 'Challengers League (Group B)',
     value: '1101999929171394653-b',
     emoji: ':___ChallengersLeague:1199341222444158986',
-    channel: '1101999929171394653'
-  },{
-    name: 'Challengers League (Group C)',
-    value: '1101999929171394653-c',
-    emoji: ':___ChallengersLeague:1199341222444158986',
-    channel: '1101999929171394653'
-  },{
-    name: 'Challengers League (Group D)',
-    value: '1101999929171394653-d',
-    emoji: ':___ChallengersLeague:1199341222444158986',
-    channel: '1101999929171394653'
+    channel: '1101999929171394653',
+    standingsChannel: '1101657533229322300',
+    standingsMsg: '1208863173545959498'
   },{
     name: 'Challengers League',
     value: '1101999929171394653-k',
@@ -52,22 +57,30 @@ export const fixturesChannels = [
     name: 'Masters League (Group A)',
     value: '1101999952483328140-a',
     emoji: ':___MastersLeague:1199341225472425984',
-    channel: '1101999952483328140'
+    channel: '1101999952483328140',
+    standingsChannel: '1101657533229322300',
+    standingsMsg: '1206691932160532510'
   },{
     name: 'Masters League (Group B)',
     value: '1101999952483328140-b',
     emoji: ':___MastersLeague:1199341225472425984',
-    channel: '1101999952483328140'
+    channel: '1101999952483328140',
+    standingsChannel: '1101657533229322300',
+    standingsMsg: '1206692113920819240'
   },{
     name: 'Masters League (Group C)',
     value: '1101999952483328140-c',
     emoji: ':___MastersLeague:1199341225472425984',
-    channel: '1101999952483328140'
+    channel: '1101999952483328140',
+    standingsChannel: '1101657533229322300',
+    standingsMsg: '1206692219176620073'
   },{
     name: 'Masters League (Group D)',
     value: '1101999952483328140-d',
     emoji: ':___MastersLeague:1199341225472425984',
-    channel: '1101999952483328140'
+    channel: '1101999952483328140',
+    standingsChannel: '1101657533229322300',
+    standingsMsg: '1206692338093523045'
   },{
     name: 'Masters League',
     value: '1101999952483328140-k',
@@ -77,22 +90,16 @@ export const fixturesChannels = [
     name: 'Redemption League (Group A)',
     value: '1202650816197034025-a',
     emoji: ':___RedemptionLeague:1201545169393168514',
-    channel: '1202650816197034025'
+    channel: '1202650816197034025',
+    standingsChannel: '1101657533229322300',
+    standingsMsg: '1208863344237482044'
   },{
     name: 'Redemption League (Group B)',
     value: '1202650816197034025-b',
     emoji: ':___RedemptionLeague:1201545169393168514',
-    channel: '1202650816197034025'
-  },{
-    name: 'Redemption League (Group C)',
-    value: '1202650816197034025-c',
-    emoji: ':___RedemptionLeague:1201545169393168514',
-    channel: '1202650816197034025'
-  },{
-    name: 'Redemption League (Group D)',
-    value: '1202650816197034025-d',
-    emoji: ':___RedemptionLeague:1201545169393168514',
-    channel: '1202650816197034025'
+    channel: '1202650816197034025',
+    standingsChannel: '1101657533229322300',
+    standingsMsg: '1208863414743470152'
   },{
     name: 'Redemption League',
     value: '1202650816197034025-k',
@@ -102,11 +109,29 @@ export const fixturesChannels = [
     name: 'Nations League',
     value: '1162009301402001418',
     emoji: ':NationsLeague:1167121018905690233',
-    channel: '1162009301402001418'
+    channel: '1162009301402001418',
+    isInternational: true
+  },{
+    name: 'Nations League (Group A)',
+    value: '1162009301402001418-a',
+    emoji: ':NationsLeague:1167121018905690233',
+    channel: '1162009301402001418',
+    standingsChannel: '1162009570022006835',
+    standingsMsg: '1208849914046451732',
+    isInternational: true
+  },{
+    name: 'Nations League (Group B)',
+    value: '1162009301402001418-b',
+    emoji: ':NationsLeague:1167121018905690233',
+    channel: '1162009301402001418',
+    standingsChannel: '1162009570022006835',
+    standingsMsg: '1208849960792105061',
+    isInternational: true
   },{
     name: 'International Friendly',
     value: '1156513002552573953',
-    emoji: ':full_star:1128309835369291827'
+    emoji: ':full_star:1128309835369291827',
+    isInternational: true
   },{
     name: 'Club Friendly',
     value: '1156513002552573953',
@@ -156,6 +181,12 @@ export const matchDays = [
   },{
     name: 'Day 18'
   },{
+    name: 'Day 19'
+  },{
+    name: 'Day 20'
+  },{
+    name: 'Day 21'
+  },{
     name: 'Qualifiers'
   },{
     name: 'Quarter-Finals'
@@ -165,12 +196,6 @@ export const matchDays = [
     name: '3rd Place'
   },{
     name: 'Final'
-  },{
-    name: 'Day 19'
-  },{
-    name: 'Day 20'
-  },{
-    name: 'Day 21'
   },{
     name: 'Day 22'
   },{
@@ -207,3 +232,9 @@ export const serverChannels = {
   nameChangesChannelId: '1198359043153068092',
   matchResultsChannelId: '1081954664347615352'
 }
+
+export const postSeasonLeagues = ['1101999929171394653-a', '1101999929171394653-b', '1101999952483328140-a', '1101999952483328140-b', '1101999952483328140-c',
+'1101999952483328140-d', '1202650816197034025-a', '1202650816197034025-b']
+
+export const lineupBlacklist = ['1068608785356169226', '616754792965865495']
+export const lineupRolesBlacklist = ['1072919258629144628', '1128307395668492319', '1095055617703543025']

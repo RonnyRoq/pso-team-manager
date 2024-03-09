@@ -4,18 +4,27 @@ import { getCurrentSeason, optionsToObject, updateResponse, waitingMsg } from ".
 import { DiscordRequest, DiscordUploadRequest } from '../../utils.js'
 import { InteractionResponseType } from 'discord-interactions'
 
+//Ensure this function doesnt crash if you ask for a league which doesnt have a table
 const internalLeagueTable = async ({dbClient, league}) => {
-  const {allTeams, leagueMatches, leagueTeams} = await dbClient(async ({matches, leagues, teams, seasonsCollect}) => {
+  const {allTeams, leagueMatches, leagueTeams, allCountries} = await dbClient(async ({matches, leagues, teams, nationalities, seasonsCollect}) => {
     const currentSeason = await getCurrentSeason(seasonsCollect)
-    const [allTeams, leagueMatches, leagueTeams] = await Promise.all([
+    const [allTeams, leagueMatches, leagueTeams, allCountries] = await Promise.all([
       teams.find({active:true}).toArray(),
       matches.find({season: currentSeason, league, finished: true}).toArray(),
       leagues.find({leagueId:league}).toArray(),
+      nationalities.find({}).toArray()
     ])
-    return {allTeams, leagueMatches, leagueTeams}
+    return {allTeams, leagueMatches, leagueTeams, allCountries}
   })
   const leagueTeamsId = leagueTeams.map(leagueTeam=> leagueTeam.team)
-  const currentTeams = allTeams.filter(team=> leagueTeamsId.includes(team.id)).map(team=> ({...team, wins:0, draws: 0, losses: 0, ffs: 0, goals: 0, against:0, played:0, ffDraws:0, wonAgainst:[]}))
+  const leagueObj = fixturesChannels.find(fixChannel => fixChannel.value === league)
+  console.log(leagueTeamsId)
+  console.log(allCountries)
+  const currentTeams = (leagueObj?.isInternational ? 
+    allCountries.filter(country => leagueTeamsId.includes(country.name)).map(country=>({...country, id: country.name, emoji: country.flag}))
+    : allTeams.filter(team=> leagueTeamsId.includes(team.id))
+  ).map(team=> ({...team, wins:0, draws: 0, losses: 0, ffs: 0, goals: 0, against:0, played:0, ffDraws:0, wonAgainst:[]}))
+  console.log(currentTeams)
   leagueMatches.forEach(({isFF, homeScore, awayScore, home, away}) => {
     const hScore = Number.parseInt(homeScore)
     const aScore = Number.parseInt(awayScore)
@@ -170,8 +179,8 @@ export const leagueTable = async ({interaction_id, token, application_id, dbClie
   await waitingMsg({interaction_id, token})
   const sortedTeams = await internalLeagueTable({dbClient, league})
   const content = //`${fixturesChannels.find(chan=> chan.value === league)?.name} standings:\r` +
-    `> Pos | Name | Points (Games) | Wins - Draws - Losses | GA | FF \r` +
-    sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name.substring(0, 19)}** | ${team.points}Pts (${team.played}) | ${team.wins} - ${team.draws} - ${team.losses} | ${team.goalDifference} | ${team.ffs} `).join('\r')
+    `> Pos | Name | Pts (G) | Wins - Draws - Losses | GA | FF \r` +
+    sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name.substring(0, 17)}** | ${team.points}Pts (${team.played}) | ${team.wins} - ${team.draws} - ${team.losses} | ${team.goalDifference} | ${team.ffs} `).join('\r')
   console.log(content.length)
   return updateResponse({application_id, token, content})
 }
@@ -183,7 +192,7 @@ export const updateLeagueTable = async ({league, dbClient}) => {
     sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name.substring(0, 19)}** | ${team.points}Pts (${team.played}) | ${team.wins} - ${team.draws} - ${team.losses} | ${team.goalDifference} | ${team.ffs} `).join('\r')
   const leagueObj = fixturesChannels.find(({value})=> value === league)
   console.log(content.length)
-  return await DiscordRequest(`/channels/${serverChannels.standingsChannelId}/messages/${leagueObj.standingsMsg}`, {
+  return await DiscordRequest(`/channels/${leagueObj?.standingsChannel || serverChannels.standingsChannelId}/messages/${leagueObj.standingsMsg}`, {
     method: 'PATCH',
     body: {
       content

@@ -22,6 +22,7 @@ export const timestamp = ({interaction_id, token, options}) => {
 export const parseDate = (date, timezone) => {
   const strTimezone = optionToTimezoneStr(timezone)
   return chrono.parseDate(date, { instance: new Date(), timezone: strTimezone }, {
+    forwardDate: true,
     timezones: { 
       "UK": {
         timezoneOffsetDuringDst: 60,

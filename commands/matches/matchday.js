@@ -2,15 +2,9 @@ import { fixturesChannels, matchDays, serverRoles } from "../../config/psafServe
 import { getCurrentSeason, msToTimestamp, optionsToObject, quickResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { parseDate } from "chrono-node"
 import { editAMatchInternal } from "../match.js"
+import { shuffleArray } from "../../functions/helpers.js"
 
 const thirtyMinutes = 30*60
-
-function shuffle(array) {
-  for (let i = array.length - 1; i > 0; i--) {
-    let j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
-  }
-}
 
 export const generateMatchday = async ({interaction_id, token, application_id, dbClient, member, options}) => {
   if(!member.roles.includes(serverRoles.presidentRole)) {
@@ -32,7 +26,7 @@ export const generateMatchday = async ({interaction_id, token, application_id, d
   const content = await dbClient(async({matches, seasonsCollect, teams, nationalities})=> {
     const currentSeason = await getCurrentSeason(seasonsCollect)
     const matchesOfDay = await matches.find({season: currentSeason, league, matchday, finished: null}).toArray()
-    shuffle(matchesOfDay)
+    shuffleArray(matchesOfDay)
     for await (const match of matchesOfDay) {
       await matches.updateOne({_id: match._id}, {$set: {dateTimestamp: currentTimestamp}})
       processedMatchesIds.push(match._id.toString())
@@ -124,6 +118,7 @@ export const generateMatchdayCmd = {
   },{
     type: 3,
     name: 'date',
-    description: "The day you're looking for (UK timezone)"
+    description: "The day you're looking for (UK timezone)",
+    required: true
   }]
 }

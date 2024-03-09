@@ -1,17 +1,19 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { DiscordRequest } from "../utils.js"
 import { displayTeam, genericFormatMatch, getCurrentSeason, optionsToObject } from "../functions/helpers.js"
+import { fixturesChannels } from "../config/psafServerConfig.js"
 
 export const team = async ({interaction_id, application_id, token, options, member, dbClient})=> {
   let response = "No teams found"
   let matchEmbeds = []
-  const {team, allmatches} = optionsToObject(options || [])
+  const {team, allmatches, league} = optionsToObject(options || [])
   let roles = []
   if(!team) {
     roles = member.roles.map(role=>({id:role}))
   } else {
     roles = [{id: team}]
   }
+  
   await dbClient(async ({teams, matches, seasonsCollect})=>{
     const team = await teams.findOne({active:true, $or:roles})
     if(!team)
@@ -21,8 +23,9 @@ export const team = async ({interaction_id, application_id, token, options, memb
     }
     response = displayTeam(team)
     const finished = allmatches ? {} : {finished: null}
+    const leagueCondition = league ? {league} : {}
     const season = await getCurrentSeason(seasonsCollect)
-    const teamsMatches = await matches.find({$or: [{home: team.id}, {away: team.id}], ...finished, season }).sort({dateTimestamp: 1}).toArray()
+    const teamsMatches = await matches.find({$or: [{home: team.id}, {away: team.id}], ...finished, ...leagueCondition, season }).sort({dateTimestamp: 1}).toArray()
     console.log(teamsMatches.length)
     const allTeams = await teams.find({active: true}).toArray()
     response += '\r**Upcoming matches:**'
@@ -32,7 +35,7 @@ export const team = async ({interaction_id, application_id, token, options, memb
       let i = 0
       let currentEmbed = ''
       for (const match of teamsMatches) {
-        currentEmbed += genericFormatMatch(allTeams, match)
+        currentEmbed += '\r'+genericFormatMatch(allTeams, match)
         i++
         if(i === 4) {
           matchEmbeds.push(currentEmbed)
@@ -51,7 +54,6 @@ export const team = async ({interaction_id, application_id, token, options, memb
     "title": "Matches",
     "description": matchEmbed,
   }))
-  console.log(embeds.map(em=> em.description.length))
   await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
     method: 'POST',
     body: {
@@ -92,5 +94,10 @@ export const teamCmd = {
     type: 5,
     name: 'allmatches',
     description: "Show finished matches?"
+  }, {
+    type: 3,
+    name: 'league',
+    description: 'League',
+    choices: fixturesChannels.map(({name, value})=> ({name, value}))
   }]
 }

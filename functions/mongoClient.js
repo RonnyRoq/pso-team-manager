@@ -16,7 +16,7 @@ const mongoClient = (client) => {
         seasonsCollect: psoDb.collection("Seasons"),
         pendingDeals: psoDb.collection("PendingDeals"),
         pendingLoans: psoDb.collection("PendingLoans"),
-        pendingReleases: psoDb.collection("PendingRelases"),
+        pendingReleases: psoDb.collection("PendingReleases"),
         candidates: psoDb.collection("Candidates"),
         lineups: psoDb.collection("Lineups"),
         playerStats: psoDb.collection("PlayerStats"),

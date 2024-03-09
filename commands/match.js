@@ -5,7 +5,7 @@ import { getCurrentSeason, getPlayerNick, msToTimestamp, optionsToObject, update
 import { DiscordRequest } from "../utils.js";
 import { sleep } from "../functions/helpers.js";
 import { parseDate } from "./timestamp.js";
-import { formatDMLineup } from "./lineup.js";
+import { formatDMLineup } from "./lineup/lineup.js";
 import { getAllPlayers } from "../functions/playersCache.js";
 
 const matchLogChannelId = '1151131972568092702'
@@ -131,6 +131,51 @@ export const formatDMMatch = (league, homeTeam, awayTeam, match, homeLineup, awa
   return {content:response, embeds}
 }
 
+export const internalCreateMatch = async ({league, home, away, isInternational=false, dateTimestamp, matchday, teams, matches, nationalities, seasonsCollect}) => {
+  const currentLeague = fixturesChannels.find(({value})=> value === league)
+  let response = `<${currentLeague.emoji}> **| ${currentLeague.name} ${matchday}** - ${dateTimestamp ? `<t:${dateTimestamp}:F>` : 'No date'}`  
+  const homeScore = '?'
+  const awayScore = '?'
+  let insertResult
+  const season = await getCurrentSeason(seasonsCollect)
+  if(isInternational) {
+    const [homeTeam, awayTeam] = await Promise.all([
+      nationalities.findOne({name: home}),
+      nationalities.findOne({name: away})
+    ])
+    response += `\r> ${homeTeam.flag} **${homeTeam.name} :vs: ${awayTeam.name}** ${awayTeam.flag}`
+  } else {
+    const [homeTeam, awayTeam] = await Promise.all([
+      teams.findOne({active:true, id: home}),
+      teams.findOne({active:true, id: away})
+    ])
+    response += `\r> ${homeTeam.flag} ${homeTeam.disqualified?':no_entry_sign: ':''}${homeTeam.emoji} <@&${homeTeam.id}> :vs: <@&${awayTeam.id}> ${awayTeam.emoji}${awayTeam.disqualified?':no_entry_sign: ':''} ${awayTeam.flag}`
+  }
+  response += `\r> ${homeScore} : ${awayScore}`
+  
+  insertResult = await matches.insertOne({
+    home,
+    away,
+    dateTimestamp,
+    league,
+    matchday,
+    homeScore,
+    awayScore,
+    isInternational,
+    season
+  })
+  response += `\rID: ${insertResult.insertedId}`
+  const messageResp = await DiscordRequest(`/channels/${matchLogChannelId}/messages`, {
+    method: 'POST',
+    body: {
+      content: response,
+    }
+  })
+  const logResp = await messageResp.json()
+  await matches.updateOne({_id: new ObjectId(insertResult.insertedId)}, {$set: {logId: logResp.id}})
+  return response
+}
+
 const createMatch = async ({interaction_id, token, options, dbClient, isInternational}) => {
   const {home, away, league, matchday, date, timezone = 0, timestamp} = optionsToObject(options)
   let dateTimestamp = timestamp
@@ -138,49 +183,8 @@ const createMatch = async ({interaction_id, token, options, dbClient, isInternat
     const parsedDate = parseDate(date, timezone)
     dateTimestamp = msToTimestamp(Date.parse(parsedDate))
   }
-  const currentLeague = fixturesChannels.find(({value})=> value === league)
-
-  let response = `<${currentLeague.emoji}> **| ${currentLeague.name} ${matchday}** - <t:${dateTimestamp}:F>`
-  await dbClient(async ({teams, matches, nationalities, seasonsCollect})=> {
-    const homeScore = '?'
-    const awayScore = '?'
-    let insertResult
-    const season = await getCurrentSeason(seasonsCollect)
-    if(isInternational) {
-      const [homeTeam, awayTeam] = await Promise.all([
-        nationalities.findOne({name: home}),
-        nationalities.findOne({name: away})
-      ])
-      response += `\r> ${homeTeam.flag} **${homeTeam.name} :vs: ${awayTeam.name}** ${awayTeam.flag}`
-    } else {
-      const [homeTeam, awayTeam] = await Promise.all([
-        teams.findOne({active:true, id: home}),
-        teams.findOne({active:true, id: away})
-      ])
-      response += `\r> ${homeTeam.flag} ${homeTeam.disqualified?':no_entry_sign: ':''}${homeTeam.emoji} <@&${homeTeam.id}> :vs: <@&${awayTeam.id}> ${awayTeam.emoji}${awayTeam.disqualified?':no_entry_sign: ':''} ${awayTeam.flag}`
-    }
-    response += `\r> ${homeScore} : ${awayScore}`
-    
-    insertResult = await matches.insertOne({
-      home,
-      away,
-      dateTimestamp,
-      league,
-      matchday,
-      homeScore,
-      awayScore,
-      isInternational,
-      season
-    })
-    response += `\rID: ${insertResult.insertedId}`
-    const messageResp = await DiscordRequest(`/channels/${matchLogChannelId}/messages`, {
-      method: 'POST',
-      body: {
-        content: response,
-      }
-    })
-    const logResp = await messageResp.json()
-    await matches.updateOne({_id: new ObjectId(insertResult.insertedId)}, {$set: {logId: logResp.id}})
+  const response = await dbClient(async ({teams, matches, nationalities, seasonsCollect})=> {
+    return internalCreateMatch({league, home, away, isInternational, dateTimestamp, matchday, teams, matches, nationalities, seasonsCollect})
   })
 
   return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {

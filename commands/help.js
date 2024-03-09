@@ -34,6 +34,7 @@ export const help = ({guild_id, interaction_id, token}) => {
     }
   })
 }
+
 const isAdmin = (member) => (member.roles || []).find(role => ['1081886764366573658', '1072201212356726836'].includes(role))
 
 export const helpAdmin = ({member, interaction_id, token}) => {

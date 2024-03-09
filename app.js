@@ -14,11 +14,11 @@ import mongoClient from './functions/mongoClient.js';
 import { now } from './commands/now.js';
 import { timestamp } from './commands/timestamp.js';
 import { help, helpAdmin } from './commands/help.js';
-import { boxLineup, eightLineup, internationalLineup, lineup } from './commands/lineup.js';
+import { internationalLineup, lineup, eightLineup, boxLineup } from './commands/lineup/lineup.js';
 import { allPlayers, autoCompleteNation, editPlayer, player, players } from './commands/player.js';
 import { team } from './commands/team.js';
 import { editInterMatch, editMatch, endMatch, getMatchesOfDay, getMatchesSummary, internationalMatch, match, matchId, matches, pastMatches, publishMatch, remindMissedMatches, resetMatch } from './commands/match.js';
-import { blacklistTeam, doubleContracts, emoji, initCountries, systemTeam } from './commands/system.js';
+import { blacklistTeam, doubleContracts, emoji, initCountries, managerContracts, systemTeam } from './commands/system.js';
 import { activateTeam, editTeam } from './commands/editTeams.js';
 import { addSelection, allNationalTeams, nationalTeam, postNationalTeams, registerElections, removeSelection, showElectionCandidates, showVotes, voteCoach } from './commands/nationalTeam.js';
 import { confirm, pendingConfirmations, releasePlayer } from './commands/confirm.js';
@@ -35,7 +35,7 @@ import { disbandTeam, disbandTeamConfirmed } from './commands/disbandTeam.js';
 import { getCurrentSeasonPhase, progressCurrentSeasonPhase } from './commands/season.js';
 import { setAllMatchToSeason } from './commands/matches/batchWork.js';
 import { endMatchModalResponse, matchResultPrompt, matchStatsModalResponse, matchStatsPrompt, refereeMatch } from './commands/matches/actions.js';
-import { fixturesChannels, serverChannels } from './config/psafServerConfig.js';
+import { fixturesChannels, postSeasonLeagues, serverChannels } from './config/psafServerConfig.js';
 import { notifyMatchStart, testDMMatch } from './commands/matches/notifyMatchStart.js';
 import { voteAction } from './commands/nationalTeams/actions.js';
 import { client, uri } from './config/mongoConfig.js';
@@ -48,6 +48,8 @@ import { generateMatchday } from './commands/matches/matchday.js';
 import { setRating } from './commands/player/rating.js';
 import { approveMoveMatch, declineMoveMatch, listMatchMoves, moveMatch, moveMatchModalResponse, moveMatchPrompt } from './commands/matches/moveMatch.js';
 import { getApi } from './api.js';
+import { generateGroup } from './commands/league/generateGroup.js';
+import { arrangeDaySchedule } from './commands/matches/arrangeDaySchedule.js';
 
 const keyPath = process.env.CERTKEY;
 const certPath = process.env.CERT;
@@ -556,6 +558,10 @@ function start() {
             return voteCoach(commandOptions)
           }
 
+          if(name === "managercontracts"){
+            return managerContracts(commandOptions)
+          }
+
           if(name === "setrating") {
             return setRating(commandOptions)
           }
@@ -599,7 +605,7 @@ function start() {
             return addSteam(commandOptions)
           }
 
-          if(name === "addtoleague") {
+          if(name === "addtoleague" || name === "addtointerleague") {
             return addToLeague(commandOptions)
           }
 
@@ -675,6 +681,14 @@ function start() {
             return manualDoubleSteam(commandOptions)
           }
 
+          if(name === 'generategroup') {
+            return generateGroup(commandOptions)
+          }
+
+          if(name === 'arrangeday') {
+            return arrangeDaySchedule(commandOptions)
+          }
+
           if (name ==='emojis') {
             const emojisResp = await DiscordRequest(`/guilds/${guild_id}/emojis`, { method: 'GET' })
             const emojis = await emojisResp.json()
@@ -747,7 +761,7 @@ function start() {
       } finally {
         await client.close();
       }
-    });
+    })
   }
   new CronJob(
     '1 9 * * *',
@@ -757,7 +771,7 @@ function start() {
     null,
     true,
     'Europe/London'
-  );
+  )
   let currentTeamIndex = 0
   new CronJob(
     '*/5 7-22 * * *',
@@ -771,8 +785,8 @@ function start() {
         }
       }
     },
-    null, 
-    true, 
+    null,
+    true,
     'Europe/London'
   )
   new CronJob(
@@ -781,8 +795,8 @@ function start() {
       //console.log('no notifications for now')
       await notifyMatchStart({dbClient})
     },
-    null, 
-    true, 
+    null,
+    true,
     'Europe/London'
   )
   new CronJob(
@@ -799,8 +813,8 @@ function start() {
         })
       }
     },
-    null, 
-    true, 
+    null,
+    true,
     'Europe/London'
   )
   new CronJob(
@@ -819,8 +833,8 @@ function start() {
       const league = fixturesChannels.find(chan=> chan.name === 'MSL')
       await updateLeagueTable({dbClient, league: league.value})
     },
-    null, 
-    true, 
+    null,
+    true,
     'Europe/London'
   )
   new CronJob(
@@ -829,8 +843,32 @@ function start() {
       const league = fixturesChannels.find(chan=> chan.name === 'ENCEL')
       await updateLeagueTable({dbClient, league: league.value})
     },
-    null, 
-    true, 
+    null,
+    true,
+    'Europe/London'
+  )
+  new CronJob(
+    '23 22 * * *',
+    async function() {
+      const leagues = fixturesChannels.filter(chan=> postSeasonLeagues.includes(chan.value))
+      for await(const league of leagues ) {
+        await updateLeagueTable({dbClient, league: league.value})
+      }
+    },
+    null,
+    true,
+    'Europe/London'
+  )
+  new CronJob(
+    '25 22 * * *',
+    async function() {
+      const leagues = fixturesChannels.filter(chan=> chan.isInternational && chan.standingsMsg)
+      for await(const league of leagues ) {
+        await updateLeagueTable({dbClient, league: league.value})
+      }
+    },
+    null,
+    true,
     'Europe/London'
   )
   new CronJob(

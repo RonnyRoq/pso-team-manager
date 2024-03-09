@@ -231,7 +231,7 @@ export const releasePlayer = async ({member, callerId, interaction_id, applicati
     
     await pendingReleases.insertOne({
       playerId: player,
-      playerName: getPlayerNick(player),
+      playerName: getPlayerNick(discPlayer),
       team,
       teamName: dbTeam.name,
       expiresOn: Date.now()+twoWeeksMs,

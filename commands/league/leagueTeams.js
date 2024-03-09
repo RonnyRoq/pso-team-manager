@@ -11,7 +11,7 @@ export const leagueTeams = async ({options, dbClient, interaction_id, token}) =>
   })
   const leagueObj = fixturesChannels.find(fixtureLeague=> fixtureLeague.value === league)
   const content = `${leagueObj.name} teams:\r`
-    + teams.map(({team})=> `<@&${team}>`).join('\r')
+    + teams.map(({team})=> leagueObj.isInternational ? team : `<@&${team}>`).join('\r')
   return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
     method: 'POST',
     body: {

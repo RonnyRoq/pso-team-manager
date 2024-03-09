@@ -119,18 +119,20 @@ export const loan = async ({interaction_id, guild_id, application_id, token, mem
       }
     }, {upsert: true})
     const seasonObj = await seasonsCollect.findOne({endedAt: null})
-    let currentPhaseIndex = seasonPhases.findIndex(({name})=> seasonObj.phase === name)
+    const currentSeasonPhase = seasonPhases.findIndex(({name})=> seasonObj.phase === name)
+    let currentPhaseIndex = currentSeasonPhase
     const phasesCount = seasonPhases.length
     if(seasonObj.phaseStartedAt + (twoWeeksMs/2) < Date.now()) {
       currentPhaseIndex = (currentPhaseIndex+1) % phasesCount
     }
     const options = [activePhase(currentPhaseIndex+1, phasesCount), activePhase(currentPhaseIndex+2, phasesCount), activePhase(currentPhaseIndex+3, phasesCount)]
+
     const content = `When would <@${player}>'s loan end?`
     const components = [{
       type: 1,
       components: options.map(option => {
         let season = seasonObj.season
-        if(option <= currentPhaseIndex) {
+        if(option <= currentSeasonPhase) {
           season = seasonObj.season+1
         }
         return {

@@ -27,6 +27,6 @@ export const getMatches = async ({getParams, dbClient}) => {
     if(!seasonQuery) {
       seasonQuery = await getCurrentSeason(seasonsCollect)
     }
-    return matches.find({...query, season: seasonQuery}, {limit: 100, sort: {dateTimestamp: 1}}).toArray()
+    return matches.find({...query, season: seasonQuery}, {limit: 100, sort: {dateTimestamp: -1}}).toArray()
   })
 }

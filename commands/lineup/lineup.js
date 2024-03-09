@@ -1,9 +1,11 @@
 import {
   InteractionResponseType,
 } from 'discord-interactions';
-import { getPlayerTeam, getPlayerNick, optionsToObject, msToTimestamp, genericFormatMatch } from '../functions/helpers.js';
-import { getAllPlayers } from '../functions/playersCache.js';
-import { serverRoles } from '../config/psafServerConfig.js';
+import { getPlayerTeam, getPlayerNick, optionsToObject, msToTimestamp, postMessage, genericFormatMatch, quickResponse, waitingMsg, updateResponse, genericInterFormatMatch } from '../../functions/helpers.js';
+import { getAllPlayers } from '../../functions/playersCache.js';
+import { lineupBlacklist, lineupRolesBlacklist, serverRoles } from '../../config/psafServerConfig.js';
+
+const nonLineupAttributes = ['_id', 'team', 'matchId', 'vs']
 
 export const formatDMLineup = ({gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5, cb, lcm, rcm, lst, rst}) => {
   let response = `**GK:** ${gk.name} (<@${gk.id}>)\r`;
@@ -44,162 +46,240 @@ export const formatDMLineup = ({gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, 
 }
 
 export const formatLineup = ({gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5}) => {
-  let response = `**GK:** <@${gk}>\r`;
-  response += `**LB:** <@${lb}>\r`;
-  response += `**RB:** <@${rb}>\r`;
-  response += `**CM:** <@${cm}>\r`;
-  response += `**LW:** <@${lw}>\r`;
-  response += `**RW:** <@${rw}>`;
-  if(sub1) {
-    response += `\r**Subs:** <@${sub1}>`;
-  }
-  if(sub2) {
-    response += `, <@${sub2}>`;
-  }
-  if(sub3) {
-    response += `, <@${sub3}>`;
-  }
-  if(sub4) {
-    response += `, <@${sub4}>`;
-  }
-  if(sub5) {
-    response += `, <@${sub5}>`;
-  }
-  return response
-}
-
-export const formatVerifiedLineup = ({gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5}) => {
-  let response = `**GK:** <@${gk.id}>\r`;
-  response += `**LB:** <@${lb.id}>\r`;
-  response += `**RB:** <@${rb.id}>\r`;
-  response += `**CM:** <@${cm.id}>\r`;
-  response += `**LW:** <@${lw.id}>\r`;
-  response += `**RW:** <@${rw.id}>`;
-  if(sub1) {
-    response += `\r**Subs:** <@${sub1.id}>`;
-  }
-  if(sub2) {
-    response += `, <@${sub2.id}>`;
-  }
-  if(sub3) {
-    response += `, <@${sub3.id}>`;
-  }
-  if(sub4) {
-    response += `, <@${sub4.id}>`;
-  }
-  if(sub5) {
-    response += `, <@${sub5.id}>`;
-  }
-  return response
-}
-
-const saveLineupNextMatch = async ({dbClient, lineup, member, allPlayers, isInternational=false}) => {
-  let playerTeam=''
-  const startOfDay = new Date()
-  startOfDay.setUTCHours(startOfDay.getHours()-1,0,0,0)
-  const endOfDay = new Date()
-  endOfDay.setUTCHours(23,59,59,999)
-  const startDateTimestamp = msToTimestamp(Date.parse(startOfDay))
-  const endDateTimestamp = msToTimestamp(Date.parse(endOfDay))
-  const playerIds = Object.entries(lineup).map(([, id])=> id)
-  
-  await dbClient(async ({teams, matches, nationalities, players, lineups})=>{
-    const dbPlayer = await players.findOne({id: member.user.id})
-    const lineupPlayers = await players.find({id: {$in: playerIds}}).toArray()
-    const nation = await nationalities.findOne({name: dbPlayer.nat1})
-    const memberTeam = await getPlayerTeam(member, teams)
-    const nextMatches = await matches.find({isInternational: isInternational ? isInternational : {$ne: true}, dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, finished: {$in: [false, null]}, $or: [{home: memberTeam.id}, {away: memberTeam.id}]}).sort({dateTimestamp:1}).toArray()
-    const nextMatch = nextMatches[0]
-    if(nextMatch) {
-      const teamsOfMatch = await teams.find({active: true, $or:[{id:nextMatch.home}, {id:nextMatch.away}]}).toArray()
-      playerTeam = genericFormatMatch(teamsOfMatch, nextMatch) + '\r'
-      const matchId = nextMatch._id.toString()
-      await lineups.updateOne({matchId, team: isInternational ? nation.name : memberTeam.id}, {
-        $setOnInsert: {
-          matchId,
-          team: isInternational ? nation.name : memberTeam.id
-        },
-        $set: {
-          ...lineup
-        }
-      }, {upsert: true})
+  if(gk && gk.id) {
+    let response = `**GK:** <@${gk.id}> ${gk.verified ? '✅': ''}${gk.steam ? '':''}\r`;
+    response += `**LB:** <@${lb.id}> ${lb.verified ? '✅': ''}\r`;
+    response += `**RB:** <@${rb.id}> ${rb.verified ? '✅': ''}\r`;
+    response += `**CM:** <@${cm.id}> ${cm.verified ? '✅': ''}\r`;
+    response += `**LW:** <@${lw.id}> ${lw.verified ? '✅': ''}\r`;
+    response += `**RW:** <@${rw.id}> ${rw.verified ? '✅': ''}`;
+    if(sub1) {
+      response += `\r**Subs:** <@${sub1.id}> ${sub1.verified ? '✅': ''}`;
     }
-    playerTeam += isInternational ? nation.flag + ' ' + nation.name + ' ' : memberTeam.emoji+' ' + memberTeam.name + ' '
-    return Object.entries(lineup)
-      .map(([pos, id])=> [pos, {id, verified: !!allPlayers.find(player=> player.user.id === id)?.roles.includes(serverRoles.verifiedRole), steam: !!lineupPlayers.find(player=>player.id === id)?.steam}])
-  })
-  return { playerTeam, }
+    if(sub2) {
+      response += `, <@${sub2.id}> ${sub2.verified ? '✅': ''}`;
+    }
+    if(sub3) {
+      response += `, <@${sub3.id}> ${sub3.verified ? '✅': ''}`;
+    }
+    if(sub4) {
+      response += `, <@${sub4.id}> ${sub4.verified ? '✅': ''}`;
+    }
+    if(sub5) {
+      response += `, <@${sub5.id}> ${sub5.verified ? '✅': ''}`;
+    }
+    return response
+  } else {
+    let response = `**GK:** <@${gk}>\r`;
+    response += `**LB:** <@${lb}>\r`;
+    response += `**RB:** <@${rb}>\r`;
+    response += `**CM:** <@${cm}>\r`;
+    response += `**LW:** <@${lw}>\r`;
+    response += `**RW:** <@${rw}>`;
+    if(sub1) {
+      response += `\r**Subs:** <@${sub1}>`;
+    }
+    if(sub2) {
+      response += `, <@${sub2}>`;
+    }
+    if(sub3) {
+      response += `, <@${sub3}>`;
+    }
+    if(sub4) {
+      response += `, <@${sub4}>`;
+    }
+    if(sub5) {
+      response += `, <@${sub5}>`;
+    }
+    return response
+  }
 }
 
-export const lineup = async({options, res, member, guild_id, dbClient}) => {
+export const formatEightLineup = ({gk, lb, cb, rb, lcm, rcm, lst, rst, sub1, sub2, sub3, sub4, sub5}) => {
+  if(gk && gk.id) {
+    let response = `**GK:** <@${gk.id}> ${gk.verified ? '✅': ''}\r`;
+    response += `**LB:** <@${lb.id}> ${lb.verified ? '✅': ''}\r`;
+    response += `**CB:** <@${cb.id}> ${cb.verified ? '✅': ''}\r`;
+    response += `**RB:** <@${rb.id}> ${rb.verified ? '✅': ''}\r`;
+    response += `**LCM:** <@${lcm.id}> ${lcm.verified ? '✅': ''}\r`;
+    response += `**RCM:** <@${rcm.id}> ${rcm.verified ? '✅': ''}\r`;
+    response += `**LST:** <@${lst.id}> ${lst.verified ? '✅': ''}\r`;
+    response += `**RST:** <@${rst.id}> ${rst.verified ? '✅': ''}`;
+    if(sub1) {
+      response += `\r**Subs:** <@${sub1.id}> ${sub1.verified ? '✅': ''}`;
+    }
+    if(sub2) {
+      response += `, <@${sub2.id}> ${sub2.verified ? '✅': ''}`;
+    }
+    if(sub3) {
+      response += `, <@${sub3.id}> ${sub3.verified ? '✅': ''}`;
+    }
+    if(sub4) {
+      response += `, <@${sub4.id}> ${sub4.verified ? '✅': ''}`;
+    }
+    if(sub5) {
+      response += `, <@${sub5.id}> ${sub5.verified ? '✅': ''}`;
+    }
+    return response
+  } else {
+    let response = `GK: <@${gk}>\r`;
+    response += `LB: <@${lb}>\r`;
+    response += `CB: <@${cb}>\r`;
+    response += `RB: <@${rb}>\r`;
+    response += `LCM: <@${lcm}>\r`;
+    response += `RCM: <@${rcm}>\r`;
+    response += `LST: <@${lst}>\r`;
+    response += `RST: <@${rst}>`;
+    if(sub1) {
+      response += `\rSubs: <@${sub1}>`;
+    }
+    if(sub2) {
+      response += `, <@${sub2}>`;
+    }
+    if(sub3) {
+      response += `, <@${sub3}>`;
+    }
+    if(sub4) {
+      response += `, <@${sub4}>`;
+    }
+    if(sub5) {
+      response += `, <@${sub5}>`;
+    }
+    return response
+  }
+}
+
+const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam, member, guild_id, isInternational, interaction_id, token, application_id, channel_id, isEightPlayers }) => {
+  const lineupFormatFunction = isEightPlayers ? formatEightLineup : formatLineup
+  if(process.env.GUILD_ID === guild_id) {
+    await waitingMsg({interaction_id, token})
+    let playerTeam= ''
+    const startOfDay = new Date()
+    startOfDay.setUTCHours(startOfDay.getHours()-1,0,0,0)
+    const endOfDay = new Date()
+    endOfDay.setUTCHours(23,59,59,999)
+    const startDateTimestamp = msToTimestamp(Date.parse(startOfDay))
+    const endDateTimestamp = msToTimestamp(Date.parse(endOfDay))
+    
+    return await dbClient(async ({teams, matches, nationalities, players, lineups})=>{
+      const dbPlayer = await players.findOne({id: member.user.id})
+      let lineupPlayers = await players.find({id: {$in: Object.values(lineup)}}).toArray()
+      const nations = await nationalities.find({}).toArray()
+      const nation = nations.find(item=> item.name === dbPlayer.nat1)
+      const memberTeam = await getPlayerTeam(member, teams)
+      const teamId = isInternational ? nation.name: memberTeam.id
+      const nextMatches = await matches.find({isInternational: isInternational ? isInternational : {$ne: true}, dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, finished: {$in: [false, null]}, $or: [{home: teamId}, {away: teamId}]}).sort({dateTimestamp:1}).toArray()
+      const nextMatch = nextMatches[0]
+      let matchId = ''
+      if(nextMatch) {
+        if(!isInternational){
+          const teamsOfMatch = await teams.find({active: true, $or:[{id:nextMatch.home}, {id:nextMatch.away}]}).toArray()
+          playerTeam = genericFormatMatch(teamsOfMatch, nextMatch) + '\r'
+        } else {
+          genericInterFormatMatch(nations, nextMatch)
+        }
+        matchId = nextMatch._id.toString()
+        await lineups.updateOne({matchId, team: teamId}, {
+          $setOnInsert: {
+            matchId,
+            team: teamId
+          },
+          $set: {
+            ...lineup
+          }
+        }, {upsert: true})
+      }
+      playerTeam += isInternational ? nation.flag + ' ' + nation.name + ' ' : memberTeam.emoji+' ' + memberTeam.name + ' '
+      lineupPlayers = lineupPlayers.filter(lineupPlayer=> lineupPlayer.steam)
+      objLineup = Object.fromEntries(Object.entries(objLineup).map(posLineup=> ({...posLineup, steam: lineupPlayers.some(lineupPlayer => lineupPlayer.id === posLineup?.id)})))
+      
+      let response = `\r<@${callerId}> posted:\r${playerTeam}lineup ${lineup.vs? `vs ${lineup.vs}`: ''}\r`
+      response += lineupFormatFunction({vs: lineup.vs, ...objLineup})
+      console.log(response)
+      
+      const messageResp = await postMessage({channel_id, content: response})
+      const message = await messageResp.json()
+      await lineups.updateOne({matchId, team: teamId}, {$set: {message: message.id}})
+      return updateResponse({application_id, token, content: response})
+    })
+  } else {
+    let response = `<@${callerId}> posted:\r${playerTeam? playerTeam : ''}lineup ${lineup.vs? `vs ${lineup.vs}`: ''}\r`
+    response += lineupFormatFunction({vs: lineup.vs, ...objLineup})
+    console.log(response)
+    
+    return quickResponse({interaction_id, token, content: response})
+  }
+}
+
+export const lineup = async({options, interaction_id, callerId, token, member, guild_id, application_id, channel_id, dbClient}) => {
   const lineup = optionsToObject(options)
-  const {gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5, vs} = lineup
-  let playerTeam = ''
-  
-  if(process.env.GUILD_ID === guild_id) {
-    const allPlayers = await getAllPlayers(guild_id)
-    playerTeam = await saveLineupNextMatch({dbClient, lineup, member, allPlayers})
+  const allPlayers = await getAllPlayers(guild_id)
+  let forbiddenUsersList = []
+  let objLineup = Object.fromEntries(
+    Object.entries(lineup)
+      .filter(([name])=> !nonLineupAttributes.includes(name))
+      .map(([name, value])=> {
+        if(lineupBlacklist.includes(value)) {
+          forbiddenUsersList.push(`<@${value}>`)
+        }
+        const discPlayer = allPlayers.find(player=> player?.user?.id === value)
+        if(discPlayer.roles.some(role => lineupRolesBlacklist.includes(role))) {
+          forbiddenUsersList.push(`<@${value}>`)
+        }
+        return [name, {id: value, name: getPlayerNick(discPlayer), verified: discPlayer.roles.includes(serverRoles.verifiedRole)}]
+      })
+  )
+  if(forbiddenUsersList.length>0) {
+    return quickResponse({interaction_id, token, content: `Can't post this lineup, restricted users: ${forbiddenUsersList.join(', ')}`})
   }
-  let response = `${playerTeam}lineup ${vs? `vs ${vs}`: ''}\r`
-  response += formatLineup({gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5})
-  
-  return res.send({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-    data: { content : response }
-  })
+  return saveLineup({dbClient, lineup, callerId, objLineup, member, application_id, guild_id, isInternational:false, interaction_id, token, channel_id, isEightPlayers: false})
 }
 
-export const internationalLineup = async ({options, res, member, guild_id, dbClient}) => {
-  const {gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5, vs} = Object.fromEntries(options.map(({name, value})=> [name, value]))
-  let playerTeam = ''
-  if(process.env.GUILD_ID === guild_id) {
-    playerTeam = await saveLineupNextMatch({dbClient, lineup, member, isInternational: true})
-  }
-  let response = `${playerTeam}lineup ${vs? `vs ${vs}`: ''}\r`
-  response += formatLineup({gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5})
-  
-  return res.send({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-    data: { content : response }
-  })
-}
-
-export const eightLineup = async ({options, res, member, guild_id, dbClient}) => {
+export const internationalLineup = async ({options, member, callerId, guild_id, interaction_id, application_id, token, channel_id, dbClient}) => {
   const lineup = optionsToObject(options)
-  const {gk, lb, cb, rb, lcm, rcm, lst, rst, sub1, sub2, sub3, sub4, sub5, sub6, vs} = lineup
-  let playerTeam = ''
-  if(process.env.GUILD_ID === guild_id) {
-    playerTeam = await saveLineupNextMatch({dbClient, lineup, member})
+  const allPlayers = await getAllPlayers(guild_id)
+  let forbiddenUsersList = []
+  let objLineup = Object.fromEntries(
+    Object.entries(lineup)
+      .filter(([name])=> !nonLineupAttributes.includes(name))
+      .map(([name, value])=> {
+        if(lineupBlacklist.includes(value)) {
+          forbiddenUsersList.push(`<@${value}>`)
+        }
+        const discPlayer = allPlayers.find(player=> player?.user?.id === value)
+        if(discPlayer.roles.some(role => lineupRolesBlacklist.includes(role))) {
+          forbiddenUsersList.push(`<@${value}>`)
+        }
+        return [name, {id: value, name: getPlayerNick(discPlayer), verified: discPlayer.roles.includes(serverRoles.verifiedRole)}]
+      })
+  )
+  if(forbiddenUsersList.length>0) {
+    return quickResponse({interaction_id, token, content: `Can't post this lineup, restricted users: ${forbiddenUsersList.join(', ')}`})
   }
-  let response = `${playerTeam}lineup ${vs? `vs ${vs}`: ''}\r`
-  response += `GK: <@${gk}>\r`;
-  response += `LB: <@${lb}>\r`;
-  response += `CB: <@${cb}>\r`;
-  response += `RB: <@${rb}>\r`;
-  response += `LCM: <@${lcm}>\r`;
-  response += `RCM: <@${rcm}>\r`;
-  response += `LST: <@${lst}>\r`;
-  response += `RST: <@${rst}>`;
-  if(sub1) {
-    response += `\rSubs: <@${sub1}>`;
+  return saveLineup({dbClient, lineup, callerId, objLineup, member, guild_id, application_id, isInternational:true, interaction_id, token, channel_id, isEightPlayers: false})
+}
+
+export const eightLineup = async ({options, interaction_id, callerId, token, application_id, channel_id, member, guild_id, dbClient}) => {
+  const lineup = optionsToObject(options)
+  const allPlayers = await getAllPlayers(guild_id)
+  let forbiddenUsersList = false
+  let objLineup = Object.fromEntries(
+    Object.entries(lineup)
+      .filter(([name])=> !nonLineupAttributes.includes(name))
+      .map(([name, value])=> {
+        const discPlayer = allPlayers.find(player=> player?.user?.id === value)
+        if(lineupBlacklist.includes(value)) {
+          forbiddenUsersList.push(`<@${value}>`)
+        } else if(discPlayer.roles.some(role => lineupRolesBlacklist.includes(role))) {
+          forbiddenUsersList.push(`<@${value}>`)
+        }
+        return [name, {id: value, name: getPlayerNick(discPlayer), verified: discPlayer.roles.includes(serverRoles.verifiedRole)}]
+      })
+  )
+  if(forbiddenUsersList.length>0) {
+    return quickResponse({interaction_id, token, content: `Can't post this lineup, restricted users: ${forbiddenUsersList.join(', ')}`})
   }
-  if(sub2) {
-    response += `, <@${sub2}>`;
-  }
-  if(sub3) {
-    response += `, <@${sub3}>`;
-  }
-  if(sub4) {
-    response += `, <@${sub4}>`;
-  }
-  if(sub5) {
-    response += `, <@${sub5}>`;
-  }
-  if(sub6) {
-    response += `, <@${sub6}>`;
-  }
-  
-  return res.send({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-    data: { content : response }
-  })
+  return saveLineup({dbClient, lineup, callerId, objLineup, member, guild_id, application_id, isInternational:false, interaction_id, token, channel_id, isEightPlayers: true})
 }
 
 const findPlayerNick = (playersList, id) => {

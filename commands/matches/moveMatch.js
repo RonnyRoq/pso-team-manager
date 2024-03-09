@@ -280,7 +280,7 @@ export const declineMoveMatch = async ({interaction_id, token, application_id, c
         content: moveRequestMessage.content+`\rDECLINED by <@${callerId}>.`
       }
     })    
-    await moveRequest.deleteOne(matchToMoveId)
+    await moveRequest.deleteOne({_id: matchToMoveId})
   })
 
   return await updateResponse({application_id, token, content: `Move declined.`})

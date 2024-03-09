@@ -2,10 +2,48 @@ import { InteractionResponseFlags, InteractionResponseType } from "discord-inter
 import { DiscordRequest } from "../utils.js"
 import { countries } from '../config/countriesConfig.js'
 import { getAllPlayers } from "../functions/playersCache.js"
-import { optionsToObject, updateResponse, waitingMsg } from "../functions/helpers.js"
+import { getCurrentSeason, getPlayerNick, optionsToObject, updateResponse, waitingMsg } from "../functions/helpers.js"
 import { serverRoles } from "../config/psafServerConfig.js"
 
 const matchBlacklistRole = '1095055617703543025'
+
+export const managerContracts = async ({interaction_id, token, application_id, dbClient, guild_id}) => {
+  await waitingMsg({interaction_id, token})
+  const allPlayers = await getAllPlayers(guild_id)
+  const managers = allPlayers.filter(player=> player.roles.includes(serverRoles.clubManagerRole))
+  const managersId = managers.map(manager=>manager.user.id)
+  return dbClient(async ({players, contracts, seasonsCollect, teams})=> {
+    const currentSeason = await getCurrentSeason(seasonsCollect)
+    const managersContracts = await contracts.find({endedAt:null, until: {$gte: currentSeason}, playerId: {$in: managersId}}).toArray()
+    const allTeams = await teams.find({active: true}).toArray()
+    const managersWithoutContracts = managers.filter(manager=> !managersContracts.some(contract=> contract.playerId === manager.user.id))
+    await managersWithoutContracts.forEach(async managerDisc => {
+      const name = getPlayerNick(managerDisc)
+      console.log(name)
+      const player = managerDisc.user.id
+      const currentContract = managersContracts.find(contract=>contract.playerId === player)
+      console.log(currentContract)
+      const team = allTeams.find(currentTeam => managerDisc.roles.includes(currentTeam.id))
+      console.log(team)
+      if(team) {
+        await Promise.all([
+          players.updateOne({id: player}, {$set:{
+            nick: name,
+          }}, {upsert: true}),
+          contracts.updateOne({playerId: player, endedAt: null}, {$set: {
+            playerId: player,
+            team: team.id,
+            at: currentContract?.at || Date.now(), 
+            until: currentSeason+1,
+            updatedAt: Date.now()
+          }}, {upsert: true})
+        ])
+        console.log(`${name} has now a 1 season contract with ${team.name}`)
+      }
+    })
+    return updateResponse({application_id, token, content: 'done'})
+  })
+}
 
 export const systemTeam = async ({interaction_id, token, options, guild_id,  dbClient})=> {
   const [role] = options || []
@@ -234,4 +272,10 @@ export const emojiCmd = {
     description: 'The Emoji you\'re looking for',
     required: true,
   }]
+}
+
+export const managerContractsCmd = {
+  type: 1,
+  name: 'managercontracts',
+  description: 'Update all managers contracts to one season',
 }

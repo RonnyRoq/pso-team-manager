@@ -1,6 +1,7 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions";
 import { fixturesChannels, serverRoles } from "../config/psafServerConfig.js";
 import { DiscordRequest } from "../utils.js";
+import { countries } from "../config/countriesConfig.js";
 
 export const isPSAF = (guild_id) => guild_id === process.env.GUILD_ID
 
@@ -64,7 +65,7 @@ export const setInternational = (playerName) => playerName.startsWith('⭐ ') ? 
 export const removeInternational = (playerName) => playerName.startsWith('⭐ ') ? playerName.substring(2) : playerName
 
 export const getPlayerTeam = (player, teams) => 
-  teams.findOne({active:true, $or:player.roles.map(role=>({id:role}))})
+  teams.findOne({active:true, id: {$in: player.roles}})
 
 export const displayTeam = (team, noLogo) => (
   `Team: ${team.flag} ${team.emoji} ${team.name} - ${team.shortName}` +
@@ -78,8 +79,16 @@ export const genericFormatMatch = (teams, match) => {
   const league = fixturesChannels.find(({value})=> value === match.league)
   const homeTeam = teams.find(({id})=> id === match.home)
   const awayTeam = teams.find(({id})=> id === match.away)
-  let response = `\r<${league.emoji}> **| ${league.name} ${match.matchday}** - <t:${match.dateTimestamp}:F>`
+  let response = `<${league.emoji}> **| ${league.name} ${match.matchday}** - <t:${match.dateTimestamp}:F>`
     response += `\r> ${homeTeam.flag} ${homeTeam.emoji} <@&${homeTeam.id}> ${match.finished ? `**${match.homeScore} - ${match.awayScore}**`: ' :vs: '} <@&${awayTeam.id}> ${awayTeam.emoji} ${awayTeam.flag}`
+  return response
+}
+export const genericInterFormatMatch = (teams, match) => {
+  const league = fixturesChannels.find(({value})=> value === match.league)
+  const homeTeam = teams.find(({name})=> name === match.home)
+  const awayTeam = teams.find(({name})=> name === match.away)
+  let response = `<${league.emoji}> **| ${league.name} ${match.matchday}** - <t:${match.dateTimestamp}:F>`
+    response += `\r> ${homeTeam.flag} ${homeTeam.name} ${match.finished ? `**${match.homeScore} - ${match.awayScore}**`: ' :vs: '} ${awayTeam.name} ${awayTeam.flag}`
   return response
 }
 
@@ -127,9 +136,31 @@ export const updateResponse = async ({application_id, token, content}) =>
     }
   })
 
+export const postMessage = async({channel_id, content='', components = []}) =>
+  DiscordRequest(`/channels/${channel_id}/messages`, 
+  {
+    method: 'POST',
+    body: {
+      content,
+      components
+    }
+  })
+
 //stolen from stackoverflow
 export const isNumeric = (str) => {
   if (typeof str != "string") return false // we only process strings!  
   return !isNaN(str) && // use type coercion to parse the _entirety_ of the string (`parseFloat` alone does not do this)...
           !isNaN(parseFloat(str)) // ...and ensure strings of whitespace fail
+}
+
+export const autocompleteCountries = countries.map(({name, flag})=> ({name, flag, display: flag+name, search: name.toLowerCase()}))
+
+//stolen from stackoverflow
+export const shuffleArray = (array) => {
+  for (var i = array.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var temp = array[i];
+      array[i] = array[j];
+      array[j] = temp;
+  }
 }

@@ -214,7 +214,7 @@ export const matchStatsModalResponse = async ({interaction_id, token, applicatio
     return homeLineup;
   }
 
-  const data = all_stats.replace('\r\n', '\n').split("\n\n");
+  const data = all_stats.replace('\r\n', ).split("\n\n");
   const dataEntries = [];
   for (let i = 0; i < data.length; i += 2) {
     dataEntries.push([data[i].trimStart(), data[i + 1]]);
@@ -225,7 +225,7 @@ export const matchStatsModalResponse = async ({interaction_id, token, applicatio
   
   const dateRegExp = new RegExp(/(\d+)-(\d+)-(\d+)_(\d+)-(\d+)-(\d+)/gm)
   const dateMatches = dateRegExp.exec(teamsAndDate[1])
-  const dateOfMatch = new Date(dateMatches[3], dateMatches[1]-1, dateMatches[2], dateMatches[4], dateMatches[5], dateMatches[6]).toISOString()
+  const dateOfMatch = new Date(dateMatches[1], dateMatches[2]-1, dateMatches[3], dateMatches[4], dateMatches[5], dateMatches[6]).toISOString()
 
   const homeAwayScores = dataEntries[0][1].split(" - ");
   const matchStatsBase = [

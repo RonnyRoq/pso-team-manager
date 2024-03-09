@@ -1,7 +1,6 @@
 import { InteractionResponseType } from "discord-interactions"
 import { DiscordRequest } from "../utils.js"
-import { getPlayerNick, msToTimestamp, optionsToObject, sleep } from "../functions/helpers.js"
-import { countries } from "../config/countriesConfig.js"
+import { getPlayerNick, msToTimestamp, optionsToObject, sleep, autocompleteCountries } from "../functions/helpers.js"
 import { getAllPlayers } from "../functions/playersCache.js"
 import { serverRoles } from "../config/psafServerConfig.js"
 import { isMemberStaff } from "../site/siteUtils.js"
@@ -9,7 +8,6 @@ import { seasonPhases } from "./season.js"
 
 const nationalTeamPlayerRole = '1103327647955685536'
 const staffRoles = ['1081886764366573658', '1072210995927339139', '1072201212356726836']
-const autocompleteCountries = countries.map(({name, flag})=> ({name, flag, display: flag+name, search: name.toLowerCase()}))
 
 export const player = async ({options, interaction_id, callerId, guild_id, application_id, member, token, dbClient}) => {
   const [{value}] = options || [{}]
@@ -297,7 +295,7 @@ export const autoCompleteNation = ({options}, res) => {
   const toSearch = (currentOption.value || "").toLowerCase()
   const countryChoices = autocompleteCountries
     .filter(({search}) => toSearch.length === 0 || search.includes(toSearch))
-    .filter((country, index) => index < 24)
+    .slice(0, 24)
   return res.send({
     type: InteractionResponseType.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT,
     data: {
