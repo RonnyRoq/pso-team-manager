@@ -10,7 +10,7 @@ import { blacklistTeamCmd, doubleContractsCmd, emojiCmd, initCountriesCmd, manag
 import { activateTeamCmd, editTeamCmd } from './commands/editTeams.js';
 import { allPlayersCmd, editPlayerCmd, myPlayerCmd, playerCmd, playersCmd } from './commands/player.js';
 import { addSelectionCmd, allNationalTeamsCmd, nationalTeamCmd, postNationalTeamsCmd, registerElectionsCmd, removeSelectionCmd, showElectionCandidatesCmd, showVotesCmd, voteCoachCmd } from './commands/nationalTeam.js';
-import { confirmCmd, releaseCmd, updateConfirmCmd } from './commands/confirm.js';
+import { confirmCmd, registerCmd, releaseCmd, updateConfirmCmd } from './commands/confirm.js';
 import { dealCmd, loanCmd } from './commands/confirmations/deal.js';
 import { listDealsCmd } from './commands/confirmations/listDeals.js';
 import { renewCmd, setContractCmd, teamTransferCmd, transferCmd } from './commands/transfers.js';
@@ -21,14 +21,15 @@ import { disbandTeamCmd } from './commands/disbandTeam.js';
 import { getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd } from './commands/season.js';
 import { testDMMatchCmd } from './commands/matches/notifyMatchStart.js';
 import { addSteamCmd, addSteamIdCmd, manualDoubleSteamCmd, setNameCmd } from './commands/player/steamid.js';
-import { addToInterLeagueCmd, addToLeagueCmd } from './commands/league/addToLeague.js';
+import { addToInterLeagueCmd, addToLeagueCmd, removeFromLeagueCmd } from './commands/league/addToLeague.js';
 import { leagueTeamsCmd } from './commands/league/leagueTeams.js';
 import { imageLeagueTableCmd, leagueTableCmd, postLeagueTableCmd } from './commands/league/leagueTable.js';
-import { generateMatchdayCmd } from './commands/matches/matchday.js';
+import { generateMatchdayCmd, randomMatchdayCmd } from './commands/matches/matchday.js';
 import { setRatingCmd } from './commands/player/rating.js';
 import { listMovesCmd, moveMatchCmd } from './commands/matches/moveMatch.js';
 import { generateGroupCmd } from './commands/league/generateGroup.js';
 import { arrangeDayScheduleCmd } from './commands/matches/arrangeDaySchedule.js';
+import { addUniqueIdCmd } from './commands/player/uniqueId.js';
 
 const TEAMS = {
   name: 'teams',
@@ -109,15 +110,15 @@ const GUILD_COMMANDS = [
   teamCmd, emojisCmd, matchCmd, editMatchCmd, moveTheMatchCmd, endMatchCmd, publishMatchCmd,
   matchIdCmd, matchesCmd, internationalMatchCmd, editInternationalMatchCmd, resetMatchCmd,
   playerCmd, editPlayerCmd, allPlayersCmd, playersCmd, myPlayerCmd,
-  confirmCmd, updateConfirmCmd, renewCmd, dealCmd, activateTeamCmd, listDealsCmd, loanCmd, releaseCmd,
+  confirmCmd, updateConfirmCmd, renewCmd, dealCmd, activateTeamCmd, listDealsCmd, loanCmd, releaseCmd, registerCmd,
   nationalTeamCmd, allNationalTeamsCmd, postNationalTeamsCmd, addSelectionCmd, removeSelectionCmd,
-  TEAMS, transferCmd, teamTransferCmd, FREEPLAYER, FINE, BONUS, editTeamCmd,
+  TEAMS, transferCmd, teamTransferCmd, FREEPLAYER, FINE, BONUS, editTeamCmd, addUniqueIdCmd,
   internationalLineupCmd, helpAdminCmd, emojiCmd, showBlacklistCmd, showNoContractsCmd, registerElectionsCmd, showElectionCandidatesCmd, voteCoachCmd, showVotesCmd,
-  disbandTeamCmd, expireContractsCmd, addSteamIdCmd, addSteamCmd, setRatingCmd, setNameCmd,
+  disbandTeamCmd, expireContractsCmd, addSteamIdCmd, addSteamCmd, setRatingCmd, setNameCmd, removeFromLeagueCmd,
   addToLeagueCmd, addToInterLeagueCmd, leagueTeamsCmd, leagueTableCmd, imageLeagueTableCmd, postLeagueTableCmd, generateMatchdayCmd,
   getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd, testDMMatchCmd, pastMatchesCmd, moveMatchCmd, listMovesCmd,
   systemTeamCmd, initCountriesCmd, postTeamCmd, postAllTeamsCmd, setContractCmd, updateTeamPostCmd, doubleContractsCmd, blacklistTeamCmd, showExpiringContractsCmd,
-  manualDoubleSteamCmd, generateGroupCmd, arrangeDayScheduleCmd, managerContractsCmd
+  manualDoubleSteamCmd, generateGroupCmd, arrangeDayScheduleCmd, managerContractsCmd, randomMatchdayCmd,
 ]
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);

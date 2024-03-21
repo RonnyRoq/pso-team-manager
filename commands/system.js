@@ -209,7 +209,7 @@ export const emoji = async({interaction_id, token, guild_id, options}) => {
 
 export const initCountries = async ({interaction_id, token, dbClient}) => {
   return await dbClient(async ({nationalities})=> {
-    console.log(countries)
+    //console.log(countries)
     countries.forEach(async({name,flag})=> {
       await nationalities.updateOne({name}, {$set: {name, flag}}, {upsert: true})
     })

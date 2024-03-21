@@ -1,5 +1,6 @@
 import express from 'express'
 import bodyParser from 'body-parser'
+import pinoHttp from 'pino-http'
 import { getTeam, getTeamAndPlayers, getTeams } from './commands/teams/getTeam.js'
 import { getPlayer, getPlayers } from './commands/player/api.js'
 import { getMatches } from './commands/matches/matches.js'
@@ -8,7 +9,7 @@ import { apiLeagueTable } from './commands/league/leagueTable.js'
 
 export const getApi = (localdev=false, dbClient={}) =>{
   const api = express() // the API app
-  
+  //api.use(pinoHttp)
   api.use(bodyParser.urlencoded({extended: true}))
 
   if(!localdev) {

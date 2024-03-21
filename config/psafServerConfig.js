@@ -20,13 +20,15 @@ export const fixturesChannels = [
     name:'PG6',
     value: '1209539443271270452',
     emoji: ':__PSAF:1095732362400247838',
-    pingRole: '1209230709542223912'
+    pingRole: '1209230709542223912',
+    standingsMsg: '1217092876278960221'
   },{
     name:'PG8',
     value: '1209539443271270452-8',
     emoji: ':__PSAF:1095732362400247838',
     pingRole: '1209230709542223912',
     channel: '1209539443271270452',
+    standingsMsg: '1217092975117471764'
   },{
     name:'WEL',
     value: '1177013563974500513',
@@ -35,7 +37,12 @@ export const fixturesChannels = [
     standingsMsg: '1185330583514132550',
     players: 8
   },{
-    name: 'Challengers League (Group A)',
+    name:'SuperCup',
+    value: '1171748569540198460',
+    emoji: ':__PSAF:1095732362400247838',
+    pingRole: '1072620805600592062'
+  },{
+/*    name: 'Challengers League (Group A)',
     value: '1101999929171394653-a',
     emoji: ':___ChallengersLeague:1199341222444158986',
     channel: '1101999929171394653',
@@ -48,13 +55,13 @@ export const fixturesChannels = [
     channel: '1101999929171394653',
     standingsChannel: '1101657533229322300',
     standingsMsg: '1208863173545959498'
-  },{
+  },{*/
     name: 'Challengers League',
     value: '1101999929171394653-k',
     emoji: ':___ChallengersLeague:1199341222444158986',
     channel: '1101999929171394653'
   },{
-    name: 'Masters League (Group A)',
+/*    name: 'Masters League (Group A)',
     value: '1101999952483328140-a',
     emoji: ':___MastersLeague:1199341225472425984',
     channel: '1101999952483328140',
@@ -81,13 +88,13 @@ export const fixturesChannels = [
     channel: '1101999952483328140',
     standingsChannel: '1101657533229322300',
     standingsMsg: '1206692338093523045'
-  },{
+  },{*/
     name: 'Masters League',
     value: '1101999952483328140-k',
     emoji: ':___MastersLeague:1199341225472425984',
     channel: '1101999952483328140'
   },{
-    name: 'Redemption League (Group A)',
+    /*name: 'Redemption League (Group A)',
     value: '1202650816197034025-a',
     emoji: ':___RedemptionLeague:1201545169393168514',
     channel: '1202650816197034025',
@@ -100,7 +107,7 @@ export const fixturesChannels = [
     channel: '1202650816197034025',
     standingsChannel: '1101657533229322300',
     standingsMsg: '1208863414743470152'
-  },{
+  },{*/
     name: 'Redemption League',
     value: '1202650816197034025-k',
     emoji: ':___RedemptionLeague:1201545169393168514',
@@ -112,7 +119,7 @@ export const fixturesChannels = [
     channel: '1162009301402001418',
     isInternational: true
   },{
-    name: 'Nations League (Group A)',
+/*    name: 'Nations League (Group A)',
     value: '1162009301402001418-a',
     emoji: ':NationsLeague:1167121018905690233',
     channel: '1162009301402001418',
@@ -127,7 +134,7 @@ export const fixturesChannels = [
     standingsChannel: '1162009570022006835',
     standingsMsg: '1208849960792105061',
     isInternational: true
-  },{
+  },{*/
     name: 'International Friendly',
     value: '1156513002552573953',
     emoji: ':full_star:1128309835369291827',
@@ -175,6 +182,16 @@ export const matchDays = [
   },{
     name: 'Day 15'
   },{
+    name: 'Qualifiers'
+  },{
+    name: 'Quarter-Finals'
+  },{
+    name: 'Semi-Finals'
+  },{
+    name: '3rd Place'
+  },{
+    name: 'Final'
+  },{
     name: 'Day 16'
   },{
     name: 'Day 17'
@@ -186,16 +203,6 @@ export const matchDays = [
     name: 'Day 20'
   },{
     name: 'Day 21'
-  },{
-    name: 'Qualifiers'
-  },{
-    name: 'Quarter-Finals'
-  },{
-    name: 'Semi-Finals'
-  },{
-    name: '3rd Place'
-  },{
-    name: 'Final'
   },{
     name: 'Day 22'
   },{
@@ -215,6 +222,7 @@ export const serverRoles = {
   psafManagementRole: '1072210995927339139',
   trialStaffRole: '1093846550226149437',
   verifiedRole: '1184943462261469325',
+  registeredRole: '1218302383856156862'
 }
 
 export const serverChannels = {
@@ -230,11 +238,14 @@ export const serverChannels = {
   ratingsChannelId: '1120629390699667542',
   moveMatchChannelId: '1091692461409173544',
   nameChangesChannelId: '1198359043153068092',
-  matchResultsChannelId: '1081954664347615352'
+  matchResultsChannelId: '1081954664347615352',
+  registrationsChannelId: '1218275545629069373'
 }
 
 export const postSeasonLeagues = ['1101999929171394653-a', '1101999929171394653-b', '1101999952483328140-a', '1101999952483328140-b', '1101999952483328140-c',
 '1101999952483328140-d', '1202650816197034025-a', '1202650816197034025-b']
+export const pgLeagues = ['1209539443271270452', '1209539443271270452-8']
 
 export const lineupBlacklist = ['1068608785356169226', '616754792965865495']
-export const lineupRolesBlacklist = ['1072919258629144628', '1128307395668492319', '1095055617703543025']
+export const lineupRolesBlacklist = ['1072919258629144628', '1128307395668492319', serverRoles.matchBlacklistRole]
+export const lineupRolesWhitelist = [serverRoles.verifiedRole]

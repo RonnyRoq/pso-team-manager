@@ -3,7 +3,7 @@ import {
 } from 'discord-interactions';
 import { getPlayerTeam, getPlayerNick, optionsToObject, msToTimestamp, postMessage, genericFormatMatch, quickResponse, waitingMsg, updateResponse, genericInterFormatMatch } from '../../functions/helpers.js';
 import { getAllPlayers } from '../../functions/playersCache.js';
-import { lineupBlacklist, lineupRolesBlacklist, serverRoles } from '../../config/psafServerConfig.js';
+import { lineupBlacklist, lineupRolesBlacklist, lineupRolesWhitelist, serverRoles } from '../../config/psafServerConfig.js';
 
 const nonLineupAttributes = ['_id', 'team', 'matchId', 'vs']
 
@@ -173,7 +173,7 @@ const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam,
       let matchId = ''
       if(nextMatch) {
         if(!isInternational){
-          const teamsOfMatch = await teams.find({active: true, $or:[{id:nextMatch.home}, {id:nextMatch.away}]}).toArray()
+          const teamsOfMatch = await teams.find({$or:[{id:nextMatch.home}, {id:nextMatch.away}]}).toArray()
           playerTeam = genericFormatMatch(teamsOfMatch, nextMatch) + '\r'
         } else {
           genericInterFormatMatch(nations, nextMatch)
@@ -219,18 +219,23 @@ export const lineup = async({options, interaction_id, callerId, token, member, g
     Object.entries(lineup)
       .filter(([name])=> !nonLineupAttributes.includes(name))
       .map(([name, value])=> {
-        if(lineupBlacklist.includes(value)) {
-          forbiddenUsersList.push(`<@${value}>`)
-        }
         const discPlayer = allPlayers.find(player=> player?.user?.id === value)
-        if(discPlayer.roles.some(role => lineupRolesBlacklist.includes(role))) {
-          forbiddenUsersList.push(`<@${value}>`)
+        if(guild_id === process.env.GUILD_ID) {
+          if(lineupBlacklist.includes(value)) {
+            forbiddenUsersList.push(`<@${value}> can't be included in a lineup`)
+          }
+          if(discPlayer.roles.some(role => lineupRolesBlacklist.includes(role))) {
+            forbiddenUsersList.push(`<@${value}> is not eligible to play`)
+          }
+          if(!discPlayer.roles.some(role => lineupRolesWhitelist.includes(role))) {
+            forbiddenUsersList.push(`<@${value}> isn't verified`)
+          }
         }
         return [name, {id: value, name: getPlayerNick(discPlayer), verified: discPlayer.roles.includes(serverRoles.verifiedRole)}]
       })
   )
   if(forbiddenUsersList.length>0) {
-    return quickResponse({interaction_id, token, content: `Can't post this lineup, restricted users: ${forbiddenUsersList.join(', ')}`})
+    return quickResponse({interaction_id, token, content: `Can't post this lineup, restricted users: \r${forbiddenUsersList.join('\r')}`})
   }
   return saveLineup({dbClient, lineup, callerId, objLineup, member, application_id, guild_id, isInternational:false, interaction_id, token, channel_id, isEightPlayers: false})
 }
@@ -243,12 +248,20 @@ export const internationalLineup = async ({options, member, callerId, guild_id, 
     Object.entries(lineup)
       .filter(([name])=> !nonLineupAttributes.includes(name))
       .map(([name, value])=> {
-        if(lineupBlacklist.includes(value)) {
-          forbiddenUsersList.push(`<@${value}>`)
-        }
         const discPlayer = allPlayers.find(player=> player?.user?.id === value)
-        if(discPlayer.roles.some(role => lineupRolesBlacklist.includes(role))) {
-          forbiddenUsersList.push(`<@${value}>`)
+        if(guild_id === process.env.GUILD_ID) {
+          if(lineupBlacklist.includes(value)) {
+            forbiddenUsersList.push(`<@${value}> can't be included in a lineup`)
+          }
+          if(discPlayer.roles.some(role => lineupRolesBlacklist.includes(role))) {
+            forbiddenUsersList.push(`<@${value}> is not eligible to play`)
+          }
+          if(!discPlayer.roles.includes(serverRoles.nationalTeamPlayerRole)) {
+            forbiddenUsersList.push(`<@${value}> is not an international player`)
+          }
+          if(!discPlayer.roles.some(role => lineupRolesWhitelist.includes(role))) {
+            forbiddenUsersList.push(`<@${value}> isn't verified`)
+          }
         }
         return [name, {id: value, name: getPlayerNick(discPlayer), verified: discPlayer.roles.includes(serverRoles.verifiedRole)}]
       })
@@ -268,10 +281,16 @@ export const eightLineup = async ({options, interaction_id, callerId, token, app
       .filter(([name])=> !nonLineupAttributes.includes(name))
       .map(([name, value])=> {
         const discPlayer = allPlayers.find(player=> player?.user?.id === value)
-        if(lineupBlacklist.includes(value)) {
-          forbiddenUsersList.push(`<@${value}>`)
-        } else if(discPlayer.roles.some(role => lineupRolesBlacklist.includes(role))) {
-          forbiddenUsersList.push(`<@${value}>`)
+        if(guild_id === process.env.GUILD_ID) {
+          if(lineupBlacklist.includes(value)) {
+            forbiddenUsersList.push(`<@${value}> can't be included in a lineup`)
+          }
+          if(discPlayer.roles.some(role => lineupRolesBlacklist.includes(role))) {
+            forbiddenUsersList.push(`<@${value}> is not eligible to play`)
+          }
+          if(!discPlayer.roles.some(role => lineupRolesWhitelist.includes(role))) {
+            forbiddenUsersList.push(`<@${value}> isn't verified`)
+          }
         }
         return [name, {id: value, name: getPlayerNick(discPlayer), verified: discPlayer.roles.includes(serverRoles.verifiedRole)}]
       })

@@ -9,7 +9,7 @@ const internalLeagueTable = async ({dbClient, league}) => {
   const {allTeams, leagueMatches, leagueTeams, allCountries} = await dbClient(async ({matches, leagues, teams, nationalities, seasonsCollect}) => {
     const currentSeason = await getCurrentSeason(seasonsCollect)
     const [allTeams, leagueMatches, leagueTeams, allCountries] = await Promise.all([
-      teams.find({active:true}).toArray(),
+      teams.find({}).toArray(),
       matches.find({season: currentSeason, league, finished: true}).toArray(),
       leagues.find({leagueId:league}).toArray(),
       nationalities.find({}).toArray()
@@ -18,13 +18,10 @@ const internalLeagueTable = async ({dbClient, league}) => {
   })
   const leagueTeamsId = leagueTeams.map(leagueTeam=> leagueTeam.team)
   const leagueObj = fixturesChannels.find(fixChannel => fixChannel.value === league)
-  console.log(leagueTeamsId)
-  console.log(allCountries)
   const currentTeams = (leagueObj?.isInternational ? 
     allCountries.filter(country => leagueTeamsId.includes(country.name)).map(country=>({...country, id: country.name, emoji: country.flag}))
-    : allTeams.filter(team=> leagueTeamsId.includes(team.id))
+    : allTeams//.filter(team=> leagueTeamsId.includes(team.id))
   ).map(team=> ({...team, wins:0, draws: 0, losses: 0, ffs: 0, goals: 0, against:0, played:0, ffDraws:0, wonAgainst:[]}))
-  console.log(currentTeams)
   leagueMatches.forEach(({isFF, homeScore, awayScore, home, away}) => {
     const hScore = Number.parseInt(homeScore)
     const aScore = Number.parseInt(awayScore)
@@ -61,8 +58,9 @@ const internalLeagueTable = async ({dbClient, league}) => {
     currentTeams[homeTeamIndex].played = (currentTeams[homeTeamIndex].played || 0) + 1
     currentTeams[awayTeamIndex].played = (currentTeams[awayTeamIndex].played || 0) + 1
   });
+  const activeTeams = currentTeams.filter(team=> team.played > 0)
 
-  const sortedTeams = currentTeams.map(team=> ({...team, points: (team.wins*3)+team.draws-team.ffs-team.ffDraws, goalDifference: team.goals-team.against})).sort((a, b)=> {
+  const sortedTeams = activeTeams.map(team=> ({...team, points: (team.wins*3)+team.draws-team.ffs-team.ffDraws, goalDifference: team.goals-team.against})).sort((a, b)=> {
     if(a.points !== b.points) {
       return b.points - a.points
     } else {
@@ -166,7 +164,7 @@ export const imageLeagueTable = async ({interaction_id, token, application_id, d
         filename: `${league}.png`
       }],
       files: [{
-        name: `${league}.png`,      
+        name: `${league}.png`,
         attachment: canvas.toBuffer()}
       ],
     }

@@ -16,7 +16,7 @@ export const notifyMatchStart = async ({dbClient}) => {
   const plusTen = now + 10*60
   const {allTeams, allNationalTeams, notifyMatches, matchLineups} = await dbClient(async ({matches, teams, nationalities, lineups, players})=> {
     const [allTeams, allNationalTeams, startingMatches] = await Promise.all([
-      teams.find({active: true}).toArray(),
+      teams.find({}).toArray(),
       nationalities.find({}).toArray(),
       matches.find({dateTimestamp: {$gte: now.toString(), $lte: plusTen.toString()}, password: null, finished: null}).toArray(),
     ])

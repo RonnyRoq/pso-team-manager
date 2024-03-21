@@ -18,7 +18,7 @@ export function VerifyDiscordRequest(clientKey) {
 }
 export const DiscordUploadRequest = async (endpoint, options={}) => {
   // append endpoint to root API URL
-  const url = 'https://discord.com/api/v10/' + endpoint;
+  const url = 'https://discord.com/api/v10' + endpoint;
   let payload = {...options}
   // Stringify payloads
   const {files, ...body} = options.body
@@ -31,19 +31,53 @@ export const DiscordUploadRequest = async (endpoint, options={}) => {
     'User-Agent': 'PSAF Team Manager',
   }
   const form = new formData();
+  form.append('content', body.content)
+  form.append('attachments', JSON.stringify(body.attachments))
+  const { port, hostname, pathname } = new URL(url)
   options.body.attachments.forEach(({filename}, index) => {
     form.append(filename, JSON.stringify(files[index]))
   });
-  let res = await fetch(url, {
+  const fetchData = {
     'body': form,
     headers: {
       ...headers,
       ...form.getHeaders()
     },
     ...payload
-  });
+  }
+  
+  //console.log(fetchData)
+  console.log(port, hostname, pathname, headers)
+  form.submit({
+    port,
+    hostname,
+    headers,
+    pathname
+  }, async (err, res)=> {
+    console.log(err)
+    console.log(res.statusCode, res.statusMessage)
+    console.log(res.read())
+    if(res.complete) {
+      if (res.statusCode > 0) {
+        const data = await res.json();
+        console.log(endpoint);
+        //console.log(JSON.stringify(options))
+        console.log(JSON.stringify(data))
+        if(data.retry_after) {
+          await sleep(data.retry_after*1000)
+          res = await DiscordRequest(endpoint, options)
+        } else {
+          throw new Error(JSON.stringify(data));
+        }
+      }
+    } else {
+      res.resume()
+    }
+  })
+  //let res = await fetch(url, fetchData);
+  //form.pipe(res)
   // throw API errors
-  if (!res.ok) {
+  /*if (!res.ok) {
     const data = await res.json();
     console.log(endpoint);
     //console.log(JSON.stringify(options))
@@ -56,7 +90,7 @@ export const DiscordUploadRequest = async (endpoint, options={}) => {
     }
   }
   // return original response
-  return res;
+  return res;*/
 }
 
 export async function DiscordRequest(endpoint, options={}) {

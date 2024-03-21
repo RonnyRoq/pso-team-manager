@@ -16,6 +16,21 @@ export const addToLeague = async ({interaction_id, token, options, dbClient}) =>
   return quickResponse({interaction_id, token, content, isEphemeral:true})
 }
 
+export const removeFromLeague = async ({interaction_id, token, options, dbClient}) => {
+  const {league, team} = optionsToObject(options)
+  const leagueObj = fixturesChannels.find(leagueEntry => leagueEntry.value === league)
+  const content = await dbClient(async ({leagues})=> {
+    if(leagueObj?.isInternational && !autocompleteCountries.some(country=> country.name === team)){
+      return Promise.resolve(`Can't remove ${team}, not a nation.`)
+    }
+    await leagues.deleteOne({leagueId: league, team})
+    const leagueTeams = await leagues.find({leagueId:league}).toArray()
+    return `${fixturesChannels.find(leagueEntry => leagueEntry.value === leagueTeams[0]?.leagueId)?.name} ${leagueTeams.length} teams:\r`
+    + leagueTeams.map(leagueTeam => leagueObj.isInternational ? leagueTeam.team :`<@&${leagueTeam.team}>`).join('\r')
+  })
+  return quickResponse({interaction_id, token, content, isEphemeral:true})
+}
+
 export const addToLeagueCmd = {
   name: 'addtoleague',
   description: 'Add a team to a league',

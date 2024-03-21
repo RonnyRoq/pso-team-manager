@@ -35,7 +35,6 @@ export const arrangeDaySchedule = async({dbClient, application_id, interaction_i
         currentTimestamp = startDateTimestamp
       }
     }
-    console.log(processedMatchesIds)
     for await (const id of processedMatchesIds) {
       await editAMatchInternal({id, teams, nationalities, matches})
     }

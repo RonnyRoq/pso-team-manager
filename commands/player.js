@@ -46,6 +46,7 @@ export const player = async ({options, interaction_id, callerId, guild_id, appli
       }
       if(isMemberStaff(member)) {
         response += `Steam: ${dbPlayer.steam || 'Not saved'}\r`
+        response += `Unique ID: ${dbPlayer.uniqueId || 'Not saved'}\r`
       }
       if(dbPlayer.desc) {
         response += `Description: *${dbPlayer.desc}*\r`
@@ -68,7 +69,7 @@ export const player = async ({options, interaction_id, callerId, guild_id, appli
 }
 
 export const editPlayer = async ({options=[], member, callerId, interaction_id, guild_id, application_id, token, dbClient}) => {
-  const {player = callerId, nat1, nat2, nat3, desc, steam, ingamename} = optionsToObject(options)
+  const {player = callerId, nat1, nat2, nat3, desc, steam, uniqueid, ingamename} = optionsToObject(options)
   
   await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
     method: 'POST',
@@ -108,6 +109,7 @@ export const editPlayer = async ({options=[], member, callerId, interaction_id, 
       nat3: nat3 || dbPlayer.nat3,
       desc: desc || dbPlayer.desc,
       steam: steam || dbPlayer.steam,
+      uniqueId: uniqueid || dbPlayer.uniqueId,
       ingamename: ingamename || dbPlayer.ingamename,
     }}, {upsert: true})
     const updatedPlayer = await players.findOne({id: player}) || {}
@@ -336,6 +338,10 @@ export const editPlayerCmd = {
     type: 3,
     name: 'steam',
     description: 'Steam Account'
+  }, {
+    type: 3,
+    name: 'uniqueid',
+    description: 'PSO\'s unique ID'
   }, {
     type: 3,
     name: 'ingamename',

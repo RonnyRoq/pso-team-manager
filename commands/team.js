@@ -26,8 +26,8 @@ export const team = async ({interaction_id, application_id, token, options, memb
     const leagueCondition = league ? {league} : {}
     const season = await getCurrentSeason(seasonsCollect)
     const teamsMatches = await matches.find({$or: [{home: team.id}, {away: team.id}], ...finished, ...leagueCondition, season }).sort({dateTimestamp: 1}).toArray()
-    console.log(teamsMatches.length)
-    const allTeams = await teams.find({active: true}).toArray()
+    //console.log(teamsMatches.length)
+    const allTeams = await teams.find({}).toArray()
     response += '\r**Upcoming matches:**'
     if(teamsMatches.length === 0 ) {
       response += '\rNone'
@@ -68,7 +68,7 @@ export const team = async ({interaction_id, application_id, token, options, memb
   let i = 3
   while (i<embeds.length) {
     const currentEmbed = embeds.slice(i, i+3)
-    console.log(currentEmbed)
+    //console.log(currentEmbed)
     await DiscordRequest(`/webhooks/${application_id}/${token}`, {
       method: 'POST',
       body: {

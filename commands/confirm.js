@@ -57,6 +57,100 @@ const getDealComponents = ({isActive}={}) => ({
   }]
 })
 
+export const register = async ({member, callerId, interaction_id, guild_id, application_id, token, options, dbClient}) => {
+  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+    method: 'POST',
+    body: {
+      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        flags: InteractionResponseFlags.EPHEMERAL
+      }
+    }
+  })
+  const {nationality, extranat, steam, uniqueid} = optionsToObject(options)
+  
+  const content = await dbClient(async ({players, nationalities})=> {
+    const [dbPlayer, allCountries] = await Promise.all([
+      players.findOne({id: callerId}),
+      nationalities.find({}).toArray(),
+    ])
+    const nat1 = dbPlayer?.nat1 || nationality
+    const nat2 = dbPlayer?.nat1 ? dbPlayer.nat2 : (extranat !== nationality ? extranat : null)
+    const nat3 = dbPlayer?.nat3
+    const steamId = dbPlayer?.steam || steam
+    const uniqueId = dbPlayer?.uniqueId || uniqueid
+
+    const {flag: flag1 = ''} = allCountries.find(({name})=> name === nat1) || {}
+    const {flag: flag2 = ''} = allCountries.find(({name})=> name === nat2) || {}
+    const {flag: flag3 = ''} = allCountries.find(({name})=> name === nat3) || {}
+    let userDetails = `${flag1}${flag2}${flag3}<@${callerId}>\rSteam: ${dbPlayer?.steam}\rUnique ID: ${dbPlayer?.uniqueId}`
+    
+    if(dbPlayer) {
+      return `You're already registered:\r${userDetails}`
+    }
+    if(member.roles.includes(serverRoles.matchBlacklistRole)) {
+      return 'Can\'t register while blacklisted.'
+    }
+    if(!member.roles.includes(serverRoles.verifiedRole)){
+      return 'Please verify before confirming.'
+    }
+    if(!steamId) {
+      return 'Please enter your Steam ID. If you can\'t, please open a ticket and get your PSO Unique ID ready.'
+    }
+    if(!steamId.includes("steamcommunity.com/profile/") && !steamId.includes("steamcommunity.com/id/") ) {
+      return 'Invalid Steam ID. Please enter the URL shown when you are in your Steam profile page.'
+    }
+    if(!nationality) {
+      return 'Please select a nationality'
+    }
+    if(extranat && extranat === nationality) {
+      return 'No need to enter the same nationality as an extra one :)'
+    }
+    if(!allCountries.find(({name})=> name === nationality)) {
+      return `Can't find ${nationality}, please select one of the nationalities of the autofill`
+    }
+    if(extranat && !allCountries.find(({name})=> name === extranat)) {
+      return `Can't find ${extranat}, please select one of the nationalities of the autofill`
+    }
+
+    const updatedPlayer = {
+      nick: getPlayerNick(member),
+      nat1,
+      nat2,
+      nat3,
+      steam: steamId,
+      uniqueId,
+    }
+    await players.updateOne({id: callerId}, {$set: updatedPlayer}, {upsert: true})
+    const payload = {
+      roles: [...new Set([...member.roles, serverRoles.registeredRole])]
+    }
+    userDetails = `${flag1}${flag2}${flag3}<@${callerId}>\rSteam: ${steamId}\rUnique ID: ${uniqueId}`
+    DiscordRequest(`guilds/${guild_id}/members/${callerId}`, {
+      method: 'PATCH',
+      body: payload
+    })
+    
+    const content = `Registered:\r${userDetails}`
+    await DiscordRequest(`/channels/${serverChannels.registrationsChannelId}/messages`, {
+        method: 'POST',
+        body: {
+          content,
+        }
+      })
+    return content
+  })
+
+
+  return await DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
+    method: 'PATCH',
+    body: {
+      content,
+      flags: InteractionResponseFlags.EPHEMERAL
+    }
+  })
+}
+
 export const confirm = async ({member, callerId, interaction_id, application_id, channel_id, token, options, dbClient}) => {
   await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
     method: 'POST',
@@ -418,6 +512,33 @@ export const confirmCmd = {
     name: 'extranat',
     description: 'Extra Nationality',
     autocomplete: true
+  }]
+}
+
+export const registerCmd = {
+  name: 'register',
+  description: 'Register with PSAF',
+  type: 1,
+  options: [{
+    type: 3,
+    name: 'nationality',
+    description: 'Nationality',
+    autocomplete: true,
+    required: true
+  },{
+    type: 3,
+    name: 'steam',
+    description: 'Your steam profile URL',
+    required: true,
+  },{
+    type: 3,
+    name: 'extranat',
+    description: 'Extra Nationality',
+    autocomplete: true
+  },{
+    type: 3,
+    name: 'uniqueid',
+    description: 'Your PSO unique ID',
   }]
 }
 

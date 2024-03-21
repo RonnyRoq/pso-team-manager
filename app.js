@@ -3,6 +3,7 @@ import express from 'express';
 import http from 'http';
 import https from 'https';
 import fs from 'fs';
+import pinoHttp from 'pino-http'
 import {
   InteractionType,
   InteractionResponseType,
@@ -21,7 +22,7 @@ import { editInterMatch, editMatch, endMatch, getMatchesOfDay, getMatchesSummary
 import { blacklistTeam, doubleContracts, emoji, initCountries, managerContracts, systemTeam } from './commands/system.js';
 import { activateTeam, editTeam } from './commands/editTeams.js';
 import { addSelection, allNationalTeams, nationalTeam, postNationalTeams, registerElections, removeSelection, showElectionCandidates, showVotes, voteCoach } from './commands/nationalTeam.js';
-import { confirm, pendingConfirmations, releasePlayer } from './commands/confirm.js';
+import { confirm, pendingConfirmations, register, releasePlayer } from './commands/confirm.js';
 import { approveDealAction, approveLoanAction, declineDealAction, declineLoanAction, finishLoanRequest, removeConfirmation, removeDeal, removeLoan, removeRelease } from './commands/confirmations/actions.js';
 import commandsRegister from './commandsRegister.js';
 import { freePlayer, releaseAction, renew, setContract, teamTransfer, transfer, transferAction } from './commands/transfers.js';
@@ -35,21 +36,22 @@ import { disbandTeam, disbandTeamConfirmed } from './commands/disbandTeam.js';
 import { getCurrentSeasonPhase, progressCurrentSeasonPhase } from './commands/season.js';
 import { setAllMatchToSeason } from './commands/matches/batchWork.js';
 import { endMatchModalResponse, matchResultPrompt, matchStatsModalResponse, matchStatsPrompt, refereeMatch } from './commands/matches/actions.js';
-import { fixturesChannels, postSeasonLeagues, serverChannels } from './config/psafServerConfig.js';
+import { fixturesChannels, pgLeagues, postSeasonLeagues, serverChannels } from './config/psafServerConfig.js';
 import { notifyMatchStart, testDMMatch } from './commands/matches/notifyMatchStart.js';
 import { voteAction } from './commands/nationalTeams/actions.js';
 import { client, uri } from './config/mongoConfig.js';
 import { getSite } from './site.js';
 import { addSteam, addSteamId, manualDoubleSteam, setName } from './commands/player/steamid.js';
-import { addToLeague } from './commands/league/addToLeague.js';
+import { addToLeague, removeFromLeague } from './commands/league/addToLeague.js';
 import { leagueTeams } from './commands/league/leagueTeams.js';
 import { imageLeagueTable, leagueTable, postLeagueTable, updateLeagueTable } from './commands/league/leagueTable.js';
-import { generateMatchday } from './commands/matches/matchday.js';
+import { generateMatchday, randomMatchesDay } from './commands/matches/matchday.js';
 import { setRating } from './commands/player/rating.js';
 import { approveMoveMatch, declineMoveMatch, listMatchMoves, moveMatch, moveMatchModalResponse, moveMatchPrompt } from './commands/matches/moveMatch.js';
 import { getApi } from './api.js';
 import { generateGroup } from './commands/league/generateGroup.js';
 import { arrangeDaySchedule } from './commands/matches/arrangeDaySchedule.js';
+import { addUniqueId } from './commands/player/uniqueId.js';
 
 const keyPath = process.env.CERTKEY;
 const certPath = process.env.CERT;
@@ -95,6 +97,7 @@ function start() {
   // Parse request body and verifies incoming requests using discord-interactions package
   app.use(express.json({ verify: VerifyDiscordRequest(process.env.PUBLIC_KEY) }));
   
+  //app.use(pinoHttp)
   app.use('/site', getSite(false, uri, dbClient))
   app.use('/api', getApi(false, dbClient))
   /**
@@ -608,6 +611,9 @@ function start() {
           if(name === "addtoleague" || name === "addtointerleague") {
             return addToLeague(commandOptions)
           }
+          if(name === "removefromleague") {
+            return removeFromLeague(commandOptions)
+          }
 
           if(name === "leagueteams") {
             return leagueTeams(commandOptions)
@@ -627,6 +633,10 @@ function start() {
 
           if(name === "generatematchday") {
             return generateMatchday(commandOptions)
+          }
+
+          if(name === "randommatchday") {
+            return randomMatchesDay(commandOptions)
           }
 
           if(name === "systemteam") {
@@ -687,6 +697,13 @@ function start() {
 
           if(name === 'arrangeday') {
             return arrangeDaySchedule(commandOptions)
+          }
+
+          if(name === 'register') {
+            return register(commandOptions)
+          }
+          if(name === 'adduniqueid') {
+            return addUniqueId(commandOptions)
           }
 
           if (name ==='emojis') {
@@ -851,6 +868,18 @@ function start() {
     '23 22 * * *',
     async function() {
       const leagues = fixturesChannels.filter(chan=> postSeasonLeagues.includes(chan.value))
+      for await(const league of leagues ) {
+        await updateLeagueTable({dbClient, league: league.value})
+      }
+    },
+    null,
+    true,
+    'Europe/London'
+  )
+  new CronJob(
+    '19 22 * * *',
+    async function() {
+      const leagues = fixturesChannels.filter(chan=> pgLeagues.includes(chan.value))
       for await(const league of leagues ) {
         await updateLeagueTable({dbClient, league: league.value})
       }

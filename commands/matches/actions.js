@@ -55,8 +55,8 @@ export const matchResultPrompt = async ({interaction_id, token, custom_id, dbCli
       ])
     } else {
       [homeTeam, awayTeam] = await Promise.all([
-        teams.findOne({active:true, id: home}),
-        teams.findOne({active:true, id: away})
+        teams.findOne({id: home}),
+        teams.findOne({id: away})
       ])
     }
 
@@ -126,8 +126,8 @@ export const matchStatsPrompt = async ({interaction_id, token, custom_id, dbClie
       ])
     } else {
       [homeTeam, awayTeam] = await Promise.all([
-        teams.findOne({active:true, id: home}),
-        teams.findOne({active:true, id: away})
+        teams.findOne({id: home}),
+        teams.findOne({id: away})
       ])
     }
 
