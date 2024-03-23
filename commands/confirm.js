@@ -77,7 +77,10 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
     const nat1 = dbPlayer?.nat1 || nationality
     const nat2 = dbPlayer?.nat1 ? dbPlayer.nat2 : (extranat !== nationality ? extranat : null)
     const nat3 = dbPlayer?.nat3
-    const steamId = dbPlayer?.steam || steam
+    let steamId = dbPlayer?.steam
+    if(steamId && !steamId.includes("steamcommunity.com/profiles/") && !steamId.includes("steamcommunity.com/id/")) {
+      steamId = steam
+    }
     const uniqueId = dbPlayer?.uniqueId || uniqueid
 
     const {flag: flag1 = ''} = allCountries.find(({name})=> name === nat1) || {}
@@ -85,7 +88,7 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
     const {flag: flag3 = ''} = allCountries.find(({name})=> name === nat3) || {}
     let userDetails = `${flag1}${flag2}${flag3}<@${callerId}>\rSteam: ${dbPlayer?.steam}\rUnique ID: ${dbPlayer?.uniqueId}`
     
-    if(dbPlayer) {
+    if(member.roles.includes(serverRoles.registeredRole) && dbPlayer) {
       return `You're already registered:\r${userDetails}`
     }
     if(member.roles.includes(serverRoles.matchBlacklistRole)) {
@@ -97,7 +100,7 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
     if(!steamId) {
       return 'Please enter your Steam ID. If you can\'t, please open a ticket and get your PSO Unique ID ready.'
     }
-    if(!steamId.includes("steamcommunity.com/profile/") && !steamId.includes("steamcommunity.com/id/") ) {
+    if(!steamId.includes("steamcommunity.com/profiles/") && !steamId.includes("steamcommunity.com/id/") ) {
       return 'Invalid Steam ID. Please enter the URL shown when you are in your Steam profile page.'
     }
     if(!nationality) {
@@ -528,7 +531,7 @@ export const registerCmd = {
   },{
     type: 3,
     name: 'steam',
-    description: 'Your steam profile URL',
+    description: 'Your steam profile URL, like https://steamcommunity.com/profiles/123456789',
     required: true,
   },{
     type: 3,

@@ -1,4 +1,3 @@
-import { DiscordRequest } from "../../utils.js"
 import { getAllPlayers } from "../../functions/playersCache.js"
 import { getPlayerNick } from "../../functions/helpers.js"
 
@@ -41,12 +40,12 @@ export const getPlayer = ({dbClient, getParams}) => {
   return dbClient(async ({players, playerStats, contracts})=> {
     const player = await players.findOne(query)
     if(player) {
-      const [stats, allContracts, discPlayerResp] = await Promise.all([
-        playerStats.find({id: player?.id, matchId: {$ne:null}}).toArray(),
+      const [stats, allContracts, allPlayers] = await Promise.all([
+        playerStats.find({id: player.id, matchId: {$ne:null}}).toArray(),
         contracts.find({playerId: player.id}).toArray(),
-        DiscordRequest(`/guilds/${process.env.GUILD_ID}/members/${player.id}`, { method: 'GET' }),
+        getAllPlayers(process.env.GUILD_ID)
       ])
-      const discPlayer = await discPlayerResp.json()
+      const discPlayer = allPlayers.find(guildMember=> guildMember?.user?.id === player.id)
       //const statMatches = stats.map(stat=> new ObjectId(stat.matchId))
       //const playerMatches = matches.find({_id: {$in: statMatches}})
       return {
