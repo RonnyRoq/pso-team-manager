@@ -68,7 +68,7 @@ export const getPlayerTeam = (player, teams) =>
   teams.findOne({active:true, id: {$in: player.roles}})
 
 export const displayTeam = (team, noLogo) => (
-  `Team: ${team.flag} ${team.emoji} ${team.name} - ${team.shortName}` +
+  `Team: ${team.flag} ${team.emoji}${team.transferBan?' :octagonal_sign:':''} ${team.name} - ${team.shortName}` +
   `\r> Budget: ${new Intl.NumberFormat('en-US').format(team.budget)}` +
   `\r> City: ${team.city}` +
   `\r> Palmarès: ${team.description || 'None'}` +

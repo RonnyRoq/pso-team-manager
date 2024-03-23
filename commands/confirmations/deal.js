@@ -17,6 +17,9 @@ const preDealChecks = async({guild_id, player, member, contracts, teams, confirm
     contracts.findOne({isLoan: true, endedAt: null, playerId: player}),
     confirmations.findOne({playerId: player})
   ])
+  if(destTeam.transferBan) {
+    return {message: `Your team <@&${destTeam.id}> is banned from doing transfers.`}
+  }
   if(ongoingLoan) {
     return {message: `<@${player}> is on loan with <@&${ongoingLoan.team}>, you can't make a deal with this player.`}
   }
@@ -25,6 +28,10 @@ const preDealChecks = async({guild_id, player, member, contracts, teams, confirm
   }
   const discPlayer = await discPlayerResp.json()
   const sourceTeam = await teams.findOne({active: true, $or: discPlayer.roles.map((id)=>({id}))})
+  if(sourceTeam.transferBan) {
+    return {message: `You cannot recruit <@${player}> as <@&${sourceTeam.id}> is banned from doing transfers.`}
+  }
+  
   if(discPlayer.roles.includes(serverRoles.clubManagerRole)) {
     return {message:`Cannot recruit <@${player}> ; Club Manager of ${sourceTeam.name}.`}
   }

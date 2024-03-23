@@ -52,6 +52,7 @@ import { getApi } from './api.js';
 import { generateGroup } from './commands/league/generateGroup.js';
 import { arrangeDaySchedule } from './commands/matches/arrangeDaySchedule.js';
 import { addUniqueId } from './commands/player/uniqueId.js';
+import { addTransferBan, removeTransferBan } from './commands/teams/transferBan.js';
 
 const keyPath = process.env.CERTKEY;
 const certPath = process.env.CERT;
@@ -378,6 +379,14 @@ function start() {
 
           if(name=== "setname") {
             return setName(commandOptions)
+          }
+
+          if(name==="addtransferban") {
+            return addTransferBan(commandOptions)
+          }
+
+          if(name === "removetransferban") {
+            return removeTransferBan(commandOptions)
           }
 
           if(name === "teams") {

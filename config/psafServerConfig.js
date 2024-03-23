@@ -239,7 +239,8 @@ export const serverChannels = {
   moveMatchChannelId: '1091692461409173544',
   nameChangesChannelId: '1198359043153068092',
   matchResultsChannelId: '1081954664347615352',
-  registrationsChannelId: '1218275545629069373'
+  registrationsChannelId: '1218275545629069373',
+  logsChannelId: '1072210076426846228'
 }
 
 export const postSeasonLeagues = ['1101999929171394653-a', '1101999929171394653-b', '1101999952483328140-a', '1101999952483328140-b', '1101999952483328140-c',

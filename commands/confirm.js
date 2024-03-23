@@ -178,6 +178,9 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
     const currentTeam = allTeams.find(({id}) => member.roles.includes(id))
     const teamToJoin = allTeams.find(({id})=> id === team)
     if(currentTeam) {
+      if(currentTeam.transferBan) { 
+        return `Your team <@&${currentTeam.id}> is banned from doing transfers, you cannot leave it.`
+      }
       const deal = pendingDeal || pendingLoan
       if(!deal) {
         console.log(`${getPlayerNick(member)} tried to confirm for ${teamToJoin.name} but no deal`)
@@ -195,6 +198,9 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
     }
     if(!teamToJoin) {
       return 'Please select an active team.'
+    }
+    if(teamToJoin.transferBan) {
+      return `<@&${teamToJoin.id}> is banned from doing transfers, you cannot join it.`
     }
     if(previousConfirmation) {
       return `You already sent a confirmation to <@&${previousConfirmation.team}>, confirmation will expire after two weeks on <t:${msToTimestamp(previousConfirmation.expiresOn)}:F>`
@@ -294,6 +300,9 @@ export const releasePlayer = async ({member, callerId, interaction_id, applicati
     }
     if(!discPlayer.roles.includes(team)) {
       return `<@${player}> doesn't play in <@&${team}>.`
+    }
+    if(dbTeam.transferBan) {
+      return `You cannot release players as <@&${dbTeam.id}> is transfer banned.`
     }
     if(activeLoanContract) {
       return `<@${player}> is on loan, you can't release him.`

@@ -30,6 +30,7 @@ import { listMovesCmd, moveMatchCmd } from './commands/matches/moveMatch.js';
 import { generateGroupCmd } from './commands/league/generateGroup.js';
 import { arrangeDayScheduleCmd } from './commands/matches/arrangeDaySchedule.js';
 import { addUniqueIdCmd } from './commands/player/uniqueId.js';
+import { addTransferBanCmd, removeTransferBanCmd } from './commands/teams/transferBan.js';
 
 const TEAMS = {
   name: 'teams',
@@ -118,7 +119,7 @@ const GUILD_COMMANDS = [
   addToLeagueCmd, addToInterLeagueCmd, leagueTeamsCmd, leagueTableCmd, imageLeagueTableCmd, postLeagueTableCmd, generateMatchdayCmd,
   getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd, testDMMatchCmd, pastMatchesCmd, moveMatchCmd, listMovesCmd,
   systemTeamCmd, initCountriesCmd, postTeamCmd, postAllTeamsCmd, setContractCmd, updateTeamPostCmd, doubleContractsCmd, blacklistTeamCmd, showExpiringContractsCmd,
-  manualDoubleSteamCmd, generateGroupCmd, arrangeDayScheduleCmd, managerContractsCmd, randomMatchdayCmd,
+  manualDoubleSteamCmd, generateGroupCmd, arrangeDayScheduleCmd, managerContractsCmd, randomMatchdayCmd, addTransferBanCmd, removeTransferBanCmd,
 ]
 
 InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);
