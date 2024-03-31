@@ -58,6 +58,7 @@ const keyPath = process.env.CERTKEY;
 const certPath = process.env.CERT;
 
 let online = false;
+global.isConnected = false
 if(fs.existsSync(keyPath)&& fs.existsSync(certPath)){
   online = true
 }
@@ -777,6 +778,7 @@ function start() {
         // Send a ping to confirm a successful connection
         await client.db("PSOTeams").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        global.isConnected = true
         dbClient(async ({teams})=> {
           allActiveTeams = await teams.find({active: true}).toArray()
           allActiveTeams.sort(() => Math.random() - 0.5)
@@ -890,7 +892,7 @@ function start() {
     async function() {
       const leagues = fixturesChannels.filter(chan=> pgLeagues.includes(chan.value))
       for await(const league of leagues ) {
-        await updateLeagueTable({dbClient, league: league.value})
+        await updateLeagueTable({dbClient, league: league.value, short:true})
       }
     },
     null,

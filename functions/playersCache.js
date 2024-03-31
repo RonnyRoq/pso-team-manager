@@ -1,13 +1,20 @@
 import NodeCache from "node-cache";
 import { DiscordRequest } from "../utils.js";
+import { sleep } from "./helpers.js";
 
 const playersCache = new NodeCache({ stdTTL: 60, checkperiod: 120, useClones: false})
 
 export const getAllPlayers = async (guild_id) => {
-  const allPlayers = playersCache.get(guild_id)
-  if(allPlayers)
+  let allPlayers = playersCache.get(guild_id)
+  if(allPlayers) {
+    while(allPlayers.length === 0) {
+      await sleep(5000)
+      allPlayers = playersCache.get(guild_id)
+    }  
     return allPlayers
-
+  }
+  
+  playersCache.set(guild_id, [])
   let lastId = 0
   let totalPlayers = []
   let currentPlayers = []

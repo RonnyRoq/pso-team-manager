@@ -18,9 +18,14 @@ export const disbandTeam = async ({interaction_id, token, options}) => {
           type: 1,
           components: [{
             type: 2,
-            label: `Confirm deletion`,
+            label: `Confirm - remove blacklist`,
             style: 4,
             custom_id: `confirm_delete_${team}`
+          },{
+            type: 2,
+            label: `Confirm - keep players blacklisted`,
+            style: 4,
+            custom_id: `confirm_delete_${team}_keepblacklist`
           }]
         }],
         flags: InteractionResponseFlags.EPHEMERAL
@@ -51,7 +56,12 @@ export const disbandTeamConfirmed = async ({interaction_id, custom_id, guild_id,
       }
     }
   })
-  const id = custom_id.substr("confirm_delete_".length)
+  let id = custom_id.substr("confirm_delete_".length)
+  let keepBlacklist = false
+  if(id.includes('_keepblacklist')) {
+    keepBlacklist = true
+    id = id.substr(0, id.length-'_keepblacklist'.length)
+  }
   const totalPlayers = await getAllPlayers(guild_id)
   const disbandedTeam = await dbClient(async ({contracts, teams})=>{
     const teamToDisband = await teams.findOne({id})
@@ -66,12 +76,15 @@ export const disbandTeamConfirmed = async ({interaction_id, custom_id, guild_id,
     await DiscordRequest(`channels/${serverChannels.clubsChannelId}/messages/${disbandTeam.clubMsg}/`, {method: 'DELETE'})
   }
   const teamPlayers = totalPlayers.filter((player) => player.roles.includes(id))
+  const rolesToFilter = keepBlacklist ?
+    [id, serverRoles.clubManagerRole, serverRoles.clubPlayerRole] 
+    : [id, serverRoles.clubManagerRole, serverRoles.clubPlayerRole, serverRoles.matchBlacklistRole]
   await teamPlayers.forEach(async discPlayer => {
     const playerName = getPlayerNick(discPlayer)
     let updatedPlayerName = removePlayerPrefix(disbandedTeam.shortName, playerName)
     const payload= {
       nick: updatedPlayerName,
-      roles: discPlayer.roles.filter(playerRole=> ![id, serverRoles.clubManagerRole, serverRoles.clubPlayerRole, serverRoles.matchBlacklistRole].includes(playerRole))
+      roles: discPlayer.roles.filter(playerRole=> !rolesToFilter.includes(playerRole))
     }
     await DiscordRequest(`guilds/${guild_id}/members/${discPlayer.user.id}`, {
       method: 'PATCH',
@@ -100,6 +113,7 @@ export const disbandTeamCmd = {
   options: [{
     type: 8,
     name: 'team',
-    description: 'Team'
+    description: 'Team',
+    required: true,
   }]
 }

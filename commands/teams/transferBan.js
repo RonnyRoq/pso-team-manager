@@ -9,7 +9,7 @@ const setTransferBan = async ({interaction_id, token, options, callerId, dbClien
     if(!dbTeam) {
       return `<@&${team}> not found for transfer ban.`
     }
-    await teams.updateOne({id: team}, {$set: {transferBan: true}})
+    await teams.updateOne({id: team}, {$set: {transferBan: banned}})
     return `<@&${team}> transfers are now ${banned ? 'banned' : 'available'}. (from <@${callerId}>)`
   })
   await DiscordRequest(`/channels/${serverChannels.logsChannelId}/messages`,{

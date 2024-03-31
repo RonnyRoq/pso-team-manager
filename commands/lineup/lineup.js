@@ -275,7 +275,7 @@ export const internationalLineup = async ({options, member, callerId, guild_id, 
 export const eightLineup = async ({options, interaction_id, callerId, token, application_id, channel_id, member, guild_id, dbClient}) => {
   const lineup = optionsToObject(options)
   const allPlayers = await getAllPlayers(guild_id)
-  let forbiddenUsersList = false
+  let forbiddenUsersList = []
   let objLineup = Object.fromEntries(
     Object.entries(lineup)
       .filter(([name])=> !nonLineupAttributes.includes(name))

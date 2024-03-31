@@ -67,7 +67,8 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
       }
     }
   })
-  const {nationality, extranat, steam, uniqueid} = optionsToObject(options)
+  const {nationality, extranat, steamprofileurl, uniqueid} = optionsToObject(options)
+  const steam = steamprofileurl
   
   const content = await dbClient(async ({players, nationalities})=> {
     const [dbPlayer, allCountries] = await Promise.all([
@@ -77,8 +78,9 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
     const nat1 = dbPlayer?.nat1 || nationality
     const nat2 = dbPlayer?.nat1 ? dbPlayer.nat2 : (extranat !== nationality ? extranat : null)
     const nat3 = dbPlayer?.nat3
-    let steamId = dbPlayer?.steam
-    if(steamId && !steamId.includes("steamcommunity.com/profiles/") && !steamId.includes("steamcommunity.com/id/")) {
+    let steamId = dbPlayer?.steam || ""
+    if(!steamId || !steamId.includes("steamcommunity.com/profiles/") || !steamId.includes("steamcommunity.com/id/")) {
+      console.log(`Doesnt have a steam ID already ${steamId}, using the one entered`)
       steamId = steam
     }
     const uniqueId = dbPlayer?.uniqueId || uniqueid
@@ -98,9 +100,11 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
       return 'Please verify before confirming.'
     }
     if(!steamId) {
+      console.log('no steam', steamId)
       return 'Please enter your Steam ID. If you can\'t, please open a ticket and get your PSO Unique ID ready.'
     }
     if(!steamId.includes("steamcommunity.com/profiles/") && !steamId.includes("steamcommunity.com/id/") ) {
+      console.log('Invalid Steam ID', steamId)
       return 'Invalid Steam ID. Please enter the URL shown when you are in your Steam profile page.'
     }
     if(!nationality) {
@@ -154,7 +158,7 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
   })
 }
 
-export const confirm = async ({member, callerId, interaction_id, application_id, channel_id, token, options, dbClient}) => {
+export const confirm = async ({member, callerId, interaction_id, application_id, guild_id, channel_id, token, options, dbClient}) => {
   await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
     method: 'POST',
     body: {
@@ -164,7 +168,7 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
       }
     }
   })
-  const {team, seasons, nationality, extranat} = Object.fromEntries(options.map(({name, value})=> [name, value]))
+  const {team, seasons} = optionsToObject(options)
   
   const response = await dbClient(async ({teams, players, nationalities, confirmations, pendingDeals, pendingLoans})=> {
     const [allTeams, dbPlayer, allCountries, previousConfirmation, pendingDeal, pendingLoan] = await Promise.all([
@@ -177,11 +181,14 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
     ])
     const currentTeam = allTeams.find(({id}) => member.roles.includes(id))
     const teamToJoin = allTeams.find(({id})=> id === team)
+    const deal = pendingDeal || pendingLoan
+    if(seasons < 2) {
+      return 'Season ending soon, you can only confirm for 2 seasons (end of this season and the one after).'
+    }
     if(currentTeam) {
       if(currentTeam.transferBan) { 
         return `Your team <@&${currentTeam.id}> is banned from doing transfers, you cannot leave it.`
       }
-      const deal = pendingDeal || pendingLoan
       if(!deal) {
         console.log(`${getPlayerNick(member)} tried to confirm for ${teamToJoin.name} but no deal`)
         return 'You can only confirm a transfer to teams your club has a deal with.'
@@ -205,28 +212,15 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
     if(previousConfirmation) {
       return `You already sent a confirmation to <@&${previousConfirmation.team}>, confirmation will expire after two weeks on <t:${msToTimestamp(previousConfirmation.expiresOn)}:F>`
     }
-    if(!dbPlayer?.nat1 && !nationality) {
-      return 'First time player, please select a nationality when using /confirm'
+    if(!dbPlayer?.nat1) {
+      return 'First time player, please use /register and select a nationality'
     }
 
-    if(!dbPlayer?.nat1 && extranat && extranat === nationality) {
-      return 'No need to enter the same nationality as an extra one :)'
-    }
-    if(!dbPlayer?.nat1 && !allCountries.find(({name})=> name === nationality)) {
-      return `Can't find ${nationality}, please select one of the nationalities of the autofill`
-    }
-    if(!dbPlayer?.nat1 && extranat && !allCountries.find(({name})=> name === extranat)) {
-      return `Can't find ${extranat}, please select one of the nationalities of the autofill`
-    }
-
-    const nat1 = dbPlayer?.nat1 || nationality
-    const nat2 = dbPlayer?.nat1 ? dbPlayer.nat2 : (extranat !== nationality ? extranat : null)
+    const nat1 = dbPlayer?.nat1
+    const nat2 = dbPlayer?.nat2
     const nat3 = dbPlayer?.nat3
     const updatedPlayer = {
       nick: getPlayerNick(member),
-      nat1,
-      nat2,
-      nat3,
     }
     await players.updateOne({id: callerId}, {$set: updatedPlayer}, {upsert: true})
     const {flag: flag1 =''} = allCountries.find(({name})=> name === nat1) || {}
@@ -248,7 +242,8 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
         method: 'POST',
         body: {
           ...getConfirmTransferComponents({isActive:true, isValidated: true}),
-          content: `<@${callerId}> requests to join <@&${team}> for ${seasons} season${seasons=== 1 ? '' :'s'}`,
+          content: `${flag1}${flag2}${flag3}<@${callerId}> requests to join <@&${team}> ${pendingLoan ? `on a loan until Season ${pendingLoan.until}, Beginning of ${seasonPhases[pendingLoan.phase]?.desc}`: `for ${seasons} season${seasons=== 1 ? '' :'s'}`}${deal ? 
+            `\r${pendingLoan ? 'LOAN' : 'TRANSFER'}: <@&${deal.teamFrom}> -> <@&${deal.destTeam}> <:EBit:1128310625873961013>**${new Intl.NumberFormat('en-US').format(deal.amount)} Ebits\rDeal link: https://discord.com/channels/${guild_id}/${serverChannels.confirmationTransferChannel}/${deal.adminMessage}`:''}`,
         }
       })
     ])
@@ -514,16 +509,6 @@ export const confirmCmd = {
     required: true,
     min_value: 1,
     max_value: 10
-  },{
-    type: 3,
-    name: 'nationality',
-    description: 'Nationality',
-    autocomplete: true
-  },{
-    type: 3,
-    name: 'extranat',
-    description: 'Extra Nationality',
-    autocomplete: true
   }]
 }
 
@@ -539,7 +524,7 @@ export const registerCmd = {
     required: true
   },{
     type: 3,
-    name: 'steam',
+    name: 'steamprofileurl',
     description: 'Your steam profile URL, like https://steamcommunity.com/profiles/123456789',
     required: true,
   },{

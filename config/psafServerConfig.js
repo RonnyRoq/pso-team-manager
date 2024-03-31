@@ -1,4 +1,4 @@
-export const fixturesChannels = [
+export const allLeagueList = [
   { name: 'GBL',
     value: '1090959034963742781',
     emoji: ':___GBL:1091064891034566676',
@@ -42,6 +42,116 @@ export const fixturesChannels = [
     emoji: ':__PSAF:1095732362400247838',
     pingRole: '1072620805600592062'
   },{
+    name: 'Challengers League',
+    value: '1101999929171394653-k',
+    emoji: ':___ChallengersLeague:1199341222444158986',
+    channel: '1101999929171394653'
+  },{
+    name: 'Masters League',
+    value: '1101999952483328140-k',
+    emoji: ':___MastersLeague:1199341225472425984',
+    channel: '1101999952483328140'
+  },{
+    name: 'Redemption League',
+    value: '1202650816197034025-k',
+    emoji: ':___RedemptionLeague:1201545169393168514',
+    channel: '1202650816197034025'
+  },{
+    name: 'Nations League',
+    value: '1162009301402001418',
+    emoji: ':NationsLeague:1167121018905690233',
+    channel: '1162009301402001418',
+    isInternational: true
+  },{
+    name: 'International Friendly',
+    value: '1156513002552573953',
+    emoji: ':full_star:1128309835369291827',
+    isInternational: true
+  },{
+    name: 'Club Friendly',
+    value: '1156513002552573953',
+    emoji: ':__PSAF:1095732362400247838'
+  },{
+    name: 'TEST',
+    value: '1150376229178978377',
+    emoji: ':full_star:1128309835369291827'
+  },{
+    name: 'Challengers League (Group A)',
+    value: '1101999929171394653-a',
+    emoji: ':___ChallengersLeague:1199341222444158986',
+    channel: '1101999929171394653',
+    standingsChannel: '1101657533229322300',
+    standingsMsg: '1208862935456284734'
+  },{
+    name: 'Challengers League (Group B)',
+    value: '1101999929171394653-b',
+    emoji: ':___ChallengersLeague:1199341222444158986',
+    channel: '1101999929171394653',
+    standingsChannel: '1101657533229322300',
+    standingsMsg: '1208863173545959498'
+  },{
+    name: 'Masters League (Group A)',
+    value: '1101999952483328140-a',
+    emoji: ':___MastersLeague:1199341225472425984',
+    channel: '1101999952483328140',
+    standingsChannel: '1101657533229322300',
+    standingsMsg: '1206691932160532510'
+  },{
+    name: 'Masters League (Group B)',
+    value: '1101999952483328140-b',
+    emoji: ':___MastersLeague:1199341225472425984',
+    channel: '1101999952483328140',
+    standingsChannel: '1101657533229322300',
+    standingsMsg: '1206692113920819240'
+  },{
+    name: 'Masters League (Group C)',
+    value: '1101999952483328140-c',
+    emoji: ':___MastersLeague:1199341225472425984',
+    channel: '1101999952483328140',
+    standingsChannel: '1101657533229322300',
+    standingsMsg: '1206692219176620073'
+  },{
+    name: 'Masters League (Group D)',
+    value: '1101999952483328140-d',
+    emoji: ':___MastersLeague:1199341225472425984',
+    channel: '1101999952483328140',
+    standingsChannel: '1101657533229322300',
+    standingsMsg: '1206692338093523045'
+  },{
+    name: 'Redemption League (Group A)',
+    value: '1202650816197034025-a',
+    emoji: ':___RedemptionLeague:1201545169393168514',
+    channel: '1202650816197034025',
+    standingsChannel: '1101657533229322300',
+    standingsMsg: '1208863344237482044'
+  },{
+    name: 'Redemption League (Group B)',
+    value: '1202650816197034025-b',
+    emoji: ':___RedemptionLeague:1201545169393168514',
+    channel: '1202650816197034025',
+    standingsChannel: '1101657533229322300',
+    standingsMsg: '1208863414743470152'
+  },{
+    name: 'Nations League (Group A)',
+    value: '1162009301402001418-a',
+    emoji: ':NationsLeague:1167121018905690233',
+    channel: '1162009301402001418',
+    standingsChannel: '1162009570022006835',
+    standingsMsg: '1208849914046451732',
+    isInternational: true
+  },{
+    name: 'Nations League (Group B)',
+    value: '1162009301402001418-b',
+    emoji: ':NationsLeague:1167121018905690233',
+    channel: '1162009301402001418',
+    standingsChannel: '1162009570022006835',
+    standingsMsg: '1208849960792105061',
+    isInternational: true
+  }
+]
+
+export const fixturesChannels = allLeagueList.slice(0, 24)
+
 /*    name: 'Challengers League (Group A)',
     value: '1101999929171394653-a',
     emoji: ':___ChallengersLeague:1199341222444158986',
@@ -56,11 +166,7 @@ export const fixturesChannels = [
     standingsChannel: '1101657533229322300',
     standingsMsg: '1208863173545959498'
   },{*/
-    name: 'Challengers League',
-    value: '1101999929171394653-k',
-    emoji: ':___ChallengersLeague:1199341222444158986',
-    channel: '1101999929171394653'
-  },{
+  
 /*    name: 'Masters League (Group A)',
     value: '1101999952483328140-a',
     emoji: ':___MastersLeague:1199341225472425984',
@@ -89,11 +195,7 @@ export const fixturesChannels = [
     standingsChannel: '1101657533229322300',
     standingsMsg: '1206692338093523045'
   },{*/
-    name: 'Masters League',
-    value: '1101999952483328140-k',
-    emoji: ':___MastersLeague:1199341225472425984',
-    channel: '1101999952483328140'
-  },{
+  
     /*name: 'Redemption League (Group A)',
     value: '1202650816197034025-a',
     emoji: ':___RedemptionLeague:1201545169393168514',
@@ -108,17 +210,6 @@ export const fixturesChannels = [
     standingsChannel: '1101657533229322300',
     standingsMsg: '1208863414743470152'
   },{*/
-    name: 'Redemption League',
-    value: '1202650816197034025-k',
-    emoji: ':___RedemptionLeague:1201545169393168514',
-    channel: '1202650816197034025'
-  },{
-    name: 'Nations League',
-    value: '1162009301402001418',
-    emoji: ':NationsLeague:1167121018905690233',
-    channel: '1162009301402001418',
-    isInternational: true
-  },{
 /*    name: 'Nations League (Group A)',
     value: '1162009301402001418-a',
     emoji: ':NationsLeague:1167121018905690233',
@@ -135,20 +226,6 @@ export const fixturesChannels = [
     standingsMsg: '1208849960792105061',
     isInternational: true
   },{*/
-    name: 'International Friendly',
-    value: '1156513002552573953',
-    emoji: ':full_star:1128309835369291827',
-    isInternational: true
-  },{
-    name: 'Club Friendly',
-    value: '1156513002552573953',
-    emoji: ':__PSAF:1095732362400247838'
-  },{
-    name: 'TEST',
-    value: '1150376229178978377',
-    emoji: ':full_star:1128309835369291827'
-  }
-]
 
 export const matchDays = [
   {

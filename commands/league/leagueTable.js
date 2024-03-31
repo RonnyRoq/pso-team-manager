@@ -173,19 +173,25 @@ export const imageLeagueTable = async ({interaction_id, token, application_id, d
 }
 
 export const leagueTable = async ({interaction_id, token, application_id, dbClient, options}) => {
-  const {league} = optionsToObject(options)
+  const {league, short} = optionsToObject(options)
   await waitingMsg({interaction_id, token})
   const sortedTeams = await internalLeagueTable({dbClient, league})
   const content = //`${fixturesChannels.find(chan=> chan.value === league)?.name} standings:\r` +
+    short ? `> Pos | Name | Pts (Games) | FF \r` +
+    sortedTeams.map((team,index)=> `> **${index+1} ${team.name.substring(0, 19)}** | ${team.points}Pts (${team.played}) | ${team.ffs} `).join('\r')
+    :
     `> Pos | Name | Pts (G) | Wins - Draws - Losses | GA | FF \r` +
     sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name.substring(0, 17)}** | ${team.points}Pts (${team.played}) | ${team.wins} - ${team.draws} - ${team.losses} | ${team.goalDifference} | ${team.ffs} `).join('\r')
   console.log(content.length)
   return updateResponse({application_id, token, content})
 }
 
-export const updateLeagueTable = async ({league, dbClient}) => {
+export const updateLeagueTable = async ({league, dbClient, short = false}) => {
   const sortedTeams = await internalLeagueTable({dbClient, league})
   const content = //`${fixturesChannels.find(chan=> chan.value === league)?.name} standings:\r` +
+    short ? `> Pos | Name | Pts (Games) | FF \r` +
+    sortedTeams.map((team,index)=> `> **${index+1} ${team.name.substring(0, 19)}** | ${team.points}Pts (${team.played}) | ${team.ffs} `).join('\r')
+    :
     `> Pos | Name | Pts (Games) | Win - Draw - Loss | GA | FF \r` +
     sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name.substring(0, 19)}** | ${team.points}Pts (${team.played}) | ${team.wins} - ${team.draws} - ${team.losses} | ${team.goalDifference} | ${team.ffs} `).join('\r')
   const leagueObj = fixturesChannels.find(({value})=> value === league)
@@ -226,6 +232,10 @@ export const leagueTableCmd = {
     description: 'League',
     required: true,
     choices: fixturesChannels.map(({name, value})=> ({name, value}))
+  },{
+    type: 5,
+    name: 'short',
+    description: "Short version?"
   }]
 }
 

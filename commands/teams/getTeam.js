@@ -2,6 +2,20 @@ import { getAllPlayers } from "../../functions/playersCache.js"
 
 
 export const getTeams = ({dbClient}) => dbClient(({teams})=> teams.find({active:true}).toArray())
+export const getAllTeams = ({dbClient}) => dbClient(async ({teams, leagues})=> {
+  const [allTeams, allLeagues] = await Promise.all([
+    teams.find({}, {sort: {active: -1, name: 1}}).toArray(),
+    leagues.find({}).toArray()
+   ])
+  const response = allTeams.map(team=> {
+    const teamLeagues = allLeagues.filter(league=> league.team === team.id)
+    return {
+      ...team,
+      leagues: teamLeagues.map(teamLeague=> teamLeague.leagueId)
+    }
+  })
+  return response
+})
 
 export const getTeam = ({id, dbClient}) => dbClient(({teams})=> teams.findOne({active:true, id}))
 

@@ -10,8 +10,9 @@ import { getMatch, getMatchesOfDay, saveMatchStats } from './commands/match.js';
 import { authUser, getGuildMember, hasSession, isMemberStaff, isStaff } from './site/siteUtils.js';
 import { mockMatch } from './site/mockMatch.js';
 import mockMatches from './site/mockMatches.js';
-import { getTeam, getTeamAndPlayers, getTeams } from './commands/teams/getTeam.js';
+import { getAllTeams, getTeam, getTeamAndPlayers, getTeams } from './commands/teams/getTeam.js';
 import { getPlayers } from './commands/player/api.js';
+import { allLeagueList } from './config/psafServerConfig.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,6 +61,12 @@ export const getSite = (localdev=false, uri='', dbClient={}) =>{
     const matches = localdev ? mockMatches.values : await getMatchesOfDay({date, dbClient, forSite:true})
     console.log(matches)
     return res.render('matches', {matches})
+  })
+  
+  site.get('/teams', async (req, res) => {
+    const teams = await getAllTeams({dbClient})
+    const leagues = Object.fromEntries(allLeagueList.map(league=> ([league.value, league.name])))
+    return res.render('teams', {teams, leagues})
   })
 
   site.post('/editmatch', async (req, res) => {

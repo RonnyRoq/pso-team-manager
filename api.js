@@ -11,7 +11,13 @@ export const getApi = (localdev=false, dbClient={}) =>{
   const api = express() // the API app
   //api.use(pinoHttp)
   api.use(bodyParser.urlencoded({extended: true}))
-
+  api.use((req, res, next) => {
+    if(global.isConnected) {
+      next()
+    } else {
+      res.status(500).end()
+    }
+  })
   if(!localdev) {
     api.use(async(req, res, next) => {
       let api_key = req.header("x-api-key")
