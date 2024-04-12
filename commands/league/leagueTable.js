@@ -158,17 +158,25 @@ export const imageLeagueTable = async ({interaction_id, token, application_id, d
     method: 'POST',
     body: {
       content: 'Standings',
+      embeds: [{
+        "title": "test!",
+        "description": "Test",
+        "image": {
+          "url": `attachment://${league}.png`
+        }
+      }],
       attachments: [{
         id: '0',
         description: 'Image for standings',
+        contentType: 'image/png',
         filename: `${league}.png`
-      }],
-      files: [{
-        name: `${league}.png`,
-        attachment: canvas.toBuffer()}
-      ],
+      }]
     }
-  })
+  }, [{
+    name: `${league}.png`,
+    data: canvas.toBuffer(),
+    contentType: 'image/png',
+  }],)
   return updateResponse({application_id, token, content: 'done'})
 }
 

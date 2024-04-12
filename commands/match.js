@@ -35,6 +35,11 @@ export const formatMatchResult = (homeTeam, awayTeam, match, callerId, homeEntri
   } else {
     content += `${homeTeam.emoji} ${homeTeam.name} ${match.homeScore} - ${match.awayScore} ${awayTeam.name} ${awayTeam.emoji}`
   }
+  const allEntries = homeEntries.concat(awayEntries)
+  const allGoals = allEntries.filter(player => player.Goals > 0).sort((a,b)=> b.Goals - a.Goals)
+  const allAssists = allEntries.filter(player => player.Assists > 0).sort((a,b)=> b.Assists - a.Assists)
+  content += `\r${allGoals.map(player=> `:soccer:x${player.Goals} ${player.name.substring(0, 18)}`).join('\r')}`
+  content += `\r${allAssists.map(player=> `:athletic_shoe:x${player.Assists} ${player.name.substring(0, 18)}`).join('\r')}`
   content += `\rFrom: <@${callerId}>`
   const {homeStats, homeScore, awayStats, awayScore} = match
   const matchStatEmbed = {
@@ -55,7 +60,7 @@ export const formatMatchResult = (homeTeam, awayTeam, match, callerId, homeEntri
     }]
   }
   const headerPlayer = `Pos   | Name (Discord)       | Score | Passes | Assists | Shots | Goals | Tackles | Interceptions | Catches | Saves \r`
-  const playerMap = (playerStats) => `${playerStats.pos.padStart(5)} | ${playerStats.name.substring(0, 18).padEnd(18)}${playerStats.id? '✅': '🔍'} | ${playerStats.Score.padStart(5)} | ${playerStats.Passes.padStart(6)} | ${
+  const playerMap = (playerStats) => `${playerStats.pos.toUpperCase().padStart(5)} | ${playerStats.name.substring(0, 18).padEnd(18)}${playerStats.id? '✅': '🔍'} | ${playerStats.Score.padStart(5)} | ${playerStats.Passes.padStart(6)} | ${
     playerStats.Assists.padStart(7) } | ${playerStats.Shots.padStart(5)} | ${playerStats.Goals.padStart(5)} | ${playerStats.Tackles.padStart(7)} | ${
       playerStats.Interceptions.padStart(13)} | ${playerStats["GK Catches"].padStart(7)} | ${playerStats["GK Saves"].padStart(5)}`
   const homeStatsTxt = headerPlayer + homeEntries.map(playerMap).join('\r')
@@ -601,73 +606,84 @@ export const resetMatch = async ({interaction_id, token, application_id, options
   return updateResponse({application_id, token, content})
 }
 
-export const publishMatch = async ({interaction_id, token, application_id, options, dbClient}) => {
-  const {league, matchday, postping} = optionsToObject(options)
+export const internalPublishMatch = async ({league, matchday, postping=true, teams, matches, image, nationalities, matchDays}) => {
   const currentLeague = fixturesChannels.find(({value})=> value === league)
   const channel = currentLeague.channel || currentLeague.value
+  const imageToPost = image || currentLeague.defaultImage
+  if(imageToPost) {
+    await DiscordRequest(`/channels/${channel}/messages`, {
+      method: 'POST',
+      body: {
+        content: imageToPost,
+      }
+    })
+  }
+  const [allTeams, allNationalTeams] = await Promise.all([teams.find({}).toArray(), nationalities.find({}).toArray()])
+  const matchCursor = matches.find({league, matchday, messageId: null}, {sort: {dateTimestamp: 1}})
+  for await (const match of matchCursor) {
+    const homeTeam = match.isInternational ? allNationalTeams.find(({name})=> name === match.home) : allTeams.find(({id})=> id === match.home)
+    const awayTeam = match.isInternational ? allNationalTeams.find(({name})=> name === match.away) : allTeams.find(({id})=> id === match.away)
+    const matchContent = formatMatch(currentLeague, homeTeam, awayTeam, match, false, match.isInternational)
+    const messageResp = await DiscordRequest(`/channels/${channel}/messages`, {
+      method: 'POST',
+      body: {
+        content: matchContent,
+      }
+    })
+    const message = await messageResp.json()
+    await matches.updateOne({_id: match._id}, {$set: {messageId: message.id}})
+    if(match.isInternational) {
+      await DiscordRequest(`/channels/${message.channel_id}/messages/${message.id}/reactions/${homeTeam.flag}/@me`, {method: 'PUT', body:{}})
+      await sleep(300)
+      await DiscordRequest(`/channels/${message.channel_id}/messages/${message.id}/reactions/🇽/@me`, {method: 'PUT', body:{}})
+      await sleep(300)
+      await DiscordRequest(`/channels/${message.channel_id}/messages/${message.id}/reactions/${awayTeam.flag}/@me`, {method: 'PUT', body:{}})
+    } else {
+      const [,homeEmoji, homeEmojiId] = homeTeam.emoji.split(':')
+      const [,awayEmoji, awayEmojiId] = awayTeam.emoji.split(':')
+      await DiscordRequest(`/channels/${message.channel_id}/messages/${message.id}/reactions/${homeEmoji}:${homeEmojiId.substring(0, homeEmojiId.length -1)}/@me`, {method: 'PUT', body:{}})
+      await sleep(300)
+      await DiscordRequest(`/channels/${message.channel_id}/messages/${message.id}/reactions/🇽/@me`, {method: 'PUT', body:{}})
+      await sleep(300)
+      await DiscordRequest(`/channels/${message.channel_id}/messages/${message.id}/reactions/${awayEmoji}:${awayEmojiId.substring(0, awayEmojiId.length -1)}/@me`, {method: 'PUT', body:{}})
+    }
+    //forced to wait otherwise we get blocked by the API limits
+    await sleep(500)
+  }
+  if(postping) {
+    const pingRole = currentLeague.pingRole ? `<@&${currentLeague.pingRole}>`:'Everyone'
+    const endMessage = `[ ${pingRole} ]--[ WELCOME BACK TO THE ${currentLeague.name}! VOTE YOUR WINNERS! ]`
+    await DiscordRequest(`/channels/${channel}/messages`, {
+      method: 'POST',
+      body: {
+        content: endMessage,
+      }
+    })
+  }
+  await matchDays.updateOne({league, matchday}, {$set: {posted:true}})
+}
 
+export const publishMatch = async ({interaction_id, token, application_id, options, dbClient}) => {
+  const {league, matchday, postping} = optionsToObject(options)
   DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
     method: 'POST',
     body: {
       type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
-        content: `Publishing ${currentLeague.name} - ${matchday}...`,
+        content: `...`,
         flags: 1 << 6
       }
     }
   })
-  return await dbClient(async ({teams, matches, nationalities}) => {
-    const teamsCursor = teams.find({})
-    const allTeams = await teamsCursor.toArray()
-    const allNationalTeams = await nationalities.find({}).toArray()
-    const matchCursor = matches.find({league, matchday, messageId: null}, {sort: {dateTimestamp: 1}})
-    for await (const match of matchCursor) {
-      const homeTeam = match.isInternational ? allNationalTeams.find(({name})=> name === match.home) : allTeams.find(({id})=> id === match.home)
-      const awayTeam = match.isInternational ? allNationalTeams.find(({name})=> name === match.away) : allTeams.find(({id})=> id === match.away)
-      const matchContent = formatMatch(currentLeague, homeTeam, awayTeam, match, false, match.isInternational)
-      const messageResp = await DiscordRequest(`/channels/${channel}/messages`, {
-        method: 'POST',
-        body: {
-          content: matchContent,
-        }
-      })
-      const message = await messageResp.json()
-      matches.updateOne({_id: match._id}, {$set: {messageId: message.id}})
-      if(match.isInternational) {
-        await DiscordRequest(`/channels/${message.channel_id}/messages/${message.id}/reactions/${homeTeam.flag}/@me`, {method: 'PUT', body:{}})
-        await sleep(300)
-        await DiscordRequest(`/channels/${message.channel_id}/messages/${message.id}/reactions/🇽/@me`, {method: 'PUT', body:{}})
-        await sleep(300)
-        await DiscordRequest(`/channels/${message.channel_id}/messages/${message.id}/reactions/${awayTeam.flag}/@me`, {method: 'PUT', body:{}})
-      } else {
-        const [,homeEmoji, homeEmojiId] = homeTeam.emoji.split(':')
-        const [,awayEmoji, awayEmojiId] = awayTeam.emoji.split(':')
-        await DiscordRequest(`/channels/${message.channel_id}/messages/${message.id}/reactions/${homeEmoji}:${homeEmojiId.substring(0, homeEmojiId.length -1)}/@me`, {method: 'PUT', body:{}})
-        await sleep(300)
-        await DiscordRequest(`/channels/${message.channel_id}/messages/${message.id}/reactions/🇽/@me`, {method: 'PUT', body:{}})
-        await sleep(300)
-        await DiscordRequest(`/channels/${message.channel_id}/messages/${message.id}/reactions/${awayEmoji}:${awayEmojiId.substring(0, awayEmojiId.length -1)}/@me`, {method: 'PUT', body:{}})
-      }
-      //forced to wait otherwise we get blocked by the API limits
-      await sleep(500)
+  await dbClient(async ({teams, matches, nationalities, matchDays}) => 
+    internalPublishMatch({league, matchday, postping, teams, matches, matchDays, nationalities})
+  )
+  return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
+    method: 'PATCH',
+    body: {
+      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      content: 'Done',
     }
-    if(postping) {
-      const pingRole = currentLeague.pingRole ? `<@&${currentLeague.pingRole}>`:'@everyone'
-      const endMessage = `[ ${pingRole} ]--[ WELCOME BACK TO THE ${currentLeague.name}! VOTE YOUR WINNERS! ]`
-      await DiscordRequest(`/channels/${channel}/messages`, {
-        method: 'POST',
-        body: {
-          content: endMessage,
-        }
-      })
-    }
-    return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-      method: 'PATCH',
-      body: {
-        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        content: 'Done',
-      }
-    })
   })
 }
 
@@ -739,7 +755,11 @@ export const getMatchesOfDay = async ({date='today', finished=false, dbClient, f
         const homeTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.home) : allTeams.find(({id})=> id === match.home)
         const awayTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.away) : allTeams.find(({id})=> id === match.away)
         const currentLeague = fixturesChannels.find(({value})=> value === match.league)
-        response.push({content: formatMatch(currentLeague, homeTeam, awayTeam, match, true, match.isInternational), matchId: match._id.toString(), components: [{
+        const matchToPush = {
+          content: formatMatch(currentLeague, homeTeam, awayTeam, match, true, match.isInternational),
+          matchId: match._id.toString(),
+          shortName: `${homeTeam.name} vs ${awayTeam.name}`,
+          components: [{
           type: 1,
           components: [{
             type: 2,
@@ -757,11 +777,13 @@ export const getMatchesOfDay = async ({date='today', finished=false, dbClient, f
             style: 3,
             custom_id: `match_stats_${match._id}`
           }]
-        }]})
+        }]}
+        response.push(matchToPush)
       }
       if(isSchedule) {
         for await (const match of response) {
-          const {matchId, content, components} = match
+          console.log(match)
+          const {matchId, content, shortName, components} = match
           const body = matchId ? {
             content,
             components
@@ -773,7 +795,22 @@ export const getMatchesOfDay = async ({date='today', finished=false, dbClient, f
             body
           })
           const message = await messageResp.json()
-          await matches.updateOne({_id: new ObjectId(matchId)}, {$set: {scheduleMessage: message.id}})
+          if(match.shortName) {
+            const threadResp = await DiscordRequest(`/channels/${serverChannels.scheduleChannelId}/messages/${message.id}/threads`, {
+              method: 'POST',
+              body: {
+                name: shortName
+              }
+            })
+            const thread = await threadResp.json()
+            await matches.updateOne({_id: new ObjectId(matchId)}, {$set: {scheduleMessage: message.id, thread: thread.id}})
+            await DiscordRequest(`/channels/${thread.id}/messages`, {
+              method: 'POST',
+              body: {
+                content: 'Thread with lineups and scheduling:'
+              }
+            })
+          }
         }
       }
       return response
@@ -872,7 +909,7 @@ export const saveMatchStats = async ({id, dbClient, callerId, matchStats}) => {
 
 export const remindMissedMatches = async ({dbClient}) => {
   const response = await getPastMatches({dbClient})
-  if(response.length>0) {
+  if(response.length>1) {
     await DiscordRequest(`/channels/${serverChannels.scheduleChannelId}/messages`, {
       method: 'POST',
       body: {

@@ -1,7 +1,7 @@
 import { fixturesChannels, matchDays, serverRoles } from "../../config/psafServerConfig.js"
 import { getCurrentSeason, msToTimestamp, optionsToObject, quickResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
-import { parseDate } from "chrono-node"
-import { editAMatchInternal, internalCreateMatch } from "../match.js"
+import { parseDate } from "../timestamp.js"
+import { editAMatchInternal, internalCreateMatch, internalPublishMatch } from "../match.js"
 import { shuffleArray } from "../../functions/helpers.js"
 
 const thirtyMinutes = 30*60
@@ -10,7 +10,7 @@ export const generateMatchday = async ({interaction_id, token, application_id, d
   if(!member.roles.includes(serverRoles.presidentRole)) {
     return quickResponse({interaction_id, token, content: 'This command is only available to presidents.', isEphemeral:true})
   }
-  const {league, matchday, date} = optionsToObject(options)
+  const {league, matchday, date, image} = optionsToObject(options)
   const parsedDate = parseDate(date)
   const startOfDay = new Date(parsedDate)
   startOfDay.setUTCHours(17,0,0,0)
@@ -23,7 +23,7 @@ export const generateMatchday = async ({interaction_id, token, application_id, d
   let currentTimestamp = startDateTimestamp
   await waitingMsg({interaction_id, token})
   let processedMatchesIds = []
-  const content = await dbClient(async({matches, seasonsCollect, teams, nationalities})=> {
+  const content = await dbClient(async({matches, matchDays, seasonsCollect, teams, nationalities})=> {
     const currentSeason = await getCurrentSeason(seasonsCollect)
     const matchesOfDay = await matches.find({season: currentSeason, league, matchday, finished: null}).toArray()
     shuffleArray(matchesOfDay)
@@ -36,6 +36,7 @@ export const generateMatchday = async ({interaction_id, token, application_id, d
       }
     }
     await Promise.allSettled(processedMatchesIds.map(id => editAMatchInternal({id, teams, nationalities, matches})))
+    await matchDays.updateOne({league, matchday}, {$set: {league, matchday, startDateTimestamp, endDateTimestamp, image}}, {upsert: true})
     return `${leagueObj.name} ${matchday}: ${processedMatchesIds.length} matches set between <t:${startDateTimestamp}:F> and <t:${endDateTimestamp}:F>`
   })
 
@@ -71,6 +72,29 @@ export const randomMatchesDay = async ({interaction_id, token, application_id, m
   })
 
   return await updateResponse({application_id, token, content: content.substring(0, 1999)})
+}
+
+export const autoPublish = async ({dbClient}) => {
+  return dbClient(async ({teams, matches, nationalities, matchDays})=> {
+    const postedMatchdays = await matchDays.find({posted: true, finished: {$in: [false, null]}}, {startDateTimestamp: 1}).toArray()
+    const nextMatchDays = await matchDays.find({posted: {$in: [false, null]}}, {startDateTimestamp: 1}).toArray()
+    const postedLeagues = [...new Set(postedMatchdays.map(postedMatchday => postedMatchday.league))]
+    console.log(postedLeagues)
+    let nextMatchday = nextMatchDays.sort((a, b) => Number(a.startDateTimestamp) - Number(b.startDateTimestamp)).find(matchDayEntry=> !postedLeagues.includes(matchDayEntry.league))
+    console.log(nextMatchday)
+    if(!nextMatchday){
+      const nowTs = Number(msToTimestamp(Date.now()))
+      const endedMatchDay = postedMatchdays.find(postedMatchday => Number(postedMatchday.endDateTimestamp) < nowTs)
+      nextMatchday = nextMatchDays.find(matchDayEntry=> matchDayEntry.league === endedMatchDay.league)
+      await matchDays.updateOne({league: endedMatchDay.league, matchday: endedMatchDay.matchday}, {$set:{finished: true}})
+    }
+
+    // We reassign so it's necessary
+    if(nextMatchday) {
+      const {league, matchday, image} = nextMatchday
+      await internalPublishMatch({league, matchday, teams, matches, nationalities, image, matchDays, postping: true})
+    }
+  })
 }
 
 /*export const matchDay = async ({interaction_id, token, dbClient}) => {

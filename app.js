@@ -3,7 +3,7 @@ import express from 'express';
 import http from 'http';
 import https from 'https';
 import fs from 'fs';
-import pinoHttp from 'pino-http'
+//import pinoHttp from 'pino-http'
 import {
   InteractionType,
   InteractionResponseType,
@@ -15,7 +15,7 @@ import mongoClient from './functions/mongoClient.js';
 import { now } from './commands/now.js';
 import { timestamp } from './commands/timestamp.js';
 import { help, helpAdmin } from './commands/help.js';
-import { internationalLineup, lineup, eightLineup, boxLineup } from './commands/lineup/lineup.js';
+import { internationalLineup, lineup, eightLineup, boxLineup, editLineup, editEightLineup } from './commands/lineup/lineup.js';
 import { allPlayers, autoCompleteNation, editPlayer, player, players } from './commands/player.js';
 import { team } from './commands/team.js';
 import { editInterMatch, editMatch, endMatch, getMatchesOfDay, getMatchesSummary, internationalMatch, match, matchId, matches, pastMatches, publishMatch, remindMissedMatches, resetMatch } from './commands/match.js';
@@ -36,7 +36,7 @@ import { disbandTeam, disbandTeamConfirmed } from './commands/disbandTeam.js';
 import { getCurrentSeasonPhase, progressCurrentSeasonPhase } from './commands/season.js';
 import { setAllMatchToSeason } from './commands/matches/batchWork.js';
 import { endMatchModalResponse, matchResultPrompt, matchStatsModalResponse, matchStatsPrompt, refereeMatch } from './commands/matches/actions.js';
-import { fixturesChannels, pgLeagues, postSeasonLeagues, serverChannels } from './config/psafServerConfig.js';
+import { fixturesChannels, pgLeagues, serverChannels } from './config/psafServerConfig.js';
 import { notifyMatchStart, testDMMatch } from './commands/matches/notifyMatchStart.js';
 import { voteAction } from './commands/nationalTeams/actions.js';
 import { client, uri } from './config/mongoConfig.js';
@@ -45,7 +45,7 @@ import { addSteam, addSteamId, manualDoubleSteam, setName } from './commands/pla
 import { addToLeague, removeFromLeague } from './commands/league/addToLeague.js';
 import { leagueTeams } from './commands/league/leagueTeams.js';
 import { imageLeagueTable, leagueTable, postLeagueTable, updateLeagueTable } from './commands/league/leagueTable.js';
-import { generateMatchday, randomMatchesDay } from './commands/matches/matchday.js';
+import { autoPublish, generateMatchday, randomMatchesDay } from './commands/matches/matchday.js';
 import { setRating } from './commands/player/rating.js';
 import { approveMoveMatch, declineMoveMatch, listMatchMoves, moveMatch, moveMatchModalResponse, moveMatchPrompt } from './commands/matches/moveMatch.js';
 import { getApi } from './api.js';
@@ -610,6 +610,12 @@ function start() {
               }
             })
           }
+          if(name === "lineupedit") {
+            return editLineup(commandOptions)
+          }
+          if(name === "eightlineupedit") {
+            return editEightLineup(commandOptions)
+          }
 
           if(name === "addsteamid") {
             return addSteamId(commandOptions)
@@ -845,7 +851,7 @@ function start() {
     true,
     'Europe/London'
   )
-  new CronJob(
+  /*new CronJob(
     '31 22 * * *',
     async function() {
       const league = fixturesChannels.find(chan=> chan.name === 'GBL')
@@ -886,7 +892,7 @@ function start() {
     null,
     true,
     'Europe/London'
-  )
+  )*/
   new CronJob(
     '19 22 * * *',
     async function() {
@@ -912,10 +918,31 @@ function start() {
     'Europe/London'
   )
   new CronJob(
+    '29 22 * * *',
+    async function() {
+      const leagues = fixturesChannels.filter(chan=> chan.name.includes('Playoffs') && chan.standingsMsg)
+      for await(const league of leagues ) {
+        await updateLeagueTable({dbClient, league: league.value})
+      }
+    },
+    null,
+    true,
+    'Europe/London'
+  )
+  /*new CronJob(
     '3 23 * * *',
     async function() {
       const league = fixturesChannels.find(chan=> chan.name === 'WEL')
       await updateLeagueTable({dbClient, league: league.value})
+    },
+    null,
+    true,
+    'Europe/London'
+  )*/
+  new CronJob(
+    '33 15 * * *',
+    async function() {
+      await autoPublish({dbClient})
     },
     null,
     true,

@@ -95,12 +95,12 @@ export const expireContracts = async ({dbClient, interaction_id, token, guild_id
   const totalPlayers = await getAllPlayers(guild_id)
   const {allExpiringContracts, allTeams} = await dbClient(async ({contracts, seasonsCollect, teams})=> {
     const currentSeason = await getCurrentSeason(seasonsCollect)
-    const fullExpiringContracts = await contracts.find({until: {$lte : currentSeason+1}, endedAt: null, isManager: null}, {limit: 50}).toArray()
+    const fullExpiringContracts = await contracts.find({until: {$lte : currentSeason}, endedAt: null, isLoan: {$ne: true}, isManager: null}, {limit: 200}).toArray()
     const allTeams = await teams.find({}).toArray()
     const allExpiringContracts = fullExpiringContracts.filter(({playerId})=> {
       const discPlayer = totalPlayers.find(({user})=> user.id === playerId)
       return discPlayer && !discPlayer.roles.includes(serverRoles.clubManagerRole)
-    }).slice(0, 20)
+    }).slice(0, 40)
     if(!dryrun) {
       await contracts.updateMany({playerId: {$in: allExpiringContracts.map(({playerId}) => playerId)}}, {$set: {endedAt: Date.now()}})
     }
@@ -119,13 +119,13 @@ export const expireContracts = async ({dbClient, interaction_id, token, guild_id
     console.log(teamPlayers)
     return await updateResponse({application_id, token, content: (teamPlayers.map(({nick})=>nick).join('\r') || '---')})
   }
-  await teamPlayers.forEach(async player => {
+  for await (const player of teamPlayers) {
     if(player.user && !player.roles.includes(serverRoles.clubManagerRole)) {
       const playerName = getPlayerNick(player)
       let updatedPlayerName = removePlayerPrefix(allTeams.find(({id})=> id === player.team )?.shortName, playerName)
       const payload= {
         nick: updatedPlayerName,
-        roles: player.roles.filter(playerRole=> ![player.team, serverRoles.clubManagerRole, serverRoles.clubPlayerRole, serverRoles.matchBlacklistRole].includes(playerRole))
+        roles: player.roles.filter(playerRole=> ![player.team, serverRoles.clubManagerRole, serverRoles.clubPlayerRole].includes(playerRole))
       }
       await DiscordRequest(`guilds/${guild_id}/members/${player.playerId}`, {
         method: 'PATCH',
@@ -133,7 +133,7 @@ export const expireContracts = async ({dbClient, interaction_id, token, guild_id
       })
       await sleep(500)
     }
-  })
+  }
   const log = [
     `# Contracts expired\rThe following players are now free agents:`,
     ...teamPlayers.map(discPlayer => `<@${discPlayer.playerId}>`),

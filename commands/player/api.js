@@ -34,10 +34,37 @@ export const getPlayers = async ({dbClient, getParams}) => {
 
 export const getPlayer = async ({dbClient, getParams}) => {
   let query = {}
+  const allPlayers = await getAllPlayers(process.env.GUILD_ID)
+  if(getParams.name) {
+    const name = getParams.name.toLowerCase()
+    const foundPlayers = allPlayers.filter(player=> player?.user?.username.toLowerCase().includes(name) || (player?.nick && player?.nick.toLowerCase().includes(name)) )
+    const searchPlayers = foundPlayers.slice(0, 9)
+    const playerIds = searchPlayers.map(player=>player.user.id)
+    return dbClient(async ({players, playerStats, contracts})=> {
+      const [dbPlayers, allStats, allContracts] = await Promise.all([
+        players.find({id: {$in: playerIds}}).toArray(),
+        playerStats.find({id: {$in: playerIds}, matchId: {$ne:null}}).toArray(),
+        contracts.find({playerId: {$in: playerIds}}).toArray(),
+      ])
+      const collection = dbPlayers.map( player => {
+          const discPlayer = searchPlayers.find(guildMember=> guildMember?.user?.id === player.id)
+          const stats = allStats.filter(stat=> stat.id === player.id)
+          const contracts = allContracts.filter(contract=> contract.playerId === player.id)
+          return {
+            ...player,
+            ...discPlayer,
+            stats,
+            contracts
+          }
+        })
+      return {
+        collection
+      }
+    })
+  }
   if(getParams.id) {
     query.id = getParams.id
   }
-  const allPlayers = await getAllPlayers(process.env.GUILD_ID)
   return dbClient(async ({players, playerStats, contracts})=> {
     const player = await players.findOne(query)
     if(player) {
@@ -54,6 +81,32 @@ export const getPlayer = async ({dbClient, getParams}) => {
         stats,
         contracts:allContracts
       }
+    }
+    return {}
+  })
+}
+
+export const getPlayerStats = async ({dbClient, getParams}) => {
+  let query = {}
+  if(!getParams.ids)
+    return {}
+  
+  query.id = {$in: getParams.ids.split(',').slice(0, 49)}
+
+  return dbClient(async ({players, playerStats, contracts})=> {
+    const player = await players.find(query).toArray()
+    if(player.length > 0) {
+      const [stats, allContracts] = await Promise.all([
+        playerStats.find({...query, matchId: {$ne:null}}).toArray(),
+        contracts.find({playerId: query.id}).toArray(),
+      ])
+      //const statMatches = stats.map(stat=> new ObjectId(stat.matchId))
+      //const playerMatches = matches.find({_id: {$in: statMatches}})
+      return player.map(player => ({
+        ...player,
+        stats: stats.filter(stat=> stat.id === player.id),
+        contracts:allContracts.filter(contract=> contract.playerId === player.id)
+      }))
     }
     return {}
   })

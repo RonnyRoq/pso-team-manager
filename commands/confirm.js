@@ -80,7 +80,7 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
     const nat3 = dbPlayer?.nat3
     let steamId = dbPlayer?.steam || ""
     if(!steamId || !steamId.includes("steamcommunity.com/profiles/") || !steamId.includes("steamcommunity.com/id/")) {
-      console.log(`Doesnt have a steam ID already ${steamId}, using the one entered`)
+      console.log(`Existing steam ID not found ( ${steamId} ), using the one entered with the command`)
       steamId = steam
     }
     const uniqueId = dbPlayer?.uniqueId || uniqueid
@@ -121,7 +121,7 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
     }
 
     const updatedPlayer = {
-      nick: getPlayerNick(member),
+      nick: dbPlayer?.nick || getPlayerNick(member),
       nat1,
       nat2,
       nat3,
@@ -130,9 +130,10 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
     }
     await players.updateOne({id: callerId}, {$set: updatedPlayer}, {upsert: true})
     const payload = {
+      nick: updatedPlayer.nick,
       roles: [...new Set([...member.roles, serverRoles.registeredRole])]
     }
-    userDetails = `${flag1}${flag2}${flag3}<@${callerId}>\rSteam: ${steamId}\rUnique ID: ${uniqueId}`
+    userDetails = `${flag1}${flag2}${flag3}<@${callerId}>\rSteam: ${encodeURI(steamId || '')}\rUnique ID: ${uniqueId || ''}`
     DiscordRequest(`guilds/${guild_id}/members/${callerId}`, {
       method: 'PATCH',
       body: payload
@@ -182,9 +183,9 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
     const currentTeam = allTeams.find(({id}) => member.roles.includes(id))
     const teamToJoin = allTeams.find(({id})=> id === team)
     const deal = pendingDeal || pendingLoan
-    if(seasons < 2) {
+    /*if(seasons < 2) {
       return 'Season ending soon, you can only confirm for 2 seasons (end of this season and the one after).'
-    }
+    }*/
     if(currentTeam) {
       if(currentTeam.transferBan) { 
         return `Your team <@&${currentTeam.id}> is banned from doing transfers, you cannot leave it.`

@@ -3,7 +3,7 @@ import { InstallGlobalCommands, InstallGuildCommands } from './utils.js';
 import { nowCmd } from './commands/now.js';
 import { timestampCmd } from './commands/timestamp.js';
 import { helpAdminCmd, helpCmd } from './commands/help.js';
-import { boxLineupcmd, eightLineupCmd, internationalLineupCmd, lineupCmd } from './commands/lineup/lineup.js';
+import { boxLineupcmd, editEightLineupCmd, editLineupCmd, eightLineupCmd, internationalLineupCmd, lineupCmd } from './commands/lineup/lineup.js';
 import { teamCmd } from './commands/team.js';
 import { editInternationalMatchCmd, editMatchCmd, endMatchCmd, internationalMatchCmd, matchCmd, matchIdCmd, matchesCmd, moveTheMatchCmd, pastMatchesCmd, publishMatchCmd, resetMatchCmd } from './commands/match.js';
 import { blacklistTeamCmd, doubleContractsCmd, emojiCmd, initCountriesCmd, managerContractsCmd, systemTeamCmd } from './commands/system.js';
@@ -110,6 +110,7 @@ const ALL_COMMANDS = [nowCmd, timestampCmd, lineupCmd, boxLineupcmd, eightLineup
 const GUILD_COMMANDS = [
   teamCmd, emojisCmd, matchCmd, editMatchCmd, moveTheMatchCmd, endMatchCmd, publishMatchCmd,
   matchIdCmd, matchesCmd, internationalMatchCmd, editInternationalMatchCmd, resetMatchCmd,
+  editLineupCmd, editEightLineupCmd,
   playerCmd, editPlayerCmd, allPlayersCmd, playersCmd, myPlayerCmd,
   confirmCmd, updateConfirmCmd, renewCmd, dealCmd, activateTeamCmd, listDealsCmd, loanCmd, releaseCmd, registerCmd,
   nationalTeamCmd, allNationalTeamsCmd, postNationalTeamsCmd, addSelectionCmd, removeSelectionCmd,

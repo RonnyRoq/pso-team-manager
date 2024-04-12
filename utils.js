@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import fetch from 'node-fetch';
-import formData from 'form-data';
+//import formData from 'form-data';
 import { verifyKey } from 'discord-interactions';
 import { sleep } from './functions/helpers.js';
 
@@ -16,48 +16,56 @@ export function VerifyDiscordRequest(clientKey) {
     }
   };
 }
-export const DiscordUploadRequest = async (endpoint, options={}) => {
+function toArrayBuffer(buffer) {
+  const arrayBuffer = new ArrayBuffer(buffer.length);
+  const view = new Uint8Array(arrayBuffer);
+  for (let i = 0; i < buffer.length; ++i) {
+    view[i] = buffer[i];
+  }
+  return arrayBuffer;
+}
+
+export const DiscordUploadRequest = async (endpoint, options={}, files) => {
   // append endpoint to root API URL
   const url = 'https://discord.com/api/v10' + endpoint;
   let payload = {...options}
+  const {method} = options
   // Stringify payloads
-  const {files, ...body} = options.body
-
-  if (options.body) payload.body = JSON.stringify(body);
+  if (options.body) payload.body = JSON.stringify(options.body);
   // Use node-fetch to make requests
   const headers = {
     Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
-    'Content-Type': 'application/json; charset=UTF-8',
+    'Content-Type': 'multipart/form-data',
     'User-Agent': 'PSAF Team Manager',
   }
-  const form = new formData();
-  form.append('content', body.content)
-  form.append('attachments', JSON.stringify(body.attachments))
-  const { port, hostname, pathname } = new URL(url)
-  options.body.attachments.forEach(({filename}, index) => {
-    form.append(filename, JSON.stringify(files[index]))
-  });
-  const fetchData = {
-    'body': form,
-    headers: {
-      ...headers,
-      ...form.getHeaders()
-    },
-    ...payload
-  }
+  const form = new FormData();
+  files.forEach(({name, data, contentType}, index) => form.append(`files[${index}]`, new Blob([toArrayBuffer(data)], {type: contentType}), name))
+  form.append('payload_json', payload.body)
   
+  //const { hostname, pathname } = new URL(url)
+
   //console.log(fetchData)
-  console.log(port, hostname, pathname, headers)
-  form.submit({
-    port,
+  console.log(url, headers)
+  for (const pair of form.entries()) {
+    console.log(pair[0], pair[1]);
+  }
+  console.log(form)
+  let res = await fetch(url, {
+    headers,
+    method,
+    body: form
+  })
+  /*form.submit({
     hostname,
     headers,
-    pathname
+    pathname,
+    protocol: 'https:'
   }, async (err, res)=> {
     console.log(err)
     console.log(res.statusCode, res.statusMessage)
     console.log(res.read())
     if(res.complete) {
+      console.log('done')
       if (res.statusCode > 0) {
         const data = await res.json();
         console.log(endpoint);
@@ -65,32 +73,36 @@ export const DiscordUploadRequest = async (endpoint, options={}) => {
         console.log(JSON.stringify(data))
         if(data.retry_after) {
           await sleep(data.retry_after*1000)
-          res = await DiscordRequest(endpoint, options)
+          res = await DiscordUploadRequest(endpoint, options, files)
         } else {
           throw new Error(JSON.stringify(data));
         }
       }
     } else {
+      console.log('continue')
       res.resume()
     }
-  })
+  })*/
   //let res = await fetch(url, fetchData);
   //form.pipe(res)
   // throw API errors
-  /*if (!res.ok) {
+  if (!res.ok) {
     const data = await res.json();
     console.log(endpoint);
     //console.log(JSON.stringify(options))
     console.log(JSON.stringify(data))
     if(data.retry_after) {
       await sleep(data.retry_after*1000)
-      res = await DiscordRequest(endpoint, options)
+      res = await DiscordUploadRequest(endpoint, options, files)
     } else {
+      console.log('Failed upload')
+      console.log(JSON.stringify(res));
       throw new Error(JSON.stringify(data));
     }
   }
+  console.log('uploaded')
   // return original response
-  return res;*/
+  return res;
 }
 
 export async function DiscordRequest(endpoint, options={}) {

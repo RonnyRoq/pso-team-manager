@@ -1,4 +1,4 @@
-import { parseDate } from "chrono-node"
+import { parseDate } from "../timestamp.js"
 import { msToTimestamp, optionsToObject, shuffleArray, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { editAMatchInternal } from "../match.js"
 

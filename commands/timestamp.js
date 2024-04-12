@@ -23,13 +23,15 @@ export const parseDate = (date, timezone) => {
   const strTimezone = optionToTimezoneStr(timezone)
   return chrono.parseDate(date, { instance: new Date(), timezone: strTimezone }, {
     forwardDate: true,
-    timezones: { 
+    timezones: {
       "UK": {
         timezoneOffsetDuringDst: 60,
         timezoneOffsetNonDst: 0,
         dstStart: (year) => chrono.getLastWeekdayOfMonth(year, chrono.Month.MARCH, chrono.Weekday.SUNDAY, 2),
         dstEnd: (year) => chrono.getLastWeekdayOfMonth(year, chrono.Month.OCTOBER, chrono.Weekday.SUNDAY, 3),
-      }}})
+      }
+    }
+  })
 }
 
 export const timestampCmd = {

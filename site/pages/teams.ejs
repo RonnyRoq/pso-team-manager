@@ -4,16 +4,18 @@
   <div class="flex-auto"></div>
   <div class="justify-center mx-10 mt-10 flex flex-col">
     <h1 class="text-3xl justify-center">Teams</h1>
+    <h2 class="text-3xl justify-center">Active Money: <%= new Intl.NumberFormat('en-US').format(totalActiveMoney)%> EBits, Sleeping Money: <%= new Intl.NumberFormat('en-US').format(totalSleepingMoney)%> EBits</h2>
     <h1 class="text-xl justify-center">All the teams</h1>
       <div class="mt-5 ">
         <div class="w-min overflow-hidden rounded-lg shadow shadow-black">
           <table class="table-auto">
             <thead>
               <tr class="border-b text-slate-200 bg-slate-800 border-slate-700">
-                <th class="border-r text-center px-2.5 border-slate-700">Name</th>
-                <th class="border-r text-center px-2.5 border-slate-700">Status</th>
-                <th class="border-r text-center px-2.5 border-slate-700">Leagues</th>
-                <th class="border-r text-center px-2.5 border-slate-700">Location</th>
+                <th class="border-r text-center px-2 border-slate-700">Name</th>
+                <th class="border-r text-center px-1 border-slate-700">Status</th>
+                <th class="border-r text-center px-1 border-slate-700">Leagues</th>
+                <th class="border-r text-center px-1 border-slate-700">Budget</th>
+                <th class="border-r text-center px-1 border-slate-700">Location</th>
                 <th class="border-r text-center border-slate-700">Actions</th>
               </tr>
             </thead>
@@ -21,9 +23,10 @@
               <% teams.forEach(team => {%>
                 <tr class="odd:bg-slate-900 even:bg-slate-800">
                   <td class="pr-56 text-left"><%= team.name %></td>
-                  <td class="pr-56 text-left">Active <%= team.active %>, Disqualified: <%= team.disqualified || false %> </td>
-                  <td class="pr-56 text-left"> <%= team.leagues?.map(league=> leagues[league]) %></td>
-                  <td class="pr-56 text-left"> <%= team.flag %> <%= team.city %></td>
+                  <td class="pr-22 text-left">Active <%= team.active %>, Disqualified: <%= team.disqualified || false %> </td>
+                  <td class="pr-22 text-left"> <%= team.leagues?.map(league=> leagues[league]) %></td>
+                  <td class="pr-22 text-left"> <%= new Intl.NumberFormat('en-US').format(team.budget) %> <%= parseFloat((team.budget / totalActiveMoney) * 100).toFixed(2) %>%</td>
+                  <td class="pr-22 text-left"> <%= team.flag %> <%= team.city %></td>
                   <td class="w-min flex flex-row p-2 gap-2">
                     <a class="text-center align-middle rounded font-bold 
                     bg-blue-600 hover:bg-blue-900 border-blue-900 hover:border-blue-600

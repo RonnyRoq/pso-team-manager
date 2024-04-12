@@ -18,6 +18,7 @@ export const getAllTeams = ({dbClient}) => dbClient(async ({teams, leagues})=> {
 })
 
 export const getTeam = ({id, dbClient}) => dbClient(({teams})=> teams.findOne({active:true, id}))
+//export const getTeamExtended 
 
 export const getTeamAndPlayers = async({id, dbClient, guild_id}) => {
   const players = await getAllPlayers(guild_id)

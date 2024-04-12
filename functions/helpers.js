@@ -18,11 +18,11 @@ export const timestampToMs = (timestamp) => {
 export const optionToTimezoneStr = (option = 0) => {
   switch (option) {
     case 1:
-      return "CET";
+      return "CEST";
     case 2:
       return "EEST";
     default:
-      return "UK";
+      return "BST";
   }
 }
 

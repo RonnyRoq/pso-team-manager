@@ -1,3 +1,10 @@
 <%- include('header') %>
-
+<form method="post">
+    <label for="name">Team Name</label><input name="name" value="<%= team.name %>" />
+    <label for="active">Active?</label><input type="checkbox" name="active" value="<%= team.active %>" />
+    <label for="flag">Flag</label><input name="flag" value="<%= team.flag %>" />
+    <label for="city">City</label><input name="city" value="<%= team.city %>" />
+    <p><%= team.leagues?.map(league=> leagues[league]) %></p>
+    <input type="submit" />
+</form>
 <%- include('footer') %>

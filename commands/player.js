@@ -23,6 +23,7 @@ export const player = async ({options, interaction_id, callerId, guild_id, appli
       }
     }
   })
+  
   const playerResp = await DiscordRequest(`/guilds/${guild_id}/members/${playerId}`, { method: 'GET' })
   const discPlayer = await playerResp.json()
   const name = getPlayerNick(discPlayer)

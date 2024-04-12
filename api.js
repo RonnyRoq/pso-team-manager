@@ -1,11 +1,12 @@
 import express from 'express'
 import bodyParser from 'body-parser'
-import pinoHttp from 'pino-http'
+//import pinoHttp from 'pino-http'
 import { getTeam, getTeamAndPlayers, getTeams } from './commands/teams/getTeam.js'
-import { getPlayer, getPlayers } from './commands/player/api.js'
+import { getPlayer, getPlayerStats, getPlayers } from './commands/player/api.js'
 import { getMatches } from './commands/matches/matches.js'
 import { getMatch } from './commands/matches/api.js'
 import { apiLeagueTable } from './commands/league/leagueTable.js'
+import { getTransfers } from './commands/transfers.js'
 
 export const getApi = (localdev=false, dbClient={}) =>{
   const api = express() // the API app
@@ -60,6 +61,20 @@ export const getApi = (localdev=false, dbClient={}) =>{
     console.log(req.url)
     console.log(req.query)
     const response = await getPlayer({getParams: req.query, dbClient})
+    res.json(response)
+  })
+
+  api.get('/playerstats', async (req, res) => {
+    console.log(req.url)
+    console.log(req.query)
+    const response = await getPlayerStats({getParams: req.query, dbClient})
+    res.json(response)
+  })
+
+  api.get('/transfers', async (req, res) => {
+    console.log(req.url)
+    console.log(req.query)
+    const response = await getTransfers({getParams: req.query, dbClient})
     res.json(response)
   })
 

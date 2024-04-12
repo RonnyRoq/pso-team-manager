@@ -65,6 +65,12 @@ export const notifyMatchStart = async ({dbClient}) => {
         embeds: body.embeds
       }
     })
+    if(startingMatch.thread) {
+      await DiscordRequest(`/channels/${startingMatch.thread}/messages`, {
+        method: 'POST',
+        body
+      })
+    }
     if(matchRefs[0]) {
       for await (const matchRef of matchRefs) {
         console.log(matchRef)

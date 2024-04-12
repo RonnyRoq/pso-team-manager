@@ -23,6 +23,8 @@ const mongoClient = (client) => {
         votes: psoDb.collection("Votes"),
         leagues: psoDb.collection("Leagues"),
         moveRequest: psoDb.collection("MoveRequest"),
+        transferHistory: psoDb.collection("TransferHistory"),
+        matchDays: psoDb.collection("MatchDays"),
       }
       return await callback(collections)
     }

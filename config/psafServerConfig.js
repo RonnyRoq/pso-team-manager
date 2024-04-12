@@ -1,21 +1,50 @@
 export const allLeagueList = [
-  { name: 'GBL',
+  { 
+    name: 'GBL',
     value: '1090959034963742781',
     emoji: ':___GBL:1091064891034566676',
     pingRole: '1154064939263213648',
     standingsMsg: '1185321840047038514'
   },{
-    name: 'MSL',
-    value: '1112413187489411072',
-    emoji: ':___MSL:1109239585701101588',
-    pingRole: '1154065063360069763',
-    standingsMsg: '1185321632194105494'
+    name: 'GBL Playoffs',
+    value: '1090959034963742781-p',
+    emoji: ':___GBL:1091064891034566676',
+    pingRole: '1154064939263213648',
+    channel: '1090959034963742781',
+    standingsMsg: '1227729454571192402',
+    defaultImage: 'https://cdn.discordapp.com/attachments/1119948866519834651/1227013819256016897/GBLstuff_1.png'
   },{
-    name:'ENCEL',
-    value: '1090959133668294666',
-    emoji: ':___ENCEL:1091064847212494989',
-    pingRole: '1154065149888561162',
-    standingsMsg: '1185322055089000500'
+    name: 'ITL',
+    value: '1226988338699960400',
+    emoji: ':___ITL:1226321222975885412',
+  },{
+    name: 'ITL Playoffs',
+    value: '1226988338699960400-p',
+    emoji: ':___ITL:1226321222975885412',
+    channel: '1226988338699960400',
+    standingsMsg: '1227729736583876658',
+    defaultImage: 'https://cdn.discordapp.com/attachments/1119948866519834651/1227013847668228246/ITLstuff.png'
+  },{
+    name:'CEL',
+    value: '1226988387249160272',
+    emoji: ':___CEL:1226321224867774544',
+  },{
+    name:'CEL Playoffs',
+    value: '1226988387249160272-p',
+    emoji: ':___CEL:1226321224867774544',
+    channel: '1226988387249160272',
+    standingsMsg: '1227729826576863242',
+    defaultImage: 'https://cdn.discordapp.com/attachments/1119948866519834651/1227013876156207154/CELstuff.png'
+  },{
+    name:'D2',
+    value: '1226988421579407563',
+    emoji: ':___D2:1226321221239701584',
+  },{
+    name:'D2 Playoffs',
+    value: '1226988421579407563-p',
+    emoji: ':___D2:1226321221239701584',
+    channel: '1090959034963742781',
+    defaultImage: 'https://cdn.discordapp.com/attachments/1119948866519834651/1227017507320107048/D1stuff.png'
   },{
     name:'PG6',
     value: '1209539443271270452',
@@ -41,6 +70,32 @@ export const allLeagueList = [
     value: '1171748569540198460',
     emoji: ':__PSAF:1095732362400247838',
     pingRole: '1072620805600592062'
+  },{
+    name:'EL1',
+    value: '1177013563974500513',
+    emoji: ':__PSAF:1095732362400247838',
+    pingRole: '1177014748856991755',
+    standingsMsg: '1185330583514132550',
+    players: 8
+  },{
+    name:'EL1 Playoffs',
+    value: '1177013563974500513-k',
+    emoji: ':__PSAF:1095732362400247838',
+    pingRole: '1177014748856991755',
+    standingsMsg: '1185330583514132550',
+    players: 8
+  },{
+    name:'EL2',
+    value: '1227943696067072111',
+    emoji: ':__PSAF:1095732362400247838',
+    pingRole: '1177014748856991755',
+    players: 8
+  },{
+    name:'EL2 Playoffs',
+    value: '1227943696067072111-k',
+    emoji: ':__PSAF:1095732362400247838',
+    pingRole: '1177014748856991755',
+    players: 8
   },{
     name: 'Challengers League',
     value: '1101999929171394653-k',
@@ -75,6 +130,18 @@ export const allLeagueList = [
     name: 'TEST',
     value: '1150376229178978377',
     emoji: ':full_star:1128309835369291827'
+  },{
+    name: 'MSL',
+    value: '1112413187489411072',
+    emoji: ':___MSL:1109239585701101588',
+    pingRole: '1154065063360069763',
+    standingsMsg: '1185321632194105494'
+  },{
+    name:'ENCEL',
+    value: '1090959133668294666',
+    emoji: ':___ENCEL:1091064847212494989',
+    pingRole: '1154065149888561162',
+    standingsMsg: '1185322055089000500'
   },{
     name: 'Challengers League (Group A)',
     value: '1101999929171394653-a',
@@ -311,6 +378,7 @@ export const serverChannels = {
   scheduleChannelId: '1136790176488755303',
   dailyResultsChannelId: '1174360872886489118',
   lobbiesChannelId: '1081887877274812487',
+  lineupsChannelId: '1095419870264434748',
   standingsChannelId: '1185321370977050775',
   ratingsChannelId: '1120629390699667542',
   moveMatchChannelId: '1091692461409173544',

@@ -63,10 +63,18 @@ export const getSite = (localdev=false, uri='', dbClient={}) =>{
     return res.render('matches', {matches})
   })
   
+  site.get('/team', async (req, res) => {
+    const teams = await getAllTeams({dbClient})
+    const leagues = Object.fromEntries(allLeagueList.map(league=> ([league.value, league.name])))
+    return res.render('team', {teams, leagues})
+  })
+
   site.get('/teams', async (req, res) => {
     const teams = await getAllTeams({dbClient})
     const leagues = Object.fromEntries(allLeagueList.map(league=> ([league.value, league.name])))
-    return res.render('teams', {teams, leagues})
+    const totalActiveMoney = teams.filter(team=>team.active).reduce((acc, team)=> acc + team.budget, 0)
+    const totalSleepingMoney = teams.filter(team=>!team.active).reduce((acc, team)=> acc + team.budget, 0)
+    return res.render('teams', {teams, leagues, totalActiveMoney, totalSleepingMoney})
   })
 
   site.post('/editmatch', async (req, res) => {
@@ -113,33 +121,6 @@ export const getSite = (localdev=false, uri='', dbClient={}) =>{
       }
     }
     return res.render('match', response)
-  })
-
-  site.get('/api/teams', async(req, res) => {
-    console.log(req.url)
-    const response = await getTeams({dbClient})
-    res.json(response)
-  })
-
-
-  site.get('/api/team', async (req, res) => {
-    console.log(req.url)
-    console.log(req.query)
-    const response = await getTeam({id: req.query.id, dbClient})
-    res.json(response)
-  })
-  site.get('/api/teamplayers', async (req, res) => {
-    console.log(req.url)
-    console.log(req.query)
-    const response = await getTeamAndPlayers({id: req.query.id, dbClient, guild_id: process.env.GUILD_ID})
-    res.json(response)
-  })
-
-  site.get('/api/players', async (req, res) => {
-    console.log(req.url)
-    console.log(req.query)
-    const response = await getPlayers({getParams: req.query, dbClient})
-    res.json(response)
   })
 
 /*  const matchDay = (req, res) => {
