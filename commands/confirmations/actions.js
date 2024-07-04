@@ -2,7 +2,7 @@ import { InteractionResponseFlags, InteractionResponseType } from "discord-inter
 import { innerRemoveConfirmation, innerRemoveDeal, innerRemoveRelease } from "../confirm.js"
 import { DiscordRequest } from "../../utils.js"
 import { serverChannels, serverRoles } from "../../config/psafServerConfig.js"
-import { getPlayerNick, quickResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { getPlayerNick, silentResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { seasonPhases } from "../season.js"
 import { twoWeeksMs } from "../../config/constants.js"
 import { ObjectId } from "mongodb"
@@ -12,17 +12,7 @@ export const removeConfirmation = async ({dbClient, interaction_id, token, messa
     const confirmation = await confirmations.findOne({adminMessage: message.id})
     return innerRemoveConfirmation({reason: 'Denied by admin', ...confirmation, confirmations, pendingDeals, pendingLoans})
   })
-  
-  return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        content,
-        flags: InteractionResponseFlags.EPHEMERAL
-      }
-    }
-  })
+  return silentResponse({interaction_id, token, content})
 }
 
 export const removeRelease = async ({dbClient, interaction_id, token, message }) => {
@@ -30,7 +20,7 @@ export const removeRelease = async ({dbClient, interaction_id, token, message })
     const release = await pendingReleases.findOne({adminMessage: message.id})
     return innerRemoveRelease({reason: 'Denied by admin', ...release, pendingReleases})
   })
-  return quickResponse({interaction_id, token, content, isEphemeral: true})
+  return silentResponse({interaction_id, token, content})
 }
 
 export const removeDeal = async ({dbClient, message, interaction_id, token }) => {
@@ -38,54 +28,20 @@ export const removeDeal = async ({dbClient, message, interaction_id, token }) =>
     const pendingDeal = await pendingDeals.findOne({adminMessage: message.id})
     return innerRemoveConfirmation({reason: 'Denied by admin', ...pendingDeal, dbClient, isDeal: true, pendingDeals, pendingLoans, confirmations})
   })
-  
-  return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        content,
-        flags: InteractionResponseFlags.EPHEMERAL
-      }
-    }
-  })
+  return silentResponse({interaction_id, token, content})
 }
 export const removeLoan = async ({dbClient, message, interaction_id, token }) => {
   const content = await dbClient(async({confirmations, pendingDeals, pendingLoans}) => {
     const pendingDeal = await pendingLoans.findOne({adminMessage: message.id})
     return innerRemoveConfirmation({reason: 'Denied by admin', ...pendingDeal, dbClient, isDeal: true, pendingDeals, pendingLoans, confirmations})
   })
-  
-  return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        content,
-        flags: InteractionResponseFlags.EPHEMERAL
-      }
-    }
-  })
+  return silentResponse({interaction_id, token, content})
 }
 
 export const declineDealAction =  async ({member, application_id, interaction_id, token, dbClient, custom_id, callerId}) => {
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        flags: InteractionResponseFlags.EPHEMERAL
-      }
-    }
-  })
+  await waitingMsg({interaction_id, token})
   if(!member.roles.includes(serverRoles.clubManagerRole)) {
-    return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-      method : 'PATCH',
-      body: {
-        content: "Only managers can approve deals",
-        flags: InteractionResponseFlags.EPHEMERAL
-      }
-    })
+    return updateResponse({application_id, token, content:"Only managers can approve deals"})
   }
   const dealId = custom_id.substr("decline_deal_".length)
   const _id = new ObjectId(dealId)
@@ -103,33 +59,13 @@ export const declineDealAction =  async ({member, application_id, interaction_id
     await pendingDeals.deleteOne({_id})
     return 'Deal declined'
   })
-  return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-    method : 'PATCH',
-    body: {
-      content,
-      flags: InteractionResponseFlags.EPHEMERAL
-    }
-  })
+  return updateResponse({application_id, token, content})
 }
 
 export const declineLoanAction =  async ({member, application_id, interaction_id, token, dbClient, custom_id, callerId}) => {
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        flags: InteractionResponseFlags.EPHEMERAL
-      }
-    }
-  })
+  await waitingMsg({interaction_id, token})
   if(!member.roles.includes(serverRoles.clubManagerRole)) {
-    return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-      method : 'PATCH',
-      body: {
-        content: "Only managers can approve deals",
-        flags: InteractionResponseFlags.EPHEMERAL
-      }
-    })
+    return updateResponse({application_id, token, content: "Only managers can approve deals"})
   }
   const loanId = custom_id.substr("decline_loan_".length)
   const _id = new ObjectId(loanId)
@@ -147,13 +83,7 @@ export const declineLoanAction =  async ({member, application_id, interaction_id
     await pendingLoans.deleteOne({_id})
     return 'Loan declined'
   })
-  return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-    method : 'PATCH',
-    body: {
-      content,
-      flags: InteractionResponseFlags.EPHEMERAL
-    }
-  })
+  return updateResponse({application_id, token, content})
 }
 
 export const approveDealAction = async ({member, application_id, interaction_id, token, dbClient, custom_id, callerId}) => {

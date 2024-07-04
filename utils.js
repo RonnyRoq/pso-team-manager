@@ -1,6 +1,8 @@
 import 'dotenv/config';
+//import fs, { openAsBlob } from 'fs'
+import { readFile } from "node:fs/promises"
+import { lookup } from "mime-types"
 import fetch from 'node-fetch';
-//import formData from 'form-data';
 import { verifyKey } from 'discord-interactions';
 import { sleep } from './functions/helpers.js';
 
@@ -16,18 +18,40 @@ export function VerifyDiscordRequest(clientKey) {
     }
   };
 }
-function toArrayBuffer(buffer) {
-  const arrayBuffer = new ArrayBuffer(buffer.length);
-  const view = new Uint8Array(arrayBuffer);
-  for (let i = 0; i < buffer.length; ++i) {
-    view[i] = buffer[i];
-  }
-  return arrayBuffer;
+
+export const SteamRequestTypes = {
+  VanityUrl: 'http://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/',
+  GetPlayerSummaries: 'http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/'
 }
+
+export const SteamRequest = (request, params) => {
+  const searchParams = new URLSearchParams(params)
+  searchParams.append('key', process.env.STEAM_API_KEY)
+  const urlReq = new URL(`${request}?${searchParams.toString()}`)
+  console.log(urlReq.href)
+  return fetch(urlReq)
+}
+
+/*function toArrayBuffer(buffer, contentType='', sliceSize=512) {
+  const b64 = buffer.toString('base64')
+  const byteArrays = [];
+  for (let offset = 0; offset < b64.length; offset += sliceSize) {
+    const slice = b64.slice(offset, offset + sliceSize);
+    const byteNumbers = new Array(slice.length);
+    for (let i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    byteArrays.push(byteArray);
+  }
+  const blob = new Blob(byteArrays, {type: contentType});
+  return blob;
+}*/
 
 export const DiscordUploadRequest = async (endpoint, options={}, files) => {
   // append endpoint to root API URL
   const url = 'https://discord.com/api/v10' + endpoint;
+  console.log(options)
   let payload = {...options}
   const {method} = options
   // Stringify payloads
@@ -36,69 +60,45 @@ export const DiscordUploadRequest = async (endpoint, options={}, files) => {
   const headers = {
     Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
     'Content-Type': 'multipart/form-data',
+    //'Content-Type': 'application/json; charset=UTF-8',
     'User-Agent': 'PSAF Team Manager',
   }
   const form = new FormData();
-  files.forEach(({name, data, contentType}, index) => form.append(`files[${index}]`, new Blob([toArrayBuffer(data)], {type: contentType}), name))
   form.append('payload_json', payload.body)
-  
-  //const { hostname, pathname } = new URL(url)
-
-  //console.log(fetchData)
-  console.log(url, headers)
-  for (const pair of form.entries()) {
-    console.log(pair[0], pair[1]);
+  let index = 0
+  for await (const file of files) {
+    const {name, path} = file
+    const fileBlob = new Blob([await readFile(path)], { type: lookup(path) });
+    form.append(`files[${index}]`, fileBlob, name)
+    index++
   }
-  console.log(form)
-  let res = await fetch(url, {
-    headers,
+  
+  const payloadToSend= {
+    headers: {...headers},
     method,
-    body: form
-  })
-  /*form.submit({
-    hostname,
-    headers,
-    pathname,
-    protocol: 'https:'
-  }, async (err, res)=> {
-    console.log(err)
-    console.log(res.statusCode, res.statusMessage)
-    console.log(res.read())
-    if(res.complete) {
-      console.log('done')
-      if (res.statusCode > 0) {
-        const data = await res.json();
-        console.log(endpoint);
-        //console.log(JSON.stringify(options))
-        console.log(JSON.stringify(data))
-        if(data.retry_after) {
-          await sleep(data.retry_after*1000)
-          res = await DiscordUploadRequest(endpoint, options, files)
-        } else {
-          throw new Error(JSON.stringify(data));
-        }
+    body: form,
+    redirect: 'follow'
+  }
+  let res
+  try{
+    res = await fetch(url, payloadToSend)
+    // throw API errors
+    if (!res.ok) {
+      const data = await res.json();
+      console.log(endpoint);
+      //console.log(JSON.stringify(options))
+      console.log(JSON.stringify(data))
+      if(data.retry_after) {
+        await sleep(data.retry_after*1000)
+        res = await DiscordUploadRequest(endpoint, options, files)
+      } else {
+        console.log('Failed upload')
+        console.log(JSON.stringify(res));
+        throw new Error(JSON.stringify(data));
       }
-    } else {
-      console.log('continue')
-      res.resume()
     }
-  })*/
-  //let res = await fetch(url, fetchData);
-  //form.pipe(res)
-  // throw API errors
-  if (!res.ok) {
-    const data = await res.json();
-    console.log(endpoint);
-    //console.log(JSON.stringify(options))
-    console.log(JSON.stringify(data))
-    if(data.retry_after) {
-      await sleep(data.retry_after*1000)
-      res = await DiscordUploadRequest(endpoint, options, files)
-    } else {
-      console.log('Failed upload')
-      console.log(JSON.stringify(res));
-      throw new Error(JSON.stringify(data));
-    }
+  } catch (e) {
+    console.log(e)
   }
   console.log('uploaded')
   // return original response
@@ -168,4 +168,16 @@ export function getRandomEmoji() {
 
 export function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+export function isValidHttpUrl(string) {
+  let url;
+  
+  try {
+    url = new URL(string);
+  } catch (_) {
+    return false;  
+  }
+
+  return url.protocol === "http:" || url.protocol === "https:";
 }

@@ -1,7 +1,6 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions";
-import { fixturesChannels, serverRoles } from "../config/psafServerConfig.js";
+import { serverChannels, serverRoles, transferBanStatus } from "../config/psafServerConfig.js";
 import { DiscordRequest } from "../utils.js";
-import { countries } from "../config/countriesConfig.js";
 
 export const isPSAF = (guild_id) => guild_id === process.env.GUILD_ID
 
@@ -68,31 +67,101 @@ export const getPlayerTeam = (player, teams) =>
   teams.findOne({active:true, id: {$in: player.roles}})
 
 export const displayTeam = (team, noLogo) => (
-  `Team: ${team.flag} ${team.emoji}${team.transferBan?' :octagonal_sign:':''} ${team.name} - ${team.shortName}` +
+  `Team: ${team.flag} ${team.emoji}${team.transferBan? (team.transferBan === transferBanStatus.transferBan ? ' :octagonal_sign:': ' :no_entry:'):''} ${team.name} - ${team.shortName}` +
   `\r> Budget: ${new Intl.NumberFormat('en-US').format(team.budget)}` +
   `\r> City: ${team.city}` +
   `\r> Palmarès: ${team.description || 'None'}` +
+  `${team.channel ? `\r> Channel: https://discord.com/channels/1072193923100966992/${team.channel}` : ''}` +
   `${noLogo ? '': `\r> Logo: ${team.logo || 'None'}`}`
 )
 
-export const genericFormatMatch = (teams, match) => {
-  const league = fixturesChannels.find(({value})=> value === match.league)
+export const genericFormatMatch = (teams, match, allLeagues) => {
+  const league = allLeagues.find(({value})=> value === match.league)
   const homeTeam = teams.find(({id})=> id === match.home)
   const awayTeam = teams.find(({id})=> id === match.away)
   let response = `<${league.emoji}> **| ${league.name} ${match.matchday}** - <t:${match.dateTimestamp}:F>`
     response += `\r> ${homeTeam.flag} ${homeTeam.emoji} <@&${homeTeam.id}> ${match.finished ? `**${match.homeScore} - ${match.awayScore}**`: ' :vs: '} <@&${awayTeam.id}> ${awayTeam.emoji} ${awayTeam.flag}`
   return response
 }
-export const genericInterFormatMatch = (teams, match) => {
-  const league = fixturesChannels.find(({value})=> value === match.league)
-  const homeTeam = teams.find(({name})=> name === match.home)
-  const awayTeam = teams.find(({name})=> name === match.away)
+export const genericInterFormatMatch = (nations, nationalSelections, match, allLeagues) => {
+  const league = allLeagues.find(({value})=> value === match.league)
+  const homeTeam = nationalSelections.find(({shortname})=> shortname === match.home)
+  const awayTeam = nationalSelections.find(({shortname})=> shortname === match.away)
+  const homeNation = nations.find(nation=>nation.name===homeTeam.eligiblenationality)
+  const awayNation = nations.find(nation=>nation.name===awayTeam.eligiblenationality)
   let response = `<${league.emoji}> **| ${league.name} ${match.matchday}** - <t:${match.dateTimestamp}:F>`
-    response += `\r> ${homeTeam.flag} ${homeTeam.name} ${match.finished ? `**${match.homeScore} - ${match.awayScore}**`: ' :vs: '} ${awayTeam.name} ${awayTeam.flag}`
+    response += `\r> ${homeNation.flag} ${homeTeam.name} ${match.finished ? `**${match.homeScore} - ${match.awayScore}**`: ' :vs: '} ${awayTeam.name} ${awayNation.flag}`
   return response
 }
 
-export const isStaffRole = (role) => [serverRoles.presidentRole, serverRoles.adminRole, serverRoles.psafManagementRole, serverRoles.trialStaffRole].includes(role)
+export const handleSubCommands = async ({interaction_id, token, options, ...rest}, subCommands) => {
+  const subCommand = options[0]
+  console.log(interaction_id, token)
+  await waitingMsg({interaction_id, token})
+  if(subCommands[subCommand?.name]) {
+    return subCommands[subCommand?.name]({...rest, token, options: subCommand.options})
+  }
+}
+
+export const removeSubCommands = (commands) => (
+  commands.map(command => (
+    {...command, options: command.options.map(option => {
+      // eslint-disable-next-line no-unused-vars
+      const {func, ...rest} = option
+      return rest
+    })})
+  )
+)
+
+export const isStaffRole = (role) => [serverRoles.presidentRole, serverRoles.adminRole, serverRoles.psafManagementRole, serverRoles.trialStaffRole, serverRoles.psoStaffRole].includes(role)
+
+export const isMemberStaff = async (guildMember) => {
+  return (guildMember.roles.find(role => isStaffRole(role)))
+}
+const supportedServers = [process.env.GUILD_ID, process.env.WC_GUILD_ID]
+
+export const isServerSupported = (guild_id) => 
+  supportedServers.includes(guild_id)
+
+export const isLineupChannel = (guild_id, channel_id) =>
+  (guild_id === process.env.GUILD_ID && channel_id === serverChannels.lineupsChannelId) 
+  || (guild_id === process.env.WC_GUILD_ID && channel_id === serverChannels.wcLineupsChannelId)
+
+export const getRegisteredRole = (guild_id) => {
+  if(guild_id === process.env.GUILD_ID) {
+    return serverRoles.registeredRole
+  }
+  if(guild_id === process.env.WC_GUILD_ID) {
+    return serverRoles.wcRegisteredRole
+  }
+  throw new Error('Server unsupported')
+}
+
+export const getNationalCaptainRole = (guild_id) => {
+  if(guild_id === process.env.GUILD_ID) {
+    return serverRoles.nationalTeamCaptainRole
+  }
+  if(guild_id === process.env.WC_GUILD_ID) {
+    return serverRoles.wcNationalCoachRole
+  }
+  throw new Error('Server unsupported')
+}
+
+export const isSteamIdIncorrect = (steamId="") => {
+  if(steamId === null || !steamId.includes("steamcommunity.com/profiles/") && !steamId.includes("steamcommunity.com/id/") ) {
+    return 'Invalid Steam ID. Please enter the URL shown when you are in your Steam profile page.'
+  }
+}
+
+export const getNationalSelectionChannel = (guild_id) => {
+  if(guild_id === process.env.GUILD_ID) {
+    return serverChannels.nationalSelectionsChannelId
+  }
+  if(guild_id === process.env.WC_GUILD_ID) {
+    return serverChannels.wcNationalSelectionsChannelId
+  }
+  throw new Error('Server unsupported')
+}
 
 export const sleep = (ms) => {
   return new Promise((resolve) => {
@@ -127,6 +196,9 @@ export const quickResponse = async ({interaction_id, token, content, isEphemeral
     }
   })
 
+export const silentResponse = async ({interaction_id, token, content}) =>
+  quickResponse({interaction_id, token, content, isEphemeral: true})
+
 export const updateResponse = async ({application_id, token, content}) => 
   DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
     method: 'PATCH',
@@ -136,13 +208,14 @@ export const updateResponse = async ({application_id, token, content}) =>
     }
   })
 
-export const postMessage = async({channel_id, content='', components = []}) =>
+export const postMessage = async({channel_id, content='', components = [], attachments = []}) =>
   DiscordRequest(`/channels/${channel_id}/messages`, 
   {
     method: 'POST',
     body: {
       content,
-      components
+      components,
+      attachments
     }
   })
 
@@ -153,8 +226,6 @@ export const isNumeric = (str) => {
           !isNaN(parseFloat(str)) // ...and ensure strings of whitespace fail
 }
 
-export const autocompleteCountries = countries.map(({name, flag})=> ({name, flag, display: flag+name, search: name.toLowerCase()}))
-
 //stolen from stackoverflow
 export const shuffleArray = (array) => {
   for (var i = array.length - 1; i > 0; i--) {
@@ -164,3 +235,10 @@ export const shuffleArray = (array) => {
       array[j] = temp;
   }
 }
+
+export const batchesFromArray = (source, size = 50) => (
+  Array.from(
+    new Array(Math.ceil(source.length / size)),
+    (_, i) => source.slice(i * size, i * size + size)
+  )
+)

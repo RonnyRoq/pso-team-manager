@@ -1,32 +1,15 @@
-import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
+import { InteractionResponseFlags } from "discord-interactions"
 import { DiscordRequest } from "../../utils.js"
-import { msToTimestamp } from "../../functions/helpers.js"
+import { msToTimestamp, quickResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
 
 const clubManagerRole = '1072620773434462318'
 
 export const listDeals = async({dbClient, interaction_id, token, application_id, member}) => {
   if(!member.roles.includes(clubManagerRole)) {
-    return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-      method: 'POST',
-      body: {
-        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: 'Only Club Managers can list deals.',
-          flags: InteractionResponseFlags.EPHEMERAL,
-        }
-      }
-    })
+    return quickResponse({interaction_id, token, content:'Only Club Managers can list deals.', isEphemeral: true})
   }
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        flags: InteractionResponseFlags.EPHEMERAL,
-      }
-    }
-  })
-  
+  await waitingMsg({interaction_id, token})
+
   const{team, teamsDeals, teamsLoans} = await dbClient(async ({teams, pendingDeals, pendingLoans})=> {
     const team = await teams.findOne({$or: member.roles.map(id=> ({id})), active: true})
     const teamsDeals = await pendingDeals.find({approved: null, $or: [{teamFrom: team.id}, {destTeam: team.id}]}).toArray()
@@ -38,13 +21,7 @@ export const listDeals = async({dbClient, interaction_id, token, application_id,
     }
   })
   const content = teamsDeals.length > 0 ? `Pending deals for <@&${team.id}>:\r` : `No pending deals for <@&${team.id}>.`
-  await DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-    method: 'PATCH',
-    body: {
-      content,
-      flags: InteractionResponseFlags.EPHEMERAL,
-    }
-  })
+  await updateResponse({application_id, token, content})
   await Promise.all([...teamsDeals.map(({_id, playerId, teamFrom, destTeam, amount, expiresOn})=>{
     const content = `TRANSFER: <@${playerId}> from <@&${teamFrom}> to <@&${destTeam}> for ${new Intl.NumberFormat('en-US').format(amount)} (expires on <t:${msToTimestamp(expiresOn)}:F>)` 
     return DiscordRequest(`/webhooks/${application_id}/${token}`, {

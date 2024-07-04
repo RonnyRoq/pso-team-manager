@@ -35,13 +35,13 @@ export const disbandTeam = async ({interaction_id, token, options}) => {
 }
 
 export const disbandTeamConfirmed = async ({interaction_id, custom_id, guild_id, token, member, callerId, dbClient}) => {
-  if(!member.roles.find(role => role === serverRoles.adminRole || role === serverRoles.presidentRole)) {
+  if(!member.roles.find(role => role === serverRoles.presidentRole)) {
     return await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
       method: 'POST',
       body: {
         type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: `Only Admins and Presidents can disband`,
+          content: `Only Presidents can disband`,
           flags: InteractionResponseFlags.EPHEMERAL
         }
       }

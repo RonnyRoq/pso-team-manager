@@ -2,6 +2,15 @@ import { InteractionResponseFlags, InteractionResponseType } from "discord-inter
 import { DiscordRequest } from "../utils.js"
 import { getAllPlayers } from "../functions/playersCache.js"
 import { serverRoles } from "../config/psafServerConfig.js"
+import { optionsToObject, waitingMsg } from "../functions/helpers.js"
+
+export const blacklist = async ({interaction_id, token, dbClient, application_id, options}) => {
+  await waitingMsg({interaction_id, token})
+  const {player, until} = optionsToObject(options)
+  const content = await dbClient(({blacklists})=> {
+
+  })
+}
 
 export const showBlacklist = async ({interaction_id, token, guild_id, application_id, dbClient}) => {
   await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {

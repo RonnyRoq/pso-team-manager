@@ -5,7 +5,7 @@ export const voteAction = async ({dbClient, interaction_id, application_id, toke
   const [,coachVote] = custom_id.split('_')
   await dbClient(async({votes, players})=> {
     const dbPlayer = await players.findOne({id: callerId})
-    await votes.updateOne({playerId: dbPlayer.id}, {$set: {playerId:dbPlayer.id, nation: dbPlayer.nat1, coachVote}}, {upsert: true})
+    await votes.updateOne({playerId: dbPlayer.id}, {$set: {playerId:dbPlayer.id, nation: dbPlayer.nat1, coachVote, votingTime: Date.now()}}, {upsert: true})
   })
   await updateResponse({application_id, token, content:'Vote saved'})
 }

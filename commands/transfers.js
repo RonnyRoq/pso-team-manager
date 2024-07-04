@@ -7,7 +7,7 @@ import { seasonPhases } from "./season.js"
 const logWebhook = process.env.WEBHOOK
 const clubPlayerRole = '1072620805600592062'
 
-const innerTransferAction = async ({teams, contracts, seasonsCollect, guild_id, playerId, team, seasons, desc, callerId, amount=0, pendingLoan, transferHistory}) => {
+const innerTransferAction = async ({teams, contracts, seasonsCollect, players, guild_id, playerId, team, seasons, desc, callerId, amount=0, pendingLoan, transferHistory}) => {
   const [dbTeam, playerResp] = await Promise.all([
     teams.findOne({id: team}),
     DiscordRequest(`/guilds/${guild_id}/members/${playerId}`, {}),
@@ -16,10 +16,10 @@ const innerTransferAction = async ({teams, contracts, seasonsCollect, guild_id, 
     await contracts.updateMany({playerId, endedAt:null}, {$set: {endedAt: Date.now()}})
   }
   const currentSeason = await getCurrentSeason(seasonsCollect)
-  const playerTransfer = await playerResp.json();
+  const playerTransfer = await playerResp.json()
   playerTransfer.roles = playerTransfer.roles || []
   const teamFrom = await teams.findOne({active:true, $or:[...playerTransfer.roles.map(role=>({id:role})), {id:'1'}]}) //little trick to force the search if the array is empty (no roles)
-  const playerName = getPlayerNick(playerTransfer);
+  const playerName = getPlayerNick(playerTransfer)
   const displayName = teamFrom ? removePlayerPrefix(teamFrom.shortName, playerName) : playerName
   const transferAmount = teamFrom ? (pendingLoan ? pendingLoan.amount : amount) : 0
   const updatedPlayerName = addPlayerPrefix(dbTeam.shortName, displayName)
@@ -33,6 +33,7 @@ const innerTransferAction = async ({teams, contracts, seasonsCollect, guild_id, 
     teams.updateOne({id: dbTeam?.id}, {$set: {budget: dbTeam.budget-transferAmount}}),
     teamFrom ? teams.updateOne({id: teamFrom.id}, {$set: {budget: teamFrom.budget+transferAmount}}) : Promise.resolve(),
     transferHistory.insertOne({playerId, at: Date.now(), teamFrom: teamFrom ? teamFrom.id : 'Free Agent', teamTo: team, transferAmount, length: seasons, until: currentSeason+seasons, desc, ...loanDetails, isLoan: !!pendingLoan}),
+    players.updateOne({id: playerId}, {$set: {name: updatedPlayerName}}),
     DiscordRequest(`guilds/${guild_id}/members/${playerId}`, {
       method: 'PATCH',
       body: payload
@@ -54,16 +55,9 @@ const endOfLoanMessage = ({playerId, team, teamFromId, callerId}) =>
 `# <@&${teamFromId}> :arrow_right: <@&${team}>\r> <@${playerId}>\r> **LOAN ENDED** Player is returning to his club.\r*(from <@${callerId}>)*`
 
 export const transferAction = async ({interaction_id, token, application_id, message, dbClient, callerId, guild_id}) => {
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        flags: InteractionResponseFlags.EPHEMERAL
-      }
-    }
-  })
-  const {done, content} = await dbClient(async ({teams, contracts, seasonsCollect, confirmations, pendingDeals, pendingLoans, transferHistory}) => {
+  await waitingMsg({interaction_id, token})
+
+  const {done, content} = await dbClient(async ({teams, contracts, players, seasonsCollect, confirmations, pendingDeals, pendingLoans, transferHistory}) => {
     const confirmation = await confirmations.findOne({adminMessage: message.id})
     if(confirmation) {
       console.log(confirmation)
@@ -72,11 +66,15 @@ export const transferAction = async ({interaction_id, token, application_id, mes
       if(pendingDeal && pendingDeal.destTeam !== team) {
         return {content:`<@${playerId}> has a deal with a different team, can't confirm`}
       }
+      const destTeam = await teams.findOne({id: team})
       let pendingLoan
       if(!pendingDeal) {
         pendingLoan = await pendingLoans.findOne({playerId, approved: true})
       }
-      const content = await innerTransferAction({teams, contracts, seasonsCollect, seasons, guild_id, playerId, team, callerId, amount: pendingDeal?.amount, pendingLoan, transferHistory})
+      if(pendingDeal?.amount && destTeam?.budget < pendingDeal?.amount ){
+        return {content: `<@&${team}> has ${destTeam.budget}EBits, they can't pay ${pendingDeal?.amount}`}
+      }
+      const content = await innerTransferAction({teams, contracts, seasonsCollect, players, seasons, guild_id, playerId, team, callerId, amount: pendingDeal?.amount, pendingLoan, transferHistory})
       await innerRemoveConfirmation({reason: `Approved by <@${callerId}>`, ...confirmation, confirmations, pendingDeals, pendingLoans})
       return {done: true, content}
     }
@@ -108,8 +106,8 @@ export const transfer = async ({options, guild_id, application_id, interaction_i
     }
   })
   const {player: playerId, team, seasons, desc} = Object.fromEntries(options.map(({name, value})=> [name, value]))
-  const content = await dbClient(async ({teams, contracts, seasonsCollect, transferHistory})=> (
-    innerTransferAction({teams, contracts, seasonsCollect, transferHistory, guild_id, playerId, team, seasons, desc, callerId, amount: 0})
+  const content = await dbClient(async ({teams, contracts, players, seasonsCollect, transferHistory})=> (
+    innerTransferAction({teams, contracts, seasonsCollect, players, transferHistory, guild_id, playerId, team, seasons, desc, callerId, amount: 0})
   ))
   await DiscordRequest(logWebhook, {
     method: 'POST',
@@ -137,8 +135,8 @@ export const teamTransfer = async ({options, guild_id, interaction_id, token, db
     }
   })
   const {player:playerId, team, amount, seasons, desc} = optionsToObject(options)
-  const content = await dbClient(async ({teams, contracts, seasonsCollect, transferHistory})=> (
-    innerTransferAction({teams, contracts, seasonsCollect, transferHistory, guild_id, playerId, team, seasons, desc, callerId, amount})
+  const content = await dbClient(async ({teams, contracts, players, seasonsCollect, transferHistory})=> (
+    innerTransferAction({teams, contracts, players, seasonsCollect, transferHistory, guild_id, playerId, team, seasons, desc, callerId, amount})
   ))
   await DiscordRequest(logWebhook, {
     method: 'POST',
@@ -359,8 +357,16 @@ export const endLoan = async ({callerId, guild_id, player, playerId, teamToRetur
   return endOfLoanMessage({playerId, team: teamToReturn.id, teamFromId: endLoanTeam.id, callerId})
 }
 const allowedFilters = ["_id", "playerId", "teamFrom", "teamTo", "length", "until", "isLoan"]
+
+
 export const getTransfers = async ({getParams, dbClient}) => {
-  let {limit = 100, skip = 0, ...filters} = getParams
+  let {limit = 100, size=100, skip = 0, page=0, ...filters} = getParams
+  if(size !== 100) {
+    limit = size
+  }
+  if(!skip) {
+    skip = page * limit
+  }
   limit = Math.max(limit, 100)
   let query = {}
   const {before, after, under, over, ...queryFilters} = filters
@@ -394,8 +400,8 @@ export const getTransfers = async ({getParams, dbClient}) => {
     ...query,
     ...filteredQueryFilters
   }
-  console.log(query)
-  return dbClient(({transferHistory})=>(transferHistory.find(query, {limit, skip}).toArray()))
+  //console.log(query)
+  return dbClient(({transferHistory})=>(transferHistory.find(query, {limit, skip, sort: {at: -1}}).toArray()))
 }
 
 export const transferCmd = {

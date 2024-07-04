@@ -1,7 +1,7 @@
-import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
-import { fixturesChannels } from "../../config/psafServerConfig.js"
-import { optionsToObject } from "../../functions/helpers.js"
-import { DiscordRequest } from "../../utils.js"
+import { optionsToObject, silentResponse } from "../../functions/helpers.js"
+import { leagueChoices } from "../../config/leagueData.js"
+import { showLeagueTeam } from "./addToLeague.js"
+import { getAllLeagues } from "../../functions/leaguesCache.js"
 
 
 export const leagueTeams = async ({options, dbClient, interaction_id, token}) => {
@@ -9,19 +9,12 @@ export const leagueTeams = async ({options, dbClient, interaction_id, token}) =>
   const teams = await dbClient(async ({leagues})=>{
     return leagues.find({leagueId: league}).toArray()
   })
-  const leagueObj = fixturesChannels.find(fixtureLeague=> fixtureLeague.value === league)
+  const allLeagues = await getAllLeagues()
+  const leagueObj = allLeagues.find(fixtureLeague=> fixtureLeague.value === league)
+  console.log(leagueObj)
   const content = `${leagueObj.name} ${teams.length} teams:\r`
-    + teams.map(({team})=> leagueObj.isInternational ? team : `<@&${team}>`).join('\r')
-  return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        flags: InteractionResponseFlags.EPHEMERAL,
-        content
-      }
-    }
-  })
+    + teams.map((leagueTeam)=> showLeagueTeam(leagueObj, leagueTeam)).join('\r')
+  return silentResponse({interaction_id, token, content})
 }
 
 export const leagueTeamsCmd = {
@@ -33,6 +26,6 @@ export const leagueTeamsCmd = {
     name: 'league',
     description: 'League',
     required: true,
-    choices: fixturesChannels.map(({name, value})=> ({name, value}))
+    choices: leagueChoices
   }]
 }

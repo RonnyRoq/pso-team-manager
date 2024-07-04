@@ -114,7 +114,7 @@ export const innerUpdateTeam = async ({guild_id, team, dbClient}) => {
       await DiscordRequest(`/channels/${serverChannels.clubsChannelId}/messages/${dbTeam.teamMsg}`, {
         method: 'PATCH',
         body: {
-          content
+          content: content.substring(0, 1999)
         }
       })
     }

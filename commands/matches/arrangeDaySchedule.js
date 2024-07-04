@@ -21,7 +21,7 @@ export const arrangeDaySchedule = async({dbClient, application_id, interaction_i
   const startDayTimestamp = msToTimestamp(Date.parse(midnight))
   const endDayTimestamp = msToTimestamp(Date.parse(totalEndDay))
 
-  const content = await dbClient(async({matches, teams, nationalities})=> {
+  const content = await dbClient(async({matches, teams, nationalities, leagueConfig})=> {
     const matchesOfDay = await matches.find({dateTimestamp: { $gt: startDayTimestamp, $lt: endDayTimestamp}, $or: [{finished:false}, {finished:null}]}).sort({dateTimestamp:1}).toArray()
     shuffleArray(matchesOfDay)
     
@@ -36,7 +36,7 @@ export const arrangeDaySchedule = async({dbClient, application_id, interaction_i
       }
     }
     for await (const id of processedMatchesIds) {
-      await editAMatchInternal({id, teams, nationalities, matches})
+      await editAMatchInternal({id, teams, nationalities, matches, leagueConfig})
     }
     console.log('done')
     //await Promise.allSettled(processedMatchesIds.map(id => editAMatchInternal({id, teams, nationalities, matches})))

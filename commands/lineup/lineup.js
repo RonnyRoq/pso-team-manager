@@ -1,13 +1,48 @@
 import {
   InteractionResponseType,
 } from 'discord-interactions';
-import { getPlayerTeam, getPlayerNick, optionsToObject, msToTimestamp, postMessage, genericFormatMatch, quickResponse, waitingMsg, updateResponse, genericInterFormatMatch } from '../../functions/helpers.js';
+import { getPlayerTeam, getPlayerNick, optionsToObject, msToTimestamp, postMessage, genericFormatMatch, waitingMsg, updateResponse, genericInterFormatMatch, getRegisteredRole, getCurrentSeason, isServerSupported, isLineupChannel, handleSubCommands } from '../../functions/helpers.js';
 import { getAllPlayers } from '../../functions/playersCache.js';
-import { lineupBlacklist, lineupRolesBlacklist, lineupRolesWhitelist, serverChannels, serverRoles } from '../../config/psafServerConfig.js';
+import { lineupBlacklist, lineupRolesBlacklist, lineupRolesWhitelist, serverChannels, serverRoles, wcLineupBlacklist, wcLineupRolesWhilelist } from '../../config/psafServerConfig.js';
 import { DiscordRequest } from '../../utils.js';
+import { getAllLeagues } from '../../functions/leaguesCache.js';
 
 const nonLineupAttributes = ['_id', 'team', 'matchId', 'vs']
 const steam = '<:steam:1201620242015719454>'
+
+const positionsOrder = {
+  gk: 'GK',
+  lb: 'LB',
+  lcb: 'LCB',
+  cb: 'CB',
+  rcb: 'RCB',
+  rb: 'RB',
+  lm: 'LM',
+  lcm: 'LCM',
+  cm: 'CM',
+  rcm: 'RCM',
+  rm: 'RM',
+  lw: 'LW',
+  lf: 'LF',
+  lst: 'LST',
+  st: 'ST',
+  rst: 'RST',
+  rf: 'RF',
+  rw: 'RW',
+}
+
+const subsOrder = [
+  "sub1",
+  "sub2",
+  "sub3",
+  "sub4",
+  "sub5",
+  "sub6",
+]
+
+export const isOfficialLineup = (guild_id, channel_id) => {
+  return (guild_id === process.env.GUILD_ID && channel_id === serverChannels.lineupsChannelId)
+}
 
 export const formatDMLineup = ({gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5, cb, lcm, rcm, lst, rst}) => {
   let response = `**GK:** ${gk.name} (<@${gk.id}>)\r`;
@@ -43,6 +78,30 @@ export const formatDMLineup = ({gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, 
   }
   if(sub5?.id) {
     response += `, ${sub5.name} (<@${sub5.id}>)`;
+  }
+  return response
+}
+
+export const formatGenericLineup = (lineup, admin = false) => {
+  const referencePositionsKeys = Object.keys(positionsOrder)
+  const lineupEntries = Object.entries(lineup)
+  const entries = lineupEntries.filter(([key])=> referencePositionsKeys.includes(key)).sort(([a], [b])=> referencePositionsKeys.indexOf(a) - referencePositionsKeys.indexOf(b))
+  const subsEntries = lineupEntries.filter(([key])=> subsOrder.includes(key)).sort(([a], [b])=> subsOrder.indexOf(a)- subsOrder.indexOf(b))
+  let response = ''
+  if(lineup?.gk?.id) {
+    response = entries.map(([key, value])=> `**${positionsOrder[key]}:** <@${value.id}> ${value.registered ? steam: ''}${value.ingamename ? ` (${value.ingamename})`: ''}${admin && value.steam ? ' '+value.steam:''}`).join('\r')
+    if(subsEntries.length>0)
+      response += "\rSubs: "
+      response += subsEntries.map(([, value])=> `<@${value.id}> ${value.registered ? steam : ''}${value.ingamename ? ` (${value.ingamename})`: ''}${admin && value.steam ? ' '+value.steam:''}`).join(', ')
+  } else {
+    response = entries.map(([key, value])=> `**${positionsOrder[key]}:** <@${value}>\r`).join('\r')
+    if(subsEntries.length>0) {
+      response += "\rSubs: "
+      response += subsEntries.map(([, value])=> `<@${value.id}>`).join(', \r')
+    }
+  }
+  if(lineup?.publicId) {
+    response += `> Lineup ID: ${lineup.publicId}`
   }
   return response
 }
@@ -151,10 +210,8 @@ export const formatEightLineup = ({gk, lb, cb, rb, lcm, rcm, lst, rst, sub1, sub
   }
 }
 
-const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam, member, edit=false, guild_id, isInternational, interaction_id, token, application_id, channel_id, isEightPlayers }) => {
-  const lineupFormatFunction = isEightPlayers ? formatEightLineup : formatLineup
-  if(process.env.GUILD_ID === guild_id && channel_id === serverChannels.lineupsChannelId) {
-    await waitingMsg({interaction_id, token})
+const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam, member, guild_id, isInternational, channel_id }) => {
+  if(isOfficialLineup(guild_id, channel_id)) {
     let playerTeam= ''
     const startOfDay = new Date()
     startOfDay.setUTCHours(startOfDay.getHours()-1,0,0,0)
@@ -163,57 +220,66 @@ const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam,
     const startDateTimestamp = msToTimestamp(Date.parse(startOfDay))
     const endDateTimestamp = msToTimestamp(Date.parse(endOfDay))
     
-    return await dbClient(async ({teams, matches, nationalities, players, lineups})=>{
-      const [dbPlayer, nations] = await Promise.all([
-        players.findOne({id: member.user.id}),
-        nationalities.find({}).toArray()
+    return await dbClient(async ({teams, matches, nationalities, players, lineups, nationalTeams, nationalContracts, seasonsCollect})=>{
+      const season = await getCurrentSeason(seasonsCollect)
+      const [dbPlayer, nations, nationalSelections, selfNationalContract] = await Promise.all([
+        players.findOne({id: callerId}),
+        nationalities.find({}).toArray(),
+        nationalTeams.find({active: true}).toArray(),
+        nationalContracts.findOne({season, playerId: callerId})
       ])
-      const nation = nations.find(item=> item.name === dbPlayer.nat1)
-      const memberTeam = await getPlayerTeam(member, teams)
-      const teamId = isInternational ? nation.name: memberTeam.id
+      const memberTeam = await (!isInternational ? getPlayerTeam(member, teams) : nationalSelections.find(selection=> selection.shortName=== selfNationalContract.selection))
+      const teamId = isInternational ? memberTeam.shortname: memberTeam?.id
+      const nation = isInternational ? memberTeam.eligiblenationality : nations.find(item=> item.name === dbPlayer.nat1)
       const nextMatches = await matches.find({isInternational: isInternational ? isInternational : {$ne: true}, dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, finished: {$in: [false, null]}, $or: [{home: teamId}, {away: teamId}]}).sort({dateTimestamp:1}).toArray()
       const nextMatch = nextMatches[0]
-      const matchId = nextMatch?._id?.toString() || ''
-      let previousLineup = {}
-      if(edit) {
+      const theMatchId = nextMatch?._id?.toString() || ''
+      let previousLineupToSave = {}
+      /*if(edit) {
         if(!nextMatch){
-          return updateResponse({application_id, token, content: `Cannot find the lineup you're trying to edit`})
+          return `Cannot find the lineup you're trying to edit`
         }
-        previousLineup = await lineups.findOne({matchId, team: teamId})
+        const previousLineup = await lineups.findOne({matchId:theMatchId, team: teamId})
         if(!previousLineup) {
-          return updateResponse({application_id, token, content: `Cannot find the lineup you're trying to edit`})
+          return `Cannot find the lineup you're trying to edit`
         }
-      }
+        previousLineupToSave = Object.fromEntries(Object.entries(previousLineup).filter(([key])=>!nonLineupAttributes.includes(key)))
+      }*/
+      const matchId = theMatchId
       if(nextMatch) {
+        const allLeagues = await getAllLeagues()
         if(!isInternational){
           const teamsOfMatch = await teams.find({$or:[{id:nextMatch.home}, {id:nextMatch.away}]}).toArray()
-          playerTeam = genericFormatMatch(teamsOfMatch, nextMatch) + '\r'
+          playerTeam = genericFormatMatch(teamsOfMatch, nextMatch, allLeagues) + '\r'
         } else {
-          genericInterFormatMatch(nations, nextMatch)
+          genericInterFormatMatch(nations, nationalSelections, nextMatch, allLeagues)
         }
         await lineups.updateOne({matchId, team: teamId}, {
           $setOnInsert: {
             matchId,
-            team: teamId
+            team: teamId,
+            postedBy: callerId,
           },
           $set: {
-            ...previousLineup,
+            ...previousLineupToSave,
             ...lineup
           }
         }, {upsert: true})
       }
-      let lineupPlayers = await players.find({id: {$in: Object.values(lineup)}}).toArray()
+      let lineupPlayers = await players.find({id: {$in: Object.values(lineup)}}, {projection: {id:1, steam: 1, ingamename: 1}}).toArray()
       playerTeam += isInternational ? nation.flag + ' ' + nation.name + ' ' : memberTeam.emoji+' ' + memberTeam.name + ' '
-      lineupPlayers = lineupPlayers.filter(lineupPlayer=> lineupPlayer.steam)
-      objLineup = Object.fromEntries(Object.entries(objLineup).map(posLineup=> ({...(lineupPlayers.find(lineupPlayer => lineupPlayer.id === posLineup?.id)|| {}), ...posLineup})))
-      
+      //lineupPlayers = lineupPlayers.filter(lineupPlayer=> lineupPlayer.steam)
+      objLineup = Object.fromEntries(Object.entries(objLineup).map(([position, objPlayer])=> {
+        const player = (lineupPlayers.find(lineupPlayer => lineupPlayer.id === objPlayer.id))
+        return ([position, {...objPlayer, ...player}])
+      }))
       let response = `\r<@${callerId}> posted:\r${playerTeam}lineup ${lineup.vs? `vs ${lineup.vs}`: ''}\r`
-      response += lineupFormatFunction({vs: lineup.vs, ...objLineup})
-      console.log(response)
-
-      let threadMessage = `\r<@${callerId}> posted:\r${playerTeam}lineup ${lineup.vs? `vs ${lineup.vs}`: ''}\r`
-      threadMessage += lineupFormatFunction({vs: lineup.vs, ...objLineup, admin: true})
+      response += formatGenericLineup({vs: lineup.vs, ...objLineup})
       
+      let threadMessage = `\r<@${callerId}> posted:\r${playerTeam}lineup ${lineup.vs? `vs ${lineup.vs}`: ''}\r`
+      threadMessage += formatGenericLineup({vs: lineup.vs, ...objLineup}, true)
+      
+
       const messageResp = await postMessage({channel_id, content: response})
       const message = await messageResp.json()
       if(nextMatch?.thread) {
@@ -232,14 +298,13 @@ const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam,
       if(matchId){
         await lineups.updateOne({matchId, team: teamId}, {$set: {message: message.id}})
       }
-      return updateResponse({application_id, token, content: response})
+      return response
     })
   } else {
     let response = `<@${callerId}> posted:\r${playerTeam? playerTeam : ''}lineup ${lineup.vs? `vs ${lineup.vs}`: ''}\r`
-    response += lineupFormatFunction({vs: lineup.vs, ...objLineup})
-    console.log(response)
-    
-    return quickResponse({interaction_id, token, content: response})
+    response += formatGenericLineup({vs: lineup.vs, ...objLineup})
+    await postMessage({channel_id, content: response})
+    return response
   }
 }
 
@@ -251,8 +316,22 @@ const verifyClubLineup = (discPlayer, playerId) => {
   if(discPlayer.roles.some(role => lineupRolesBlacklist.includes(role))) {
     response.message = `<@${playerId}> is not eligible to play`
   }
-  if(!discPlayer.roles.some(role => lineupRolesWhitelist.includes(role))) {
-    response.message =`<@${playerId}> isn't verified`
+  if(!discPlayer.roles.some(role => lineupRolesWhitelist === role)) {
+    response.message =`<@${playerId}> isn't verified/registered`
+  }
+  return response
+}
+
+const verifyWCLineup = (discPlayer, playerId) => {
+  const response = {}
+  if(lineupBlacklist.includes(playerId)) {
+    response.message = `<@${playerId}> can't be included in a lineup`
+  }
+  if(discPlayer.roles.some(role => wcLineupBlacklist.includes(role))) {
+    response.message = `<@${playerId}> is not eligible to play`
+  }
+  if(!discPlayer.roles.some(role => wcLineupRolesWhilelist === role)) {
+    response.message =`<@${playerId}> isn't registered`
   }
   return response
 }
@@ -268,7 +347,7 @@ const verifyInternationalLineup = (discPlayer, playerId) => {
   if(!discPlayer.roles.includes(serverRoles.nationalTeamPlayerRole)) {
      response.message = `<@${playerId}> is not an international player`
   }
-  if(!discPlayer.roles.some(role => lineupRolesWhitelist.includes(role))) {
+  if(!discPlayer.roles.some(role => lineupRolesWhitelist === role)) {
      response.message = `<@${playerId}> isn't verified`
   }
   return response
@@ -278,7 +357,7 @@ export const editLineup = async({options, interaction_id, callerId, token, membe
   return lineup({options, interaction_id, callerId, token, member, edit:true, guild_id, application_id, channel_id, dbClient})
 }
 
-export const lineup = async({options, interaction_id, callerId, token, member, edit = false, guild_id, application_id, channel_id, dbClient}) => {
+export const lineup = async({options, callerId, token, member, edit = false, guild_id, application_id, channel_id, dbClient}) => {
   const lineup = optionsToObject(options)
   const allPlayers = await getAllPlayers(guild_id)
   let forbiddenUsersList = []
@@ -297,9 +376,12 @@ export const lineup = async({options, interaction_id, callerId, token, member, e
       })
   )
   if(forbiddenUsersList.length>0) {
-    return quickResponse({interaction_id, token, content: `Can't post this lineup, restricted users: \r${forbiddenUsersList.join('\r')}`})
+    const content = forbiddenUsersList.join('\r')
+    await postMessage({channel_id, content})
+    return updateResponse({application_id, token, content})
   }
-  return saveLineup({dbClient, lineup, callerId, objLineup, member, edit, application_id, guild_id, isInternational:false, interaction_id, token, channel_id, isEightPlayers: false})
+  const content = await saveLineup({dbClient, lineup, callerId, objLineup, member, edit, application_id, guild_id, isInternational:false, token, channel_id, isEightPlayers: false})
+  return updateResponse({application_id, token, content})
 }
 
 export const internationalLineup = async ({options, member, callerId, guild_id, interaction_id, application_id, token, channel_id, dbClient}) => {
@@ -321,9 +403,12 @@ export const internationalLineup = async ({options, member, callerId, guild_id, 
       })
   )
   if(forbiddenUsersList.length>0) {
-    return quickResponse({interaction_id, token, content: `Can't post this lineup, restricted users: ${forbiddenUsersList.join(', ')}`})
+    await postMessage({channel_id, content})
+    return updateResponse({application_id, token, content})
   }
-  return saveLineup({dbClient, lineup, callerId, objLineup, member, guild_id, application_id, isInternational:true, interaction_id, token, channel_id, isEightPlayers: false})
+  await waitingMsg({interaction_id, token})
+  const content = await saveLineup({dbClient, lineup, callerId, objLineup, member, guild_id, application_id, isInternational:true, interaction_id, token, channel_id, isEightPlayers: false})
+  return updateResponse({application_id, token, content})
 }
 
 export const editEightLineup = ({options, interaction_id, callerId, token, application_id, channel_id, member, guild_id, dbClient}) => 
@@ -331,6 +416,7 @@ export const editEightLineup = ({options, interaction_id, callerId, token, appli
 
 export const eightLineup = async ({options, interaction_id, callerId, token, application_id, channel_id, edit=false, member, guild_id, dbClient}) => {
   const lineup = optionsToObject(options)
+  await waitingMsg({interaction_id, token})
   const allPlayers = await getAllPlayers(guild_id)
   let forbiddenUsersList = []
   let objLineup = Object.fromEntries(
@@ -348,9 +434,10 @@ export const eightLineup = async ({options, interaction_id, callerId, token, app
       })
   )
   if(forbiddenUsersList.length>0) {
-    return quickResponse({interaction_id, token, content: `Can't post this lineup, restricted users: ${forbiddenUsersList.join(', ')}`})
+    return postMessage({channel_id, content: `<@${callerId}> - Can't post this lineup, restricted users: ${forbiddenUsersList.join(', ')}`})
   }
-  return saveLineup({dbClient, lineup, callerId, objLineup, member, guild_id, application_id, edit, isInternational:false, interaction_id, token, channel_id, isEightPlayers: true})
+  const content = await saveLineup({dbClient, lineup, callerId, objLineup, member, guild_id, application_id, edit, isInternational:false, interaction_id, token, channel_id, isEightPlayers: true})
+  return updateResponse({application_id, token, content})
 }
 
 const findPlayerNick = (playersList, id) => {
@@ -376,8 +463,9 @@ export const boxLineup = async ({res, options, member, guild_id, dbClient}) => {
       const nextMatches = await matches.find({dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, finished: {$in: [false, null]}, $or: [{home: memberTeam.id}, {away: memberTeam.id}]}).sort({dateTimestamp:1}).toArray()
       const nextMatch = nextMatches[0]
       if(nextMatch) {
+        const allLeagues = await getAllLeagues()
         const teamsOfMatch = await teams.find({active: true, $or:[{id:nextMatch.home}, {id:nextMatch.away}]}).toArray()
-        playerTeam = genericFormatMatch(teamsOfMatch, nextMatch) + '\r'
+        playerTeam = genericFormatMatch(teamsOfMatch, nextMatch, allLeagues) + '\r'
         const matchId = nextMatch._id.toString()
         await lineups.updateOne({matchId, team:memberTeam.id}, {
           $setOnInsert: {
@@ -504,11 +592,56 @@ export const boxLineup = async ({res, options, member, guild_id, dbClient}) => {
   })
 }
 
+const lineupSelections = async(commandOptions) => 
+  handleSubCommands(commandOptions, wcLineupSubCommands)
 
-export const lineupCmd = {
+const lineupClub = async (commandOptions) => 
+  handleSubCommands(commandOptions, clubLineupSubCommands)
+
+const interLineup = async ({options, guild_id, token, application_id, callerId, member, channel_id, dbClient}) => {
+  const lineup = optionsToObject(options)
+  const allPlayers = await getAllPlayers(guild_id)
+  let forbiddenUsersList = []
+  let objLineup = Object.fromEntries(
+    Object.entries(lineup)
+      .filter(([name])=> !nonLineupAttributes.includes(name))
+      .map(([name, value])=> {
+        const discPlayer = allPlayers.find(player=> player?.user?.id === value)
+        if(isServerSupported(guild_id) && isLineupChannel(guild_id, channel_id)) {
+          const response = verifyWCLineup(discPlayer, value)
+          if(response.message) {
+            forbiddenUsersList.push(response.message)
+          }
+        }
+        return [name, {id: value, name: getPlayerNick(discPlayer), registered: discPlayer.roles.includes(getRegisteredRole(guild_id))}]
+      })
+  )
+  if(forbiddenUsersList.length>0) {
+    const content = `<@${callerId}> can't post this lineup, restricted users: ${forbiddenUsersList.join(', ')}`
+    await postMessage({channel_id, content})
+    return updateResponse({application_id, token, content})
+  }
+  const content = await saveLineup({dbClient, lineup, callerId, objLineup, member, guild_id, edit:false, isInternational:true, channel_id, isEightPlayers: true})
+  return updateResponse({application_id, token, content})
+}
+
+const wcLineupSubCommands = {
+  'a': interLineup,
+  'b' : interLineup,
+  'c': interLineup,
+}
+
+const clubLineupSubCommands = {
+  'a': lineup,
+  'b': lineup,
+  'c': lineup,
+}
+const lineupCmd = {
   name: 'lineup',
   description: 'Create a lineup for your team',
   type: 1,
+  app: true,
+  func: eightLineup,
   options: [{
     type: 6,
     name: 'gk',
@@ -566,18 +699,20 @@ export const lineupCmd = {
   }]
 }
 
-export const boxLineupcmd = {...lineupCmd, name: 'boxlineup'}
-export const internationalLineupCmd = {...lineupCmd, name: 'interlineup'}
-export const editLineupCmd = {
+const boxLineupcmd = {...lineupCmd, name: 'boxlineup'}
+const internationalLineupCmd = {...lineupCmd, name: 'interlineup'}
+/*export const editLineupCmd = {
   name: 'lineupedit',
   description: 'Edit a saved lineup for your team',
   type: 1,
   options: lineupCmd.options.map(option=> ({...option, required: false}))
-}
-export const eightLineupCmd = {
+}*/
+const eightLineupCmd = {
   name: 'eightlineup',
   description: 'Create a 8v8 lineup for your team',
   type: 1,
+  app: true,
+  func: eightLineup,
   options: [{
     type: 6,
     name: 'gk',
@@ -649,9 +784,426 @@ export const eightLineupCmd = {
   }]
 }
 
-export const editEightLineupCmd = {
-  name: 'eightlineupedit',
-  description: 'Edit a saved 8v8 lineup for your team',
+const wcLineupCmd = {
+  name: 'wclineup',
+  description: 'Lineup for a World cup match',
   type: 1,
-  options: eightLineupCmd.options.map(option=> ({...option, required:false}))
+  psaf: true,
+  wc: true,
+  func: lineupSelections,
+  options: [{
+    type: 1,
+    name: 'a',
+    description: '3-3-2 Lineup',
+    options: [{
+      type: 6,
+      name: 'gk',
+      description: 'GK',
+      required: true
+    },{
+      type: 6,
+      name: 'lb',
+      description: 'LB',
+      required: true
+    },{
+      type: 6,
+      name: 'cb',
+      description: 'CB',
+      required: true
+    },{
+      type: 6,
+      name: 'rb',
+      description: 'RB',
+      required: true
+    },{
+      type: 6,
+      name: 'lcm',
+      description: 'LCM',
+      required: true
+    },{
+      type: 6,
+      name: 'rcm',
+      description: 'RCM',
+      required: true
+    },{
+      type: 6,
+      name: 'lst',
+      description: 'LST',
+      required: true
+    },{
+      type: 6,
+      name: 'rst',
+      description: 'RST',
+      required: true
+    },{
+      type: 6,
+      name: 'sub1',
+      description: 'Sub1'
+    },{
+      type: 6,
+      name: 'sub2',
+      description: 'Sub2'
+    },{
+      type: 6,
+      name: 'sub3',
+      description: 'Sub3'
+    },{
+      type: 6,
+      name: 'sub4',
+      description: 'Sub4'
+    },{
+      type: 6,
+      name: 'sub5',
+      description: 'Sub5'
+    },{
+      type: 6,
+      name: 'sub6',
+      description: 'Sub6'
+    }, {
+      type: 3,
+      name: 'vs',
+      description: 'Against'
+    }]
+  },{
+    type: 1,
+    name: 'b',
+    description: 'A 3-1-3 lineup',
+    options: [{
+      type: 6,
+      name: 'gk',
+      description: 'GK',
+      required: true
+    },{
+      type: 6,
+      name: 'lb',
+      description: 'LB',
+      required: true
+    },{
+      type: 6,
+      name: 'cb',
+      description: 'CB',
+      required: true
+    },{
+      type: 6,
+      name: 'rb',
+      description: 'RB',
+      required: true
+    },{
+      type: 6,
+      name: 'cm',
+      description: 'CM',
+      required: true
+    },{
+      type: 6,
+      name: 'lw',
+      description: 'LW',
+      required: true
+    },{
+      type: 6,
+      name: 'st',
+      description: 'ST',
+      required: true
+    },{
+      type: 6,
+      name: 'rw',
+      description: 'RW',
+      required: true
+    },{
+      type: 6,
+      name: 'sub1',
+      description: 'Sub1'
+    },{
+      type: 6,
+      name: 'sub2',
+      description: 'Sub2'
+    },{
+      type: 6,
+      name: 'sub3',
+      description: 'Sub3'
+    },{
+      type: 6,
+      name: 'sub4',
+      description: 'Sub4'
+    },{
+      type: 6,
+      name: 'sub5',
+      description: 'Sub5'
+    },{
+      type: 6,
+      name: 'sub6',
+      description: 'Sub6'
+    }, {
+      type: 3,
+      name: 'vs',
+      description: 'Against'
+    }]
+  },{
+    type: 1,
+    name: 'c',
+    description: 'a 4-1-2 lineup',
+    options: [{
+      type: 6,
+      name: 'gk',
+      description: 'GK',
+      required: true
+    },{
+      type: 6,
+      name: 'lb',
+      description: 'LB',
+      required: true
+    },{
+      type: 6,
+      name: 'lcb',
+      description: 'LCB',
+      required: true
+    },{
+      type: 6,
+      name: 'rcb',
+      description: 'RCB',
+      required: true
+    },{
+      type: 6,
+      name: 'rb',
+      description: 'RB',
+      required: true
+    },{
+      type: 6,
+      name: 'cm',
+      description: 'CM',
+      required: true
+    },{
+      type: 6,
+      name: 'lst',
+      description: 'LST',
+      required: true
+    },{
+      type: 6,
+      name: 'rst',
+      description: 'RST',
+      required: true
+    },{
+      type: 6,
+      name: 'sub1',
+      description: 'Sub1'
+    },{
+      type: 6,
+      name: 'sub2',
+      description: 'Sub2'
+    },{
+      type: 6,
+      name: 'sub3',
+      description: 'Sub3'
+    },{
+      type: 6,
+      name: 'sub4',
+      description: 'Sub4'
+    },{
+      type: 6,
+      name: 'sub5',
+      description: 'Sub5'
+    },{
+      type: 6,
+      name: 'sub6',
+      description: 'Sub6'
+    }, {
+      type: 3,
+      name: 'vs',
+      description: 'Against'
+    }]
+  }]
 }
+const startingSix = {
+  name: 'startingsix',
+  description: 'Lineup for a 6v6 match',
+  type: 1,
+  app: true,
+  func: lineupClub,
+  options: [{
+    type: 1,
+    name: 'a',
+    description: '2-1-2 Lineup',
+    options: [{
+      type: 6,
+      name: 'gk',
+      description: 'GK',
+      required: true
+    },{
+      type: 6,
+      name: 'lb',
+      description: 'LB',
+      required: true
+    },{
+      type: 6,
+      name: 'rb',
+      description: 'RB',
+      required: true
+    },{
+      type: 6,
+      name: 'cm',
+      description: 'CM',
+      required: true
+    },{
+      type: 6,
+      name: 'lw',
+      description: 'LW',
+      required: true
+    },{
+      type: 6,
+      name: 'rw',
+      description: 'RW',
+      required: true
+    },{
+      type: 6,
+      name: 'sub1',
+      description: 'Sub1'
+    },{
+      type: 6,
+      name: 'sub2',
+      description: 'Sub2'
+    },{
+      type: 6,
+      name: 'sub3',
+      description: 'Sub3'
+    },{
+      type: 6,
+      name: 'sub4',
+      description: 'Sub4'
+    },{
+      type: 6,
+      name: 'sub5',
+      description: 'Sub5'
+    }, {
+      type: 3,
+      name: 'vs',
+      description: 'Against'
+    }]
+  },{
+    type: 1,
+    name: 'b',
+    description: 'A 2-3 lineup',
+    options: [{
+      type: 6,
+      name: 'gk',
+      description: 'GK',
+      required: true
+    },{
+      type: 6,
+      name: 'lb',
+      description: 'LB',
+      required: true
+    },{
+      type: 6,
+      name: 'rb',
+      description: 'RB',
+      required: true
+    },{
+      type: 6,
+      name: 'lw',
+      description: 'LW',
+      required: true
+    },{
+      type: 6,
+      name: 'st',
+      description: 'ST',
+      required: true
+    },{
+      type: 6,
+      name: 'rw',
+      description: 'RW',
+      required: true
+    },{
+      type: 6,
+      name: 'sub1',
+      description: 'Sub1'
+    },{
+      type: 6,
+      name: 'sub2',
+      description: 'Sub2'
+    },{
+      type: 6,
+      name: 'sub3',
+      description: 'Sub3'
+    },{
+      type: 6,
+      name: 'sub4',
+      description: 'Sub4'
+    },{
+      type: 6,
+      name: 'sub5',
+      description: 'Sub5'
+    }, {
+      type: 3,
+      name: 'vs',
+      description: 'Against'
+    }]
+  },{
+    type: 1,
+    name: 'c',
+    description: 'a 3-2 lineup',
+    options: [{
+      type: 6,
+      name: 'gk',
+      description: 'GK',
+      required: true
+    },{
+      type: 6,
+      name: 'lb',
+      description: 'LB',
+      required: true
+    },{
+      type: 6,
+      name: 'cb',
+      description: 'CB',
+      required: true
+    },{
+      type: 6,
+      name: 'rb',
+      description: 'RB',
+      required: true
+    },{
+      type: 6,
+      name: 'lf',
+      description: 'LF',
+      required: true
+    },{
+      type: 6,
+      name: 'rf',
+      description: 'RF',
+      required: true
+    },{
+      type: 6,
+      name: 'sub1',
+      description: 'Sub1'
+    },{
+      type: 6,
+      name: 'sub2',
+      description: 'Sub2'
+    },{
+      type: 6,
+      name: 'sub3',
+      description: 'Sub3'
+    },{
+      type: 6,
+      name: 'sub4',
+      description: 'Sub4'
+    },{
+      type: 6,
+      name: 'sub5',
+      description: 'Sub5'
+    }, {
+      type: 3,
+      name: 'vs',
+      description: 'Against'
+    }]
+  }]
+}
+
+const startingEight = {
+  name: 'startingeight',
+  description: 'Your 8v8 club lineup',
+  func: lineupClub,
+  app: true,
+  options: wcLineupCmd.options
+}
+
+export default [wcLineupCmd, startingSix, startingEight, lineupCmd, boxLineupcmd, eightLineupCmd, internationalLineupCmd]

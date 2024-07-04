@@ -1,11 +1,12 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
-import { fixturesChannels, serverChannels, serverRoles } from "../../config/psafServerConfig.js"
+import { serverChannels, serverRoles } from "../../config/psafServerConfig.js"
 import { msToTimestamp, quickResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { editAMatchInternal, formatMatch } from "../match.js"
 import { DiscordRequest } from "../../utils.js"
 import { ObjectId } from "mongodb"
 import { parseDate } from "../timestamp.js"
 import { twoWeeksMs } from "../../config/constants.js"
+import { getAllLeagues } from "../../functions/leaguesCache.js"
 
 const oneWeekMs = 604800016
 
@@ -29,10 +30,11 @@ export const moveMatch = async ({interaction_id, token, application_id, dbClient
     const allNationalTeams = await nationalities.find({}).toArray()
     const allTeams = await teams.find({active:true}).toArray()
     const response = []
+    const allLeagues = await getAllLeagues()
     for (const match of weekMatches) {
       const homeTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.home) : allTeams.find(({id})=> id === match.home)
       const awayTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.away) : allTeams.find(({id})=> id === match.away)
-      const currentLeague = fixturesChannels.find(({value})=> value === match.league)
+      const currentLeague = allLeagues.find(({value})=> value === match.league)
       response.push({content: formatMatch(currentLeague, homeTeam, awayTeam, match, true, match.isInternational), matchId: match._id.toString()})
     }
     return response
@@ -177,7 +179,7 @@ export const listMatchMoves = async ({interaction_id, token, application_id, mem
     return quickResponse({interaction_id, token, content: 'Only Club Managers can list moves.', isEphemeral:true})
   }
   await waitingMsg({interaction_id, token})
-  
+  const allLeagues = await getAllLeagues()
   const{team, allTeams, matchesToMove, teamMatches} = await dbClient(async ({moveRequest, teams, matches})=> {
     const orArg = [...member.roles.map(id=> ({id})), {_id:'__'}]
     console.log(orArg)
@@ -211,7 +213,7 @@ export const listMatchMoves = async ({interaction_id, token, application_id, mem
     console.log(match)
     const homeTeam = allTeams.find(({id})=> id === match.home)
     const awayTeam = allTeams.find(({id})=> id === match.away)
-    const currentLeague = fixturesChannels.find(({value})=> value === match.league)
+    const currentLeague = allLeagues.find(({value})=> value === match.league)
     const content = `${formatMatch(currentLeague, homeTeam, awayTeam, match)}\rRequested time: <t:${matchToMove.dateTimestamp}:F>`
     await DiscordRequest(`/webhooks/${application_id}/${token}`, {
       method: 'POST',
@@ -242,9 +244,9 @@ export const approveMoveMatch = async ({interaction_id, token, application_id, c
   const matchToMoveId = new ObjectId(id)
   await waitingMsg({interaction_id, token})
   
-  const updatedMatch = await dbClient(async ({moveRequest, teams, nationalities, matches})=> {
+  const updatedMatch = await dbClient(async ({moveRequest, teams, nationalities, matches, leagueConfig})=> {
     const matchToMove = await moveRequest.findOne(matchToMoveId)
-    const updatedMatch = await editAMatchInternal({id: matchToMove.id, timestamp: matchToMove.dateTimestamp, teams, nationalities, matches})
+    const updatedMatch = await editAMatchInternal({id: matchToMove.id, timestamp: matchToMove.dateTimestamp, teams, nationalities, matches, leagueConfig})
     const resp = await DiscordRequest(`/channels/${serverChannels.moveMatchChannelId}/messages/${matchToMove.message}`, {method: 'GET'})
     const moveRequestMessage = await resp.json()
     await DiscordRequest(`/channels/${serverChannels.moveMatchChannelId}/messages/${matchToMove.message}`, {

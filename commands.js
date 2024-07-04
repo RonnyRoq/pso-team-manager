@@ -2,14 +2,13 @@ import 'dotenv/config';
 import { InstallGlobalCommands, InstallGuildCommands } from './utils.js';
 import { nowCmd } from './commands/now.js';
 import { timestampCmd } from './commands/timestamp.js';
-import { helpAdminCmd, helpCmd } from './commands/help.js';
-import { boxLineupcmd, editEightLineupCmd, editLineupCmd, eightLineupCmd, internationalLineupCmd, lineupCmd } from './commands/lineup/lineup.js';
-import { teamCmd } from './commands/team.js';
-import { editInternationalMatchCmd, editMatchCmd, endMatchCmd, internationalMatchCmd, matchCmd, matchIdCmd, matchesCmd, moveTheMatchCmd, pastMatchesCmd, publishMatchCmd, resetMatchCmd } from './commands/match.js';
-import { blacklistTeamCmd, doubleContractsCmd, emojiCmd, initCountriesCmd, managerContractsCmd, systemTeamCmd } from './commands/system.js';
+import { helpCmd } from './commands/help.js';
+import { myTeamCmd, teamCmd } from './commands/team.js';
+import { editInternationalMatchCmd, editMatchCmd, endMatchCmd, internationalMatchCmd, matchCmd, matchIdCmd, matchesCmd, moveTheMatchCmd, pastMatchesCmd, publishMatchCmd, resetMatchCmd, unPublishMatchCmd } from './commands/match.js';
+import { blacklistTeamCmd, emojiCmd, expireThingsCmd, fixNamesCmd, managerContractsCmd, systemTeamCmd } from './commands/system.js';
 import { activateTeamCmd, editTeamCmd } from './commands/editTeams.js';
-import { allPlayersCmd, editPlayerCmd, myPlayerCmd, playerCmd, playersCmd } from './commands/player.js';
-import { addSelectionCmd, allNationalTeamsCmd, nationalTeamCmd, postNationalTeamsCmd, registerElectionsCmd, removeSelectionCmd, showElectionCandidatesCmd, showVotesCmd, voteCoachCmd } from './commands/nationalTeam.js';
+import { editPlayerCmd, myPlayerCmd, playerCmd, playersCmd } from './commands/player.js';
+import { allNationalTeamsCmd, nationalTeamCmd, postNationalTeamsCmd, registerElectionsCmd, showElectionCandidatesCmd, showVotesCmd, voteCoachCmd } from './commands/nationalTeam.js';
 import { confirmCmd, registerCmd, releaseCmd, updateConfirmCmd } from './commands/confirm.js';
 import { dealCmd, loanCmd } from './commands/confirmations/deal.js';
 import { listDealsCmd } from './commands/confirmations/listDeals.js';
@@ -20,22 +19,38 @@ import { expireContractsCmd, showExpiringContractsCmd, showNoContractsCmd } from
 import { disbandTeamCmd } from './commands/disbandTeam.js';
 import { getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd } from './commands/season.js';
 import { testDMMatchCmd } from './commands/matches/notifyMatchStart.js';
-import { addSteamCmd, addSteamIdCmd, manualDoubleSteamCmd, setNameCmd } from './commands/player/steamid.js';
-import { addToInterLeagueCmd, addToLeagueCmd, removeFromLeagueCmd } from './commands/league/addToLeague.js';
+import { addSteamIdCmd, manualDoubleSteamCmd, setNameCmd } from './commands/player/steamid.js';
 import { leagueTeamsCmd } from './commands/league/leagueTeams.js';
 import { imageLeagueTableCmd, leagueTableCmd, postLeagueTableCmd } from './commands/league/leagueTable.js';
-import { generateMatchdayCmd, randomMatchdayCmd } from './commands/matches/matchday.js';
+import { generateMatchdayCmd, oneTimeSeasonCmd, publishNextMatchesCmd, randomMatchdayCmd, showMatchDayCmd, updateMatchDayImageCmd } from './commands/matches/matchday.js';
 import { setRatingCmd } from './commands/player/rating.js';
 import { listMovesCmd, moveMatchCmd } from './commands/matches/moveMatch.js';
-import { generateGroupCmd } from './commands/league/generateGroup.js';
 import { arrangeDayScheduleCmd } from './commands/matches/arrangeDaySchedule.js';
 import { addUniqueIdCmd } from './commands/player/uniqueId.js';
-import { addTransferBanCmd, removeTransferBanCmd } from './commands/teams/transferBan.js';
+import commandsRegister from './commandsRegister.js';
 
-const TEAMS = {
-  name: 'teams',
-  description: 'List team details',
-  type: 1,
+const mapToCmd = (map) => {
+  const globalCommands = []
+  const psafCommands = []
+  const wcCommands = []
+  map.forEach(fullCmd => {
+    // eslint-disable-next-line no-unused-vars
+    const {func, psaf, wc, app, ...command} = fullCmd
+    if (psaf) {
+      psafCommands.push(command)
+    }
+    if(wc) {
+      wcCommands.push(command)
+    }
+    if(app) {
+      globalCommands.push(command)
+    }
+  })
+  return {
+    globalCommands,
+    psafCommands,
+    wcCommands
+  }
 }
 
 const FREEPLAYER = {
@@ -105,23 +120,33 @@ export const emojisCmd = {
   type: 1
 }
 
-const ALL_COMMANDS = [nowCmd, timestampCmd, lineupCmd, boxLineupcmd, eightLineupCmd, helpCmd];
+const ALL_COMMANDS = [nowCmd, timestampCmd, helpCmd];
 
 const GUILD_COMMANDS = [
-  teamCmd, emojisCmd, matchCmd, editMatchCmd, moveTheMatchCmd, endMatchCmd, publishMatchCmd,
+  teamCmd, matchCmd, editMatchCmd, moveTheMatchCmd, endMatchCmd, publishMatchCmd, unPublishMatchCmd, myTeamCmd,
   matchIdCmd, matchesCmd, internationalMatchCmd, editInternationalMatchCmd, resetMatchCmd,
-  editLineupCmd, editEightLineupCmd,
-  playerCmd, editPlayerCmd, allPlayersCmd, playersCmd, myPlayerCmd,
+  playerCmd, editPlayerCmd, playersCmd, myPlayerCmd,
   confirmCmd, updateConfirmCmd, renewCmd, dealCmd, activateTeamCmd, listDealsCmd, loanCmd, releaseCmd, registerCmd,
-  nationalTeamCmd, allNationalTeamsCmd, postNationalTeamsCmd, addSelectionCmd, removeSelectionCmd,
-  TEAMS, transferCmd, teamTransferCmd, FREEPLAYER, FINE, BONUS, editTeamCmd, addUniqueIdCmd,
-  internationalLineupCmd, helpAdminCmd, emojiCmd, showBlacklistCmd, showNoContractsCmd, registerElectionsCmd, showElectionCandidatesCmd, voteCoachCmd, showVotesCmd,
-  disbandTeamCmd, expireContractsCmd, addSteamIdCmd, addSteamCmd, setRatingCmd, setNameCmd, removeFromLeagueCmd,
-  addToLeagueCmd, addToInterLeagueCmd, leagueTeamsCmd, leagueTableCmd, imageLeagueTableCmd, postLeagueTableCmd, generateMatchdayCmd,
+  nationalTeamCmd, allNationalTeamsCmd, postNationalTeamsCmd,
+  transferCmd, teamTransferCmd, FREEPLAYER, FINE, BONUS, editTeamCmd, addUniqueIdCmd,
+  emojiCmd, showBlacklistCmd, showNoContractsCmd, registerElectionsCmd, showElectionCandidatesCmd, voteCoachCmd, showVotesCmd,
+  disbandTeamCmd, expireContractsCmd, addSteamIdCmd, setRatingCmd, setNameCmd,
+  leagueTeamsCmd, leagueTableCmd, imageLeagueTableCmd, postLeagueTableCmd, generateMatchdayCmd,
   getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd, testDMMatchCmd, pastMatchesCmd, moveMatchCmd, listMovesCmd,
-  systemTeamCmd, initCountriesCmd, postTeamCmd, postAllTeamsCmd, setContractCmd, updateTeamPostCmd, doubleContractsCmd, blacklistTeamCmd, showExpiringContractsCmd,
-  manualDoubleSteamCmd, generateGroupCmd, arrangeDayScheduleCmd, managerContractsCmd, randomMatchdayCmd, addTransferBanCmd, removeTransferBanCmd,
+  systemTeamCmd, postTeamCmd, postAllTeamsCmd, setContractCmd, updateTeamPostCmd, blacklistTeamCmd, showExpiringContractsCmd, expireThingsCmd, publishNextMatchesCmd,
+  manualDoubleSteamCmd, arrangeDayScheduleCmd, managerContractsCmd, randomMatchdayCmd, fixNamesCmd, showMatchDayCmd, updateMatchDayImageCmd, oneTimeSeasonCmd,
 ]
 
-InstallGlobalCommands(process.env.APP_ID, ALL_COMMANDS);
-InstallGuildCommands(process.env.APP_ID, process.env.GUILD_ID, GUILD_COMMANDS)
+const {globalCommands, psafCommands, wcCommands} = mapToCmd(commandsRegister())
+
+const WC_GUILD_COMMANDS = [
+  registerCmd, registerElectionsCmd, showElectionCandidatesCmd, voteCoachCmd,
+]
+const allCommands = [...ALL_COMMANDS, ...globalCommands]
+console.log(Object.fromEntries(allCommands.map((cmd,index) => [index, cmd.name])))
+InstallGlobalCommands(process.env.APP_ID, allCommands);
+const guildCommands = [...GUILD_COMMANDS, ...psafCommands]
+console.log(Object.fromEntries(guildCommands.map((cmd,index) => [index, cmd.name])))
+InstallGuildCommands(process.env.APP_ID, process.env.GUILD_ID, guildCommands)
+const wcGuildCommands = [...WC_GUILD_COMMANDS, ...wcCommands]
+InstallGuildCommands(process.env.APP_ID, process.env.WC_GUILD_ID, wcGuildCommands)

@@ -194,5 +194,8 @@ export const countries = [
   },{
     name: "Tunisia",
     flag:	"🇹🇳",
+  },{
+    name: "Iceland",
+    flag: "🇮🇸"
   }
 ]

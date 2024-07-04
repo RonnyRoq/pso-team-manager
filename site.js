@@ -10,9 +10,7 @@ import { getMatch, getMatchesOfDay, saveMatchStats } from './commands/match.js';
 import { authUser, getGuildMember, hasSession, isMemberStaff, isStaff } from './site/siteUtils.js';
 import { mockMatch } from './site/mockMatch.js';
 import mockMatches from './site/mockMatches.js';
-import { getAllTeams, getTeam, getTeamAndPlayers, getTeams } from './commands/teams/getTeam.js';
-import { getPlayers } from './commands/player/api.js';
-import { allLeagueList } from './config/psafServerConfig.js';
+import { getAllTeams } from './commands/teams/getTeam.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,14 +62,12 @@ export const getSite = (localdev=false, uri='', dbClient={}) =>{
   })
   
   site.get('/team', async (req, res) => {
-    const teams = await getAllTeams({dbClient})
-    const leagues = Object.fromEntries(allLeagueList.map(league=> ([league.value, league.name])))
+    const {teams, leagues} = await getAllTeams({dbClient})
     return res.render('team', {teams, leagues})
   })
 
   site.get('/teams', async (req, res) => {
-    const teams = await getAllTeams({dbClient})
-    const leagues = Object.fromEntries(allLeagueList.map(league=> ([league.value, league.name])))
+    const {teams, leagues} = await getAllTeams({dbClient})
     const totalActiveMoney = teams.filter(team=>team.active).reduce((acc, team)=> acc + team.budget, 0)
     const totalSleepingMoney = teams.filter(team=>!team.active).reduce((acc, team)=> acc + team.budget, 0)
     return res.render('teams', {teams, leagues, totalActiveMoney, totalSleepingMoney})

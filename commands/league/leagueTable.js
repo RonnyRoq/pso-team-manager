@@ -1,8 +1,10 @@
+import fs from 'fs';
 import { createCanvas } from 'canvas'
-import { fixturesChannels, serverChannels } from "../../config/psafServerConfig.js"
-import { getCurrentSeason, optionsToObject, updateResponse, waitingMsg } from "../../functions/helpers.js"
-import { DiscordRequest, DiscordUploadRequest } from '../../utils.js'
-import { InteractionResponseType } from 'discord-interactions'
+import { NONE, elimMatchDaysSorted, serverChannels, serverRoles } from "../../config/psafServerConfig.js"
+import { getCurrentSeason, optionsToObject, quickResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { DiscordRequest} from '../../utils.js'
+import { leagueChoices } from '../../config/leagueData.js';
+import { getAllLeagues } from '../../functions/leaguesCache.js';
 
 //Ensure this function doesnt crash if you ask for a league which doesnt have a table
 const internalLeagueTable = async ({dbClient, league}) => {
@@ -17,12 +19,17 @@ const internalLeagueTable = async ({dbClient, league}) => {
     return {allTeams, leagueMatches, leagueTeams, allCountries}
   })
   const leagueTeamsId = leagueTeams.map(leagueTeam=> leagueTeam.team)
-  const leagueObj = fixturesChannels.find(fixChannel => fixChannel.value === league)
+  const allLeagues = await getAllLeagues()
+  const leagueObj = allLeagues.find(fixChannel => fixChannel.value === league)
   const currentTeams = (leagueObj?.isInternational ? 
-    allCountries.filter(country => leagueTeamsId.includes(country.name)).map(country=>({...country, id: country.name, emoji: country.flag}))
-    : allTeams//.filter(team=> leagueTeamsId.includes(team.id))
+    allCountries.filter(country => leagueTeamsId.includes(country.name)).map(country=>({...country, id: country.name, emoji: country.flag})) 
+    : allTeams.map(team => {
+      const leagueTeam = leagueTeams.find(leagueTeam=> leagueTeam.team === team.id)||{}
+      return {...team, penaltyPoints: leagueTeam.penaltypoints || 0, group: leagueTeam.group || NONE, position: leagueTeam.position}
+    })
   ).map(team=> ({...team, wins:0, draws: 0, losses: 0, ffs: 0, goals: 0, against:0, played:0, ffDraws:0, wonAgainst:[]}))
   leagueMatches.forEach(({isFF, homeScore, awayScore, home, away}) => {
+    console.log(leagueObj?.name, home, away)
     const hScore = Number.parseInt(homeScore)
     const aScore = Number.parseInt(awayScore)
     const homeTeamIndex = currentTeams.findIndex(team=>team.id === home)
@@ -58,30 +65,134 @@ const internalLeagueTable = async ({dbClient, league}) => {
     currentTeams[homeTeamIndex].played = (currentTeams[homeTeamIndex].played || 0) + 1
     currentTeams[awayTeamIndex].played = (currentTeams[awayTeamIndex].played || 0) + 1
   });
-  const activeTeams = currentTeams.filter(team=> team.played > 0)
-
-  const sortedTeams = activeTeams.map(team=> ({...team, points: (team.wins*3)+team.draws-team.ffs-team.ffDraws, goalDifference: team.goals-team.against})).sort((a, b)=> {
-    if(a.points !== b.points) {
-      return b.points - a.points
-    } else {
-      const aWon = a.wonAgainst.includes(b.id)
-      const bWon = b.wonAgainst.includes(a.id)
-      if(aWon !== bWon) {
-        return aWon ? -1 : 1
-      } else if(a.goalDifference !== b.goalDifference) {
-        return b.goalDifference - a.goalDifference
-      } else if(a.goals !== b.goals ){
-        return b.goals - a.goals
+  const activeTeams = currentTeams.filter(team=> leagueTeamsId.includes(team.id))
+  const teamsPerGroup = {}
+  activeTeams.forEach(team=> {
+    const group = team.group || NONE
+    const currentGroup = teamsPerGroup[group] || []
+    teamsPerGroup[group] = [...currentGroup, team]
+  })
+  console.log(JSON.stringify(teamsPerGroup, undefined, 2))
+  const groupEntries = Object.entries(teamsPerGroup).sort(([a], [b])=> a.localeCompare(b))
+  console.log(JSON.stringify(groupEntries, undefined, 2))
+  const sortedGroups = groupEntries.map(([group, groupTeams])=> {
+    const sortedTeams = groupTeams.map(team=> ({...team, points: (team.wins*3)+team.draws-team.ffs-team.ffDraws-team.penaltyPoints, goalDifference: team.goals-team.against})).sort((a, b)=> {
+      if(a.points !== b.points) {
+        return b.points - a.points
       } else {
-        return a.played - b.played
+        const aWon = a.wonAgainst.includes(b.id)
+        const bWon = b.wonAgainst.includes(a.id)
+        if(aWon !== bWon) {
+          return aWon ? -1 : 1
+        } else if(a.goalDifference !== b.goalDifference) {
+          return b.goalDifference - a.goalDifference
+        } else if(a.goals !== b.goals ){
+          return b.goals - a.goals
+        } else {
+          return a.played - b.played
+        }
       }
+    })
+    return [group, sortedTeams]
+  })
+  return sortedGroups
+}
+
+const formatTeamTree = (name) => name.substring(0, 17).padEnd(18)
+const nextStep = [1, 2, 5, 6, 9, 10, 13, 14]
+export const internalElimTree = async ({dbClient, league}) => {
+  const {allTeams, leagueMatches, leagueTeams, allCountries} = await dbClient(async ({matches, leagues, teams, nationalities, seasonsCollect}) => {
+    const currentSeason = await getCurrentSeason(seasonsCollect)
+    const [allTeams, leagueMatches, leagueTeams, allCountries] = await Promise.all([
+      teams.find({}).toArray(),
+      matches.find({season: currentSeason, league}).toArray(),
+      leagues.find({leagueId:league}).toArray(),
+      nationalities.find({}).toArray()
+    ])
+    return {allTeams, leagueMatches: leagueMatches, leagueTeams, allCountries}
+  })
+  const leagueTeamsId = leagueTeams.map(leagueTeam=> leagueTeam.team)
+  const allLeagues = await getAllLeagues()
+  const leagueObj = allLeagues.find(fixChannel => fixChannel.value === league)
+  const currentTeams = (leagueObj?.isInternational ? 
+    allCountries.filter(country => leagueTeamsId.includes(country.name)).map(country=>({...country, id: country.name, emoji: country.flag})) 
+    : allTeams.filter(team=> leagueTeams.find(leagueTeam=> leagueTeam.team === team.id) || team.id === serverRoles.unknownTeam)
+      .map(team => {
+        const leagueTeam = leagueTeams.find(leagueTeam=> leagueTeam.team === team.id)||{}
+        return {...team, penaltyPoints: leagueTeam.penaltypoints || 0, group: leagueTeam.group || NONE, position: leagueTeam.position}
+      })
+  ).map(team=> ({...team, wins:0, draws: 0, losses: 0, ffs: 0, goals: 0, against:0, played:0, ffDraws:0, wonAgainst:[]}))
+  .sort((a, b)=> a.position-b.position)
+  console.log(currentTeams)
+
+  const sortedMatches = leagueMatches.map( leagueMatch => {
+    const matchdayIndex = elimMatchDaysSorted.findIndex(elimMatchDay=>elimMatchDay === leagueMatch.matchday)
+    const homeTeam = currentTeams.find(team=> team.id === leagueMatch.home)
+    const awayTeam = currentTeams.find(team => team.id === leagueMatch.away)
+    console.log(matchdayIndex, homeTeam.name, awayTeam.name)
+    return {
+      ...leagueMatch,
+      homeTeam, 
+      awayTeam,
+      matchdayIndex: matchdayIndex
+    }
+  }).sort((a, b) => {
+    if(a.matchdayIndex !== b.matchdayIndex) {
+      return a.matchdayIndex - b.matchdayIndex
+    } else {
+      return a.order - b.order
     }
   })
-  return sortedTeams
+  console.log(sortedMatches.map(({matchday, order})=>({matchday, order})))
+  if(sortedMatches.length > 0) {
+    let currentMatchDay = sortedMatches[0].matchdayIndex
+    const initialMatchDay = currentMatchDay
+    let i=0
+    let lines = []
+    console.log(i, sortedMatches.length, sortedMatches[i].matchdayIndex, currentMatchDay)
+    let lastStepMatchesLength = 0
+    let insertedLines = []
+    let lastInsertedLines = []
+    let currentMatchInMatchday = 0
+    while (i<sortedMatches.length) {
+      const currentMatch = sortedMatches[i]
+      if(currentMatchDay !== currentMatch.matchdayIndex){
+        lastInsertedLines = insertedLines
+        insertedLines = []
+        lastStepMatchesLength = i
+        currentMatchInMatchday = 0
+        currentMatchDay = currentMatch.matchdayIndex
+      }
+      //console.log(currentMatchDay)
+      if(initialMatchDay === sortedMatches[i]?.matchdayIndex){
+        const homeIndex = 2*i, awayIndex = 2*i+1
+        lines[homeIndex]=`${formatTeamTree(currentMatch.homeTeam.name)} ${currentMatch.finished ? `${currentMatch.homeScore.padStart(2)}`: '  '}`
+        lines[awayIndex]=`${formatTeamTree(currentMatch.awayTeam.name)} ${currentMatch.finished ? `${currentMatch.awayScore.padStart(2)}`: '  '}`
+        insertedLines.push(homeIndex, awayIndex)
+      } else {
+        const homeIndex = lastInsertedLines[nextStep[2*currentMatchInMatchday]]
+        const awayIndex = lastInsertedLines[nextStep[2*currentMatchInMatchday+1]]
+        const indexHome = (i*2-lines.length)
+        const indexAway = (i*2-lines.length)*2
+        console.log(currentMatchDay, indexHome, indexAway)
+        lines[homeIndex] += ' | '+`${formatTeamTree(currentMatch.home === serverRoles.unknownTeam ? currentMatch.matchday : currentMatch.homeTeam.name)} ${currentMatch.finished ? `${currentMatch.homeScore.padStart(2)}`: '  '}`
+        lines[awayIndex] += ' | '+`${formatTeamTree(currentMatch.away === serverRoles.unknownTeam ? currentMatch.matchday : currentMatch.awayTeam.name)} ${currentMatch.finished ? `${currentMatch.awayScore.padStart(2)}`: '  '}`
+        insertedLines.push(homeIndex, awayIndex)
+      }
+      i++
+      currentMatchInMatchday++
+    }
+    console.log(lines)
+    const staticLength = lines.length-2
+    for(let j=staticLength/2;j>0;j--) {
+      lines.splice(j*2, 0, '------------------')
+    }
+    return '```'+lines.join('\r')+'```'
+  }
 }
 
 export const apiLeagueTable = async ({dbClient, league}) => {
-  const leagueIds = fixturesChannels.map(chan => chan.value)
+  const leagueIds = leagueChoices.map(chan => chan.value)
   if(leagueIds.includes(league)){
     return internalLeagueTable({dbClient, league})
   }
@@ -92,6 +203,7 @@ export const imageLeagueTable = async ({interaction_id, token, application_id, d
   const {league} = optionsToObject(options)
   await waitingMsg({interaction_id, token})
   const sortedTeams = await internalLeagueTable({dbClient, league})
+  const allLeagues = await getAllLeagues()
   
   const width = 800
   const height = 800
@@ -112,7 +224,7 @@ export const imageLeagueTable = async ({interaction_id, token, application_id, d
 
   ctx.fillStyle = '#101010'
   ctx.font = 'bold 24px sans-serif'
-  ctx.fillText(fixturesChannels.find(chan=> chan.value === league)?.name, 75, 80);
+  ctx.fillText(allLeagues.find(chan=> chan.value === league)?.name, 75, 80);
   ctx.font = 'bold 16px sans-serif'
 
   ctx.fillStyle = '#101040'
@@ -154,57 +266,91 @@ export const imageLeagueTable = async ({interaction_id, token, application_id, d
     ctx.fillText(ffs, 580, lineY)
   })
 
-  DiscordUploadRequest(`/channels/${serverChannels.botTestingChannelId}/messages`, {
+  const out = fs.createWriteStream(`site/images/league/${league}.png`)
+  const stream = canvas.createPNGStream({})
+  stream.pipe(out)
+  
+  await new Promise(resolve => out.on("finish", resolve))
+
+  /*await DiscordUploadRequest(`/channels/${serverChannels.botTestingChannelId}/messages`, {
     method: 'POST',
     body: {
-      content: 'Standings',
-      embeds: [{
-        "title": "test!",
-        "description": "Test",
-        "image": {
-          "url": `attachment://${league}.png`
-        }
-      }],
-      attachments: [{
-        id: '0',
-        description: 'Image for standings',
-        contentType: 'image/png',
-        filename: `${league}.png`
-      }]
+      content: 'Standings'
     }
   }, [{
     name: `${league}.png`,
-    data: canvas.toBuffer(),
+    path: `./${league}.png`
+  }],)*/
+  /*await DiscordUploadRequest(`/channels/${serverChannels.botTestingChannelId}/messages`, {
+    method: 'POST',
+    body: {
+      content: 'Standings'
+    }
+  }, [{
+    name: `${league}.png`,
+    data: canvas.toBuffer().toString(),
     contentType: 'image/png',
-  }],)
-  return updateResponse({application_id, token, content: 'done'})
+  }],)*/
+  return updateResponse({application_id, token, content: `https://pso.shinmugen.net/site/images/league/${league}.png`})
+}
+
+export const formatLeagueTree = async ({league, dbClient, short = false}) => {
+  const sortedGroups = await internalElimTree({dbClient, league})
+  const content = sortedGroups.map(([group, sortedTeams]) => {
+    const response = `${group !== NONE ? `## GROUP ${group}\r`: `${group}`}` +
+    (
+      short ? `> Pos | Name | Pts (Games) | FF \r` +
+      sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name.substring(0, 19)}** | ${team.points}Pts (${team.played}) | ${team.ffs} `).join('\r')
+      :
+      `> Pos | Name | Pts (G) | Wins - Draws - Losses | GA | FF \r` +
+      sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name.substring(0, 17)}** | ${team.points}Pts (${team.played}) | ${team.wins} - ${team.draws} - ${team.losses} | ${team.goalDifference} | ${team.ffs} `).join('\r')
+    )
+    return response
+  }).join('\r')
+  console.log(content.length)
+  return content
+}
+
+export const formatLeagueTable = async ({league, dbClient, short = false}) => {
+  const allLeagues = await getAllLeagues()
+  const leagueObj = allLeagues.find(currentLeague=> currentLeague.value === league)
+  if(leagueObj.knockout){
+    const res = await internalElimTree({dbClient, league})
+    return res
+  } else {
+    const sortedGroups = await internalLeagueTable({dbClient, league})
+    const content = sortedGroups.map(([group, sortedTeams]) => {
+      const response = `${group !== NONE ? `## GROUP ${group}\r`: `${group}`}` +
+      (
+        short ? `> Pos | Name | Pts (Games) | FF \r` +
+        sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name.substring(0, 19)}** | ${team.points}Pts (${team.played}) | ${team.ffs} `).join('\r')
+        :
+        `> Pos | Name | Pts (G) | Wins - Draws - Losses | GA | FF \r` +
+        sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name.substring(0, 17)}** | ${team.points}Pts (${team.played}) | ${team.wins} - ${team.draws} - ${team.losses} | ${team.goalDifference} | ${team.ffs} `).join('\r')
+      )
+      return response
+    }).join('\r')
+    console.log(content.length)
+    return content
+  }
 }
 
 export const leagueTable = async ({interaction_id, token, application_id, dbClient, options}) => {
   const {league, short} = optionsToObject(options)
   await waitingMsg({interaction_id, token})
-  const sortedTeams = await internalLeagueTable({dbClient, league})
-  const content = //`${fixturesChannels.find(chan=> chan.value === league)?.name} standings:\r` +
-    short ? `> Pos | Name | Pts (Games) | FF \r` +
-    sortedTeams.map((team,index)=> `> **${index+1} ${team.name.substring(0, 19)}** | ${team.points}Pts (${team.played}) | ${team.ffs} `).join('\r')
-    :
-    `> Pos | Name | Pts (G) | Wins - Draws - Losses | GA | FF \r` +
-    sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name.substring(0, 17)}** | ${team.points}Pts (${team.played}) | ${team.wins} - ${team.draws} - ${team.losses} | ${team.goalDifference} | ${team.ffs} `).join('\r')
-  console.log(content.length)
+  const content = await formatLeagueTable({league, dbClient, short})
   return updateResponse({application_id, token, content})
 }
 
 export const updateLeagueTable = async ({league, dbClient, short = false}) => {
-  const sortedTeams = await internalLeagueTable({dbClient, league})
-  const content = //`${fixturesChannels.find(chan=> chan.value === league)?.name} standings:\r` +
-    short ? `> Pos | Name | Pts (Games) | FF \r` +
-    sortedTeams.map((team,index)=> `> **${index+1} ${team.name.substring(0, 19)}** | ${team.points}Pts (${team.played}) | ${team.ffs} `).join('\r')
-    :
-    `> Pos | Name | Pts (Games) | Win - Draw - Loss | GA | FF \r` +
-    sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name.substring(0, 19)}** | ${team.points}Pts (${team.played}) | ${team.wins} - ${team.draws} - ${team.losses} | ${team.goalDifference} | ${team.ffs} `).join('\r')
-  const leagueObj = fixturesChannels.find(({value})=> value === league)
-  console.log(content.length)
-  return await DiscordRequest(`/channels/${leagueObj?.standingsChannel || serverChannels.standingsChannelId}/messages/${leagueObj.standingsMsg}`, {
+  console.log(`Updating league ${league.name}, ${league.standingsMsg}`)
+  if(!league.active || !league.standingsMsg){
+    console.log(`${league.name} Active: ${league.active} StandingsMsg: ${league.standingsMsg}`)
+    return
+  }
+  console.log(`Updating ${league.name}`)
+  const content = await formatLeagueTable({league: league.value, dbClient, short})
+  return DiscordRequest(`/channels/${league?.standingsChannel || serverChannels.standingsChannelId}/messages/${league.standingsMsg}`, {
     method: 'PATCH',
     body: {
       content
@@ -213,21 +359,9 @@ export const updateLeagueTable = async ({league, dbClient, short = false}) => {
 }
 
 export const postLeagueTable = async ({interaction_id, token, dbClient, options}) => {
-  const {league} = optionsToObject(options)
-  const sortedTeams = await internalLeagueTable({dbClient, league})
-  const content = `${fixturesChannels.find(chan=> chan.value === league)?.name} standings:\r` +
-    `> Pos | Name | Points (Games) | Wins - Draws - Losses | GA | FFs \r` +
-    sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name}** | ${team.points}Pts (${team.played}) | ${team.wins} - ${team.draws} - ${team.losses} | ${team.goalDifference} | ${team.ffs} `).join('\r')
-
-  return await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        content
-      }
-    }
-  })
+  const {league, short} = optionsToObject(options)
+  const content = await formatLeagueTable({league, dbClient, short})
+  return quickResponse({interaction_id, token, content})
 }
 
 export const leagueTableCmd = {
@@ -239,7 +373,7 @@ export const leagueTableCmd = {
     name: 'league',
     description: 'League',
     required: true,
-    choices: fixturesChannels.map(({name, value})=> ({name, value}))
+    choices: leagueChoices
   },{
     type: 5,
     name: 'short',
@@ -261,6 +395,6 @@ export const imageLeagueTableCmd = {
     name: 'league',
     description: 'League',
     required: true,
-    choices: fixturesChannels.map(({name, value})=> ({name, value}))
+    choices: leagueChoices
   }]
 }

@@ -40,6 +40,42 @@ export const refereeMatch = async ({interaction_id, token, custom_id, applicatio
   })
   await updateResponse({application_id, token, content})
 }
+export const streamerMatch = async ({interaction_id, token, custom_id, application_id, message, callerId, dbClient}) => {
+  await waitingMsg({interaction_id, token})
+  const [,id] = custom_id.split('_')
+  const matchId = new ObjectId(id)
+  const content = await dbClient(async ({matches})=> {
+    const match = await matches.findOne(matchId)
+    let streamersArray = (match.streamers || '').split(',')
+    if(streamersArray[0] === '') {
+      streamersArray = []
+    }
+    let streamers = []
+    let content = message.content
+    let response = ''
+    if(streamersArray.includes(callerId)) {
+      const indexContent = message.content.indexOf(`\r<@${callerId}>`)
+      const indexLength = `\r<@${callerId}>`.length
+      streamers = streamersArray.filter(id=> id!== callerId)
+      content = message.content.substring(0, indexContent) + message.content.substring(indexContent+indexLength)
+      response = 'Removed you from the list of streamers.'
+    } else {
+      streamers = [...streamersArray, callerId]
+      content = message.content + `\r<@${callerId}>`
+      response = 'Added you to the list of streamers for this match'
+    }
+    await matches.updateOne({_id: matchId}, {$set: {streamers: streamers.join(',')}})
+    await DiscordRequest(`/channels/${message.channel_id}/messages/${message.id}`, {
+      method: 'PATCH',
+      body: {
+        content,
+        components: message.components
+      }
+    })
+    return response
+  })
+  await updateResponse({application_id, token, content})
+}
 
 export const matchResultPrompt = async ({interaction_id, token, custom_id, dbClient}) => {
   const [,,id] = custom_id.split('_')
@@ -198,9 +234,10 @@ export const matchStatsModalResponse = async ({interaction_id, token, applicatio
     /^(GK|LB|RB|CB|LCB|RCB|LCM|RCM|CM|LW|RW|ST|LST|RST|LF|RF|Sub \d) (.+) (\D+): ([\d|,]+) (\D+): (\d+) (\D+): (\d+) (\D+): (\d+) (\D+): (\d+) (\D+): (\d+) (\D+): (\d+) (\D+): (\d+) (\D+): (\d+)$/gm;
     const homeLineup = {};
     for (const playerStats of homePlayerStats) {
-      const playerRegexp = new RegExp(playerStatsRegexp);
-      console.log(playerStats)
-      const parsedPlayerStats = playerRegexp.exec(playerStats);
+      //console.log(playerStats)
+      const playerRegexp = new RegExp(playerStatsRegexp)
+      const parsedPlayerStats = playerRegexp.exec(playerStats)
+      //console.log(parsedPlayerStats)
       const [, ...parsedPlayerValues] = parsedPlayerStats
       let playerEntries = [];
       for (let i = 2; i < parsedPlayerValues.length; i += 2) {

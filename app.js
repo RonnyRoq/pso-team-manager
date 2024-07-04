@@ -9,50 +9,48 @@ import {
   InteractionResponseType,
   InteractionResponseFlags
 } from 'discord-interactions';
-import { CronJob } from 'cron';
 import { VerifyDiscordRequest, DiscordRequest } from './utils.js';
 import mongoClient from './functions/mongoClient.js';
 import { now } from './commands/now.js';
 import { timestamp } from './commands/timestamp.js';
 import { help, helpAdmin } from './commands/help.js';
-import { internationalLineup, lineup, eightLineup, boxLineup, editLineup, editEightLineup } from './commands/lineup/lineup.js';
 import { allPlayers, autoCompleteNation, editPlayer, player, players } from './commands/player.js';
 import { team } from './commands/team.js';
-import { editInterMatch, editMatch, endMatch, getMatchesOfDay, getMatchesSummary, internationalMatch, match, matchId, matches, pastMatches, publishMatch, remindMissedMatches, resetMatch } from './commands/match.js';
-import { blacklistTeam, doubleContracts, emoji, initCountries, managerContracts, systemTeam } from './commands/system.js';
+import { editInterMatch, editMatch, endMatch, internationalMatch, match, matchId, matches, pastMatches, publishMatch, resetMatch, unpublishMatch } from './commands/match.js';
+import { blacklistTeam, doubleContracts, emoji, expireThings, fixNames, initCountries, managerContracts, systemTeam } from './commands/system.js';
 import { activateTeam, editTeam } from './commands/editTeams.js';
-import { addSelection, allNationalTeams, nationalTeam, postNationalTeams, registerElections, removeSelection, showElectionCandidates, showVotes, voteCoach } from './commands/nationalTeam.js';
+import { addSelection, allNationalTeams, autoCompleteSelections, nationalTeam, postNationalTeams, registerElections, removeSelection, showElectionCandidates, showVotes, voteCoach } from './commands/nationalTeam.js';
 import { confirm, pendingConfirmations, register, releasePlayer } from './commands/confirm.js';
 import { approveDealAction, approveLoanAction, declineDealAction, declineLoanAction, finishLoanRequest, removeConfirmation, removeDeal, removeLoan, removeRelease } from './commands/confirmations/actions.js';
 import commandsRegister from './commandsRegister.js';
 import { freePlayer, releaseAction, renew, setContract, teamTransfer, transfer, transferAction } from './commands/transfers.js';
-import { innerUpdateTeam, postAllTeams, postTeam, updateTeamPost } from './commands/postTeam.js';
-import { optionsToObject, sleep } from './functions/helpers.js';
+import { postAllTeams, postTeam, updateTeamPost } from './commands/postTeam.js';
+import { sleep } from './functions/helpers.js';
 import { deal, loan } from './commands/confirmations/deal.js';
 import { listDeals } from './commands/confirmations/listDeals.js';
 import { showBlacklist } from './commands/blacklist.js';
 import { emergencyOneSeasonContract, expireContracts, showExpiringContracts, showNoContracts } from './commands/contracts.js';
 import { disbandTeam, disbandTeamConfirmed } from './commands/disbandTeam.js';
-import { getCurrentSeasonPhase, progressCurrentSeasonPhase } from './commands/season.js';
+import { getCurrentSeasonPhase, progressCurrentSeasonPhase, updateCacheCurrentSeason } from './commands/season.js';
 import { setAllMatchToSeason } from './commands/matches/batchWork.js';
 import { endMatchModalResponse, matchResultPrompt, matchStatsModalResponse, matchStatsPrompt, refereeMatch } from './commands/matches/actions.js';
-import { fixturesChannels, pgLeagues, serverChannels } from './config/psafServerConfig.js';
-import { notifyMatchStart, testDMMatch } from './commands/matches/notifyMatchStart.js';
+import { testDMMatch } from './commands/matches/notifyMatchStart.js';
 import { voteAction } from './commands/nationalTeams/actions.js';
 import { client, uri } from './config/mongoConfig.js';
 import { getSite } from './site.js';
 import { addSteam, addSteamId, manualDoubleSteam, setName } from './commands/player/steamid.js';
-import { addToLeague, removeFromLeague } from './commands/league/addToLeague.js';
 import { leagueTeams } from './commands/league/leagueTeams.js';
-import { imageLeagueTable, leagueTable, postLeagueTable, updateLeagueTable } from './commands/league/leagueTable.js';
-import { autoPublish, generateMatchday, randomMatchesDay } from './commands/matches/matchday.js';
+import { imageLeagueTable, leagueTable, postLeagueTable } from './commands/league/leagueTable.js';
+import { generateMatchday, onetimeseason, publishNextMatches, randomMatchesDay, showMatchDay, updateMatchDayImage } from './commands/matches/matchday.js';
 import { setRating } from './commands/player/rating.js';
 import { approveMoveMatch, declineMoveMatch, listMatchMoves, moveMatch, moveMatchModalResponse, moveMatchPrompt } from './commands/matches/moveMatch.js';
 import { getApi } from './api.js';
-import { generateGroup } from './commands/league/generateGroup.js';
 import { arrangeDaySchedule } from './commands/matches/arrangeDaySchedule.js';
 import { addUniqueId } from './commands/player/uniqueId.js';
-import { addTransferBan, removeTransferBan } from './commands/teams/transferBan.js';
+import { editLeague } from './commands/league/editLeague.js';
+import { initCronJobs } from './cronjobs.js';
+import { initAllLeagues } from './functions/leaguesCache.js';
+import { autoCompleteLeague } from './functions/autoComplete.js';
 
 const keyPath = process.env.CERTKEY;
 const certPath = process.env.CERT;
@@ -79,6 +77,36 @@ const getTeamsCollection = async () => {
   const psoTeams = client.db("PSOTeamManager");
   return psoTeams.collection("Teams");
 }
+
+const mapToFunc = (map) => {
+  const globalCommands = new Map()
+  const psafCommands = new Map()
+  const wcCommands = new Map()
+  map.forEach(fullCmd => {
+    // eslint-disable-next-line no-unused-vars
+    const {func, psaf, wc, app, name} = fullCmd
+    if (psaf) {
+      psafCommands.set(name, func)
+    }
+    if(wc) {
+      wcCommands.set(name, func)
+    }
+    if(app) {
+      globalCommands.set(name, func)
+    }
+  })
+  return {
+    globalCommands,
+    psafCommands,
+    wcCommands
+  }
+}
+
+const {
+  globalCommands,
+  psafCommands,
+  wcCommands
+} = mapToFunc(commandsRegister())
 
 const displayTeam = (team) => (
   `Team: ${team.flag} ${team.emoji} ${team.name} - ${team.shortName}` +
@@ -117,13 +145,28 @@ function start() {
       }
 
       if (type === InteractionType.APPLICATION_COMMAND_AUTOCOMPLETE) {
+        let optionChanged = data.options.find(option=> option.focused)
+        if(!optionChanged)
+          optionChanged = data.options?.[0]?.options.find(option => option.focused)
         if(data.name==="editplayer"){
-          return autoCompleteNation(data, res)
+          return autoCompleteNation(optionChanged, dbClient, res)
         }
         if(data.name === "nationalteam"){
-          return autoCompleteNation(data, res)
+          return autoCompleteNation(optionChanged, dbClient, res)
         }
-        return autoCompleteNation(data, res)
+        if(optionChanged.name === "selection") {
+          return autoCompleteSelections(optionChanged, dbClient, res)
+        }
+        if(optionChanged.name === "eligiblenationality") {
+          return autoCompleteNation(optionChanged, dbClient, res)
+        }
+        if(optionChanged.name === "nationality") {
+          return autoCompleteNation(optionChanged, dbClient, res)
+        }
+        if(optionChanged.name === "league") {
+          return autoCompleteLeague(optionChanged, dbClient, res)
+        }
+        return autoCompleteNation(data, dbClient, res)
       }
       console.log(`Interaction ${type} from ${callerId}`)
 
@@ -140,8 +183,8 @@ function start() {
         const { message } = req.body
         const { custom_id } = data
         console.log(`custom_id ${custom_id}`)
+        const componentOptions = {custom_id, callerId, member, message, interaction_id, application_id, channel_id, token, guild_id, dbClient}
         if(guild_id === process.env.GUILD_ID) {
-          const componentOptions = {custom_id, callerId, member, message, interaction_id, application_id, channel_id, token, guild_id, dbClient}
           if(componentRegister[custom_id]) {
             return componentRegister[custom_id](componentOptions)
           }
@@ -161,6 +204,9 @@ function start() {
             return disbandTeamConfirmed(componentOptions)
           }
           if(custom_id.startsWith("referee_")) {
+            return refereeMatch(componentOptions)
+          }
+          if(custom_id.startsWith("streamer_")) {
             return refereeMatch(componentOptions)
           }
           if(custom_id.startsWith("loan_")) {
@@ -191,6 +237,10 @@ function start() {
               flags: InteractionResponseFlags.EPHEMERAL
             }
           })
+        } else if(guild_id === process.env.WC_GUILD_ID) {
+          if(custom_id.startsWith("vote_")) {
+            return voteAction(componentOptions)
+          }
         }
       }
 
@@ -213,14 +263,19 @@ function start() {
       }
 
       if (type === InteractionType.APPLICATION_COMMAND) {
-        const { name, options } = data;
-        const optionsObj = optionsToObject(options || [])
+        const { name, options, resolved } = data;
+        //const optionsObj = optionsToObject(options || [])
         console.log(`command ${name}`)
-        console.log(optionsObj)
+        console.log(options)
+        if(name === "uploadtest") {
+          console.log(req)
+          console.log(JSON.stringify(req.body))
+        }
 
         const commandOptions = {
-          name, options, member, interaction_id, application_id, channel_id, token, guild_id, callerId, res, dbClient
+          name, options, member, interaction_id, application_id, channel_id, token, guild_id, callerId, res, resolved, dbClient
         }
+        //console.log(commandOptions)
 
         if (name === 'help') {
           return help(commandOptions)
@@ -233,16 +288,25 @@ function start() {
           return timestamp(commandOptions)
         }
 
-        if(name === "boxlineup"){
-          return boxLineup(commandOptions)
-        }
+        if(process.env.WC_GUILD_ID === guild_id) {
+          if(name === "register") {
+            return register(commandOptions)
+          }
 
-        if(name === "lineup") {
-          return lineup(commandOptions)
-        }
+          if (name === "registerelections") {
+            return registerElections(commandOptions)
+          }
 
-        if(name === "eightlineup") {
-          return eightLineup(commandOptions)
+          if(name === 'showelectioncandidates') {
+            return showElectionCandidates(commandOptions)
+          }
+
+          if (name === "votecoach") {
+            return voteCoach(commandOptions)
+          }
+          if(wcCommands.has(name)) {
+            return wcCommands.get(name)(commandOptions)
+          }
         }
 
         if(process.env.GUILD_ID === guild_id) {
@@ -252,10 +316,6 @@ function start() {
           
           if (name === "player") {
             return player(commandOptions)
-          }
-
-          if(name === "interlineup") {
-            return internationalLineup(commandOptions)
           }
 
           if (name==="myplayer") {
@@ -300,6 +360,14 @@ function start() {
 
           if (name === "publishmatch") {
             return publishMatch(commandOptions)
+          }
+
+          if (name === "unpublishmatch") {
+            return unpublishMatch(commandOptions)
+          }
+
+          if (name === "expirethings") {
+            return expireThings(commandOptions)
           }
 
           if (name === "matchid") {
@@ -382,14 +450,6 @@ function start() {
             return setName(commandOptions)
           }
 
-          if(name==="addtransferban") {
-            return addTransferBan(commandOptions)
-          }
-
-          if(name === "removetransferban") {
-            return removeTransferBan(commandOptions)
-          }
-
           if(name === "teams") {
             let teamsResponse = []
             try {
@@ -434,6 +494,10 @@ function start() {
             return 
           }
 
+          if(name === "myteam") {
+            return team(commandOptions)
+          }
+
           if (name === "transfer") {
             return transfer(commandOptions)
           }
@@ -456,6 +520,18 @@ function start() {
 
           if(name === "listdeals") {
             return listDeals(commandOptions)
+          }
+
+          if(name === "showmatchday") {
+            return showMatchDay(commandOptions)
+          }
+
+          if(name === "updatematchdayimage") {
+            return updateMatchDayImage(commandOptions)
+          }
+
+          if(name === "onetimeseason") {
+            return onetimeseason(commandOptions)
           }
 
           if (name === "fine") {
@@ -610,25 +686,12 @@ function start() {
               }
             })
           }
-          if(name === "lineupedit") {
-            return editLineup(commandOptions)
-          }
-          if(name === "eightlineupedit") {
-            return editEightLineup(commandOptions)
-          }
 
           if(name === "addsteamid") {
             return addSteamId(commandOptions)
           }
           if(name === "addsteam") {
             return addSteam(commandOptions)
-          }
-
-          if(name === "addtoleague" || name === "addtointerleague") {
-            return addToLeague(commandOptions)
-          }
-          if(name === "removefromleague") {
-            return removeFromLeague(commandOptions)
           }
 
           if(name === "leagueteams") {
@@ -703,12 +766,16 @@ function start() {
             return listMatchMoves(commandOptions)
           }
 
-          if(name === 'checkdoublesteam') {
-            return manualDoubleSteam(commandOptions)
+          if(name === 'editleague') {
+            return editLeague(commandOptions)
           }
 
-          if(name === 'generategroup') {
-            return generateGroup(commandOptions)
+          if(name === 'publishnextmatches') {
+            return publishNextMatches(commandOptions)
+          }
+
+          if(name === 'checkdoublesteam') {
+            return manualDoubleSteam(commandOptions)
           }
 
           if(name === 'arrangeday') {
@@ -720,6 +787,9 @@ function start() {
           }
           if(name === 'adduniqueid') {
             return addUniqueId(commandOptions)
+          }
+          if(name === 'fixnames') {
+            return fixNames(commandOptions)
           }
 
           if (name ==='emojis') {
@@ -737,18 +807,28 @@ function start() {
               }
             })
           }
+          if(psafCommands.has(name)) {
+            return psafCommands.get(name)(commandOptions)
+          }
+        }
+
+        if(globalCommands.has(name)) {
+          return globalCommands.get(name)(commandOptions)
         }
       }
     }
     catch(e) {
       console.error(e)
     }
+    console.log('no handlers found')
+    console.log(data)
+    
     return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
       method: 'POST',
       body: {
         type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: 'Failed to process the command.',
+          content: `Failed to process the ${data?.name} command.`,
           flags: 1 << 6
         }
       }
@@ -757,6 +837,8 @@ function start() {
 
 
   let allActiveTeams = []
+  let allNationalSelections = []
+  let allLeagues = []
   var httpServer = http.createServer(app);
   httpServer.listen(PORT, async ()=> {
     console.log('Listening http on port', PORT);
@@ -785,178 +867,24 @@ function start() {
         await client.db("PSOTeams").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
         global.isConnected = true
-        dbClient(async ({teams})=> {
-          allActiveTeams = await teams.find({active: true}).toArray()
-          allActiveTeams.sort(() => Math.random() - 0.5)
-        })
       }
       catch(e){
         console.error(e)
       } finally {
         await client.close();
       }
+      await dbClient(async ({seasonsCollect, teams, nationalTeams, leagueConfig})=> {
+        await updateCacheCurrentSeason(seasonsCollect)
+        allActiveTeams = await teams.find({active: true}).toArray()
+        allActiveTeams.sort(() => Math.random() - 0.5)
+        allNationalSelections = await nationalTeams.find({active: true}).toArray()
+        allNationalSelections.sort(() => Math.random() - 0.5)
+        allLeagues = await leagueConfig.find(({archived: {$ne: true}})).sort({order: 1}).toArray()
+        initAllLeagues(allLeagues)
+      })
+      initCronJobs({dbClient, allActiveTeams, allNationalSelections, allLeagues})
     })
   }
-  new CronJob(
-    '1 9 * * *',
-    async function() {
-      getMatchesOfDay({date:'today', dbClient, isSchedule: true})
-    },
-    null,
-    true,
-    'Europe/London'
-  )
-  let currentTeamIndex = 0
-  new CronJob(
-    '*/5 7-22 * * *',
-    async function() {
-      if(allActiveTeams.length > 0) {
-        await innerUpdateTeam({guild_id: process.env.GUILD_ID, team: allActiveTeams[currentTeamIndex]?.id, dbClient})
-        console.log(`${allActiveTeams[currentTeamIndex].name} updated.`)
-        currentTeamIndex++
-        if(currentTeamIndex>= allActiveTeams.length) {
-          currentTeamIndex = 0
-        }
-      }
-    },
-    null,
-    true,
-    'Europe/London'
-  )
-  new CronJob(
-    '*/2 6-22 * * *',
-    async function() {
-      //console.log('no notifications for now')
-      await notifyMatchStart({dbClient})
-    },
-    null,
-    true,
-    'Europe/London'
-  )
-  new CronJob(
-    '1 22 * * *',
-    async function() {
-      console.log('every day at 22')
-      const response = await getMatchesSummary({dbClient})
-      for await(const message of response) {
-        await DiscordRequest(`/channels/${serverChannels.dailyResultsChannelId}/messages`, {
-          method: 'POST',
-          body: {
-            content: message
-          }
-        })
-      }
-    },
-    null,
-    true,
-    'Europe/London'
-  )
-  /*new CronJob(
-    '31 22 * * *',
-    async function() {
-      const league = fixturesChannels.find(chan=> chan.name === 'GBL')
-      await updateLeagueTable({dbClient, league: league.value})
-    },
-    null,
-    true,
-    'Europe/London'
-  )
-  new CronJob(
-    '33 22 * * *',
-    async function() {
-      const league = fixturesChannels.find(chan=> chan.name === 'MSL')
-      await updateLeagueTable({dbClient, league: league.value})
-    },
-    null,
-    true,
-    'Europe/London'
-  )
-  new CronJob(
-    '35 22 * * *',
-    async function() {
-      const league = fixturesChannels.find(chan=> chan.name === 'ENCEL')
-      await updateLeagueTable({dbClient, league: league.value})
-    },
-    null,
-    true,
-    'Europe/London'
-  )
-  new CronJob(
-    '23 22 * * *',
-    async function() {
-      const leagues = fixturesChannels.filter(chan=> postSeasonLeagues.includes(chan.value))
-      for await(const league of leagues ) {
-        await updateLeagueTable({dbClient, league: league.value})
-      }
-    },
-    null,
-    true,
-    'Europe/London'
-  )*/
-  new CronJob(
-    '19 22 * * *',
-    async function() {
-      const leagues = fixturesChannels.filter(chan=> pgLeagues.includes(chan.value))
-      for await(const league of leagues ) {
-        await updateLeagueTable({dbClient, league: league.value, short:true})
-      }
-    },
-    null,
-    true,
-    'Europe/London'
-  )
-  new CronJob(
-    '25 22 * * *',
-    async function() {
-      const leagues = fixturesChannels.filter(chan=> chan.isInternational && chan.standingsMsg)
-      for await(const league of leagues ) {
-        await updateLeagueTable({dbClient, league: league.value})
-      }
-    },
-    null,
-    true,
-    'Europe/London'
-  )
-  new CronJob(
-    '29 22 * * *',
-    async function() {
-      const leagues = fixturesChannels.filter(chan=> chan.name.includes('Playoffs') && chan.standingsMsg)
-      for await(const league of leagues ) {
-        await updateLeagueTable({dbClient, league: league.value})
-      }
-    },
-    null,
-    true,
-    'Europe/London'
-  )
-  /*new CronJob(
-    '3 23 * * *',
-    async function() {
-      const league = fixturesChannels.find(chan=> chan.name === 'WEL')
-      await updateLeagueTable({dbClient, league: league.value})
-    },
-    null,
-    true,
-    'Europe/London'
-  )*/
-  new CronJob(
-    '33 15 * * *',
-    async function() {
-      await autoPublish({dbClient})
-    },
-    null,
-    true,
-    'Europe/London'
-  )
-  new CronJob(
-    '34 21 * * *',
-    async function() {
-      await remindMissedMatches({dbClient})
-    },
-    null,
-    true,
-    'Europe/London'
-  )
 }
 
 start()

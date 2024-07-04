@@ -1,11 +1,24 @@
 import { InteractionResponseType, InteractionResponseFlags } from "discord-interactions"
-import { DiscordRequest } from "../utils.js"
-import { displayTeam, optionsToObject } from "../functions/helpers.js"
+import { DiscordRequest, isValidHttpUrl } from "../utils.js"
+import { displayTeam, isNumeric, optionsToObject } from "../functions/helpers.js"
 
 export const editTeam = async ({interaction_id, token, options, dbClient}) => {
   let response = "No teams found"
-  const {team, palmares, emoji, city, flag, shortname, name, logo} = Object.fromEntries(options.map(({name, value})=> [name, value]))
+  const {team, palmares, emoji, city, flag, shortname, name, logo, channel} = Object.fromEntries(options.map(({name, value})=> [name, value]))
   const roles = [{id: team}]
+  let newChannel = channel
+  if(channel){
+    if(isValidHttpUrl(channel)) {
+      const channelUrl = new URL(channel)
+      if (channelUrl.hostname === 'discord.com') {
+        const pathArray = channelUrl.pathname.split('/')
+        newChannel = pathArray.length > 0 ? pathArray[pathArray.length-1] : ''
+      }
+    }
+  }
+  if(!isNumeric(newChannel)) {
+    newChannel = ''
+  }
   return await dbClient(async ({teams})=>{
     const team = (await teams.findOne({$or:roles})) || {}
     const payload = {
@@ -15,9 +28,10 @@ export const editTeam = async ({interaction_id, token, options, dbClient}) => {
       emoji: emoji || team.emoji,
       city: city || team.city,
       flag: flag || team.flag,
-      logo: logo || team.logo
+      logo: logo || team.logo,
+      channel: newChannel || team.channel
     }
-    teams.updateOne({id: team.id}, {$set: payload})
+    await teams.updateOne({id: team.id}, {$set: payload})
     const updatedTeam = await teams.findOne({id:team.id})
     response = displayTeam(updatedTeam)
     return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
@@ -100,6 +114,10 @@ export const editTeamCmd =  {
     type: 3,
     name: 'name',
     description: 'Team\'s name'
+  },{
+    type: 3,
+    name: 'channel',
+    description: 'Team\'s channel'
   }]
 }
 

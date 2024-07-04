@@ -1,13 +1,39 @@
+import path from 'path';
+import {fileURLToPath} from 'url';
 import { InteractionResponseType } from "discord-interactions"
+import download from "image-downloader"
 import { DiscordRequest } from "../utils.js"
-import { getPlayerNick, msToTimestamp, optionsToObject, sleep, autocompleteCountries } from "../functions/helpers.js"
+import { getPlayerNick, msToTimestamp, optionsToObject, sleep, updateResponse, waitingMsg, isMemberStaff, quickResponse } from "../functions/helpers.js"
 import { getAllPlayers } from "../functions/playersCache.js"
-import { serverRoles } from "../config/psafServerConfig.js"
-import { isMemberStaff } from "../site/siteUtils.js"
+import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
 import { seasonPhases } from "./season.js"
+import { getAllCountries } from "../functions/countriesCache.js"
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const nationalTeamPlayerRole = '1103327647955685536'
 const staffRoles = ['1081886764366573658', '1072210995927339139', '1072201212356726836']
+
+
+const getConfirmPictureComponents = ({isValidated, isActive}={}) => ({
+  components: [{
+    type: 1,
+    components: [{
+      type: 2,
+      label: "Confirm",
+      style: 3,
+      custom_id: "confirm_picture",
+      disabled: !isValidated
+    },{
+      type: 2,
+      label: "Cancel",
+      style: 4,
+      custom_id: "cancel_picture",
+      disabled: !isActive
+    }]
+  }]
+})
 
 export const player = async ({options, interaction_id, callerId, guild_id, application_id, member, token, dbClient}) => {
   const [{value}] = options || [{}]
@@ -57,6 +83,9 @@ export const player = async ({options, interaction_id, callerId, guild_id, appli
         const contractsList = playerContracts.sort((a, b)=> b.at - a.at).map(({team, at, isLoan, phase, endedAt, until})=> `<@&${team}> from: <t:${msToTimestamp(at)}:F> ${endedAt ? `to: <t:${msToTimestamp(endedAt)}:F>`: (discPlayer.roles.includes(serverRoles.clubManagerRole) ? ' - :crown: Manager' : (isLoan ? `LOAN until season ${until}, beginning of ${seasonPhases[phase].desc}`: `until end of season ${until-1}`))}`)
         response += contractsList.join('\r')
       }
+      if(dbPlayer.profilePicture) {
+        response += `\rhttps://pso.shinmugen.net/${dbPlayer.profilePicture}`
+      }
     }
   })
 
@@ -69,9 +98,11 @@ export const player = async ({options, interaction_id, callerId, guild_id, appli
   })
 }
 
-export const editPlayer = async ({options=[], member, callerId, interaction_id, guild_id, application_id, token, dbClient}) => {
-  const {player = callerId, nat1, nat2, nat3, desc, steam, uniqueid, ingamename} = optionsToObject(options)
-  
+export const editPlayer = async ({options=[], member, callerId, resolved, interaction_id, guild_id, application_id, token, dbClient}) => {
+  const {player = callerId, desc, steam, uniqueid, ingamename, picture} = optionsToObject(options)
+  const nat1 = undefined
+  const nat2 = undefined
+  const nat3 = undefined
   await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
     method: 'POST',
     body: {
@@ -82,6 +113,19 @@ export const editPlayer = async ({options=[], member, callerId, interaction_id, 
       }
     }
   })
+  let profilePicture
+  if(picture) {
+    const image = resolved?.attachments?.[picture]?.proxy_url
+    if(image) {
+      const urlPath = new URL(image).pathname
+      profilePicture = `site/images/${player}${path.extname(urlPath)}`
+      download.image({
+        url: image,
+        dest: `${__dirname}/../${profilePicture}`,
+        extractFilename: false
+      })
+    }
+  }
   const playerResp = await DiscordRequest(`/guilds/${guild_id}/members/${player}`, { method: 'GET' })
   const discPlayer = await playerResp.json()
   let response = 'Nothing edited'
@@ -112,6 +156,7 @@ export const editPlayer = async ({options=[], member, callerId, interaction_id, 
       steam: steam || dbPlayer.steam,
       uniqueId: uniqueid || dbPlayer.uniqueId,
       ingamename: ingamename || dbPlayer.ingamename,
+      profilePicture: profilePicture || dbPlayer.profilePicture,
     }}, {upsert: true})
     const updatedPlayer = await players.findOne({id: player}) || {}
     const team = discPlayer.roles.find(role => allTeamIds.includes(role))
@@ -126,6 +171,9 @@ export const editPlayer = async ({options=[], member, callerId, interaction_id, 
       if(updatedPlayer.desc) {
         response += `Description: *${updatedPlayer.desc}*\r`
       }
+      if(updatedPlayer.profilePicture) {
+        response += `https://pso.shinmugen.net/${profilePicture}`
+      }
     }
     
     return await DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
@@ -136,6 +184,88 @@ export const editPlayer = async ({options=[], member, callerId, interaction_id, 
       }
     })
   })
+}
+
+export const updatePlayerPicture = async ({options=[], callerId, resolved, interaction_id, guild_id, application_id, token, dbClient}) => {
+  const {player = callerId, picture} = optionsToObject(options)
+  await waitingMsg({interaction_id, token})
+  
+  let profilePicture
+  if(picture) {
+    const image = resolved?.attachments?.[picture]?.proxy_url
+    if(image) {
+      const urlPath = new URL(image).pathname
+      profilePicture = `site/images/${player}${path.extname(urlPath)}`
+      download.image({
+        url: image,
+        dest: `${__dirname}/../${profilePicture}`,
+        extractFilename: false
+      })
+    }
+  }
+  const playerResp = await DiscordRequest(`/guilds/${guild_id}/members/${player}`, { method: 'GET' })
+  const discPlayer = await playerResp.json()
+  let response = 'Nothing edited'
+  return await dbClient(async ({players, nationalities, teams})=> {
+    const allTeams = await teams.find({active:true}).toArray()
+    const allTeamIds = allTeams.map(({id})=> id)
+    const dbPlayer = await players.findOne({id: player}) || {}
+    await players.updateOne({id: player}, {$set:{
+      profilePicture: profilePicture || dbPlayer.profilePicture,
+    }}, {upsert: true})
+    const updatedPlayer = await players.findOne({id: player}) || {}
+    const team = discPlayer.roles.find(role => allTeamIds.includes(role))
+    response = `<@${player}> - ${team ? `<@&${team}>` : 'Free Agent'}\r`
+    if(updatedPlayer) {
+      const country = await nationalities.findOne({name: updatedPlayer.nat1})
+      const country2 = await nationalities.findOne({name: updatedPlayer.nat2})
+      const country3 = await nationalities.findOne({name: updatedPlayer.nat3})
+      if(country){
+        response += `${country.flag} ${discPlayer.roles.includes(nationalTeamPlayerRole) ? 'International': ''}${country2? `, ${country2.flag}`: ''}${country3? `, ${country3.flag}`: ''}\r`
+      }
+      if(updatedPlayer.desc) {
+        response += `Description: *${updatedPlayer.desc}*\r`
+      }
+      if(updatedPlayer.profilePicture) {
+        response += `https://pso.shinmugen.net/${profilePicture}`
+      }
+    }
+    
+    return updateResponse({application_id, token, content: response})
+  })
+}
+
+const postPlayerPicture = async ({options, callerId, member, resolved, interaction_id, guild_id, application_id, token, dbClient}) => {
+  const playerName = getPlayerNick(member)
+  const {picture} = optionsToObject(options)
+  const image = resolved?.attachments?.[picture]?.proxy_url
+  const content = `${playerName} posted:\r${image}`
+  await quickResponse({interaction_id, token, content: `${playerName} posted:\r${image}`})
+  if(image) {
+    const response = await dbClient(async ({pendingPictures})=> {
+      const confirmResp = await DiscordRequest(`/channels/${serverChannels.confirmationPictures}/messages`, {
+        method: 'POST',
+        body: {
+          ...getConfirmPictureComponents({isActive: true, isValidated:true}),
+          content
+        }
+      })
+      const confirmMsg = await confirmResp.json()
+      const pendingPic = await pendingPictures.findOne({playerId: callerId}).toArray()
+      if(pendingPic) {
+        if(pendingPic.adminMsg) {
+          await DiscordRequest(`/channels/${serverChannels.confirmationPictures}/messages/${pendingPic.adminMsg}`, {
+            method: 'PUT',
+            body: {
+              ...getConfirmPictureComponents({isActive: true, isValidated:true}),
+              content: 'Cancelled by new upload'
+            }
+          })
+          
+        }
+      }
+    })
+  }
 }
 
 export const getPlayersList = async (totalPlayers, teamToList, displayCountries, players, contracts) => {
@@ -293,12 +423,14 @@ export const playersCmd = {
   }]
 }
 
-export const autoCompleteNation = ({options}, res) => {
-  const currentOption = options.find(({focused}) => focused === true);
+export const autoCompleteNation = async (currentOption, dbClient, res) => {
   const toSearch = (currentOption.value || "").toLowerCase()
+  const searchCountries = await getAllCountries(dbClient)
+  const autocompleteCountries = searchCountries.map(({name, flag})=> ({name, flag, display: flag+name, search: name.toLowerCase()}))
   const countryChoices = autocompleteCountries
     .filter(({search}) => toSearch.length === 0 || search.includes(toSearch))
     .slice(0, 24)
+  console.log(countryChoices)
   return res.send({
     type: InteractionResponseType.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT,
     data: {
@@ -318,21 +450,6 @@ export const editPlayerCmd = {
     required: true,
   },{
     type: 3,
-    name: 'nat1',
-    description: 'Main nationality',
-    autocomplete: true
-  },{
-    type: 3,
-    name: 'nat2',
-    description: 'Nationality 2',
-    autocomplete: true
-  },{
-    type: 3,
-    name: 'nat3',
-    description: 'Nationality 3',
-    autocomplete: true
-  },{
-    type: 3,
     name: 'desc',
     description: 'Player\'s description',
   }, {
@@ -347,5 +464,44 @@ export const editPlayerCmd = {
     type: 3,
     name: 'ingamename',
     description: 'In Game name'
+  }, {
+    type: 11,
+    name: 'picture',
+    description: 'Profile picture for cards'
   }]
 }
+
+export const updatePlayerPictureCmd = {
+  name: 'playerpicture',
+  description: 'Update a player\'s picture',
+  type: 1,
+  psaf: true,
+  func: updatePlayerPicture,
+  options: [{
+    type: 6,
+    name: 'player',
+    description: 'Player',
+    required: true,
+ }, {
+    type: 11,
+    name: 'picture',
+    description: 'Profile picture for cards',
+    required: true
+  }]
+}
+
+export const postPlayerPictureCmd = {
+  name: 'postpicture',
+  description: 'Post your player picture',
+  type: 1,
+  psaf: true,
+  func: postPlayerPicture,
+  options: [{
+    type: 11,
+    name: 'picture',
+    description: 'Picture for cards. Transparent bg-480x560',
+    required: true
+  }]
+}
+
+export default [updatePlayerPictureCmd]

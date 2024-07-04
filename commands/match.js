@@ -1,12 +1,14 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions";
 import { ObjectId, ReturnDocument } from "mongodb";
-import { fixturesChannels, matchDays, serverChannels } from "../config/psafServerConfig.js";
-import { getCurrentSeason, getPlayerNick, msToTimestamp, optionsToObject, updateResponse, waitingMsg } from "../functions/helpers.js";
+import { elimMatchDaysSorted, matchDays, serverChannels } from "../config/psafServerConfig.js";
+import { getCurrentSeason, getPlayerNick, msToTimestamp, optionsToObject, quickResponse, updateResponse, waitingMsg } from "../functions/helpers.js";
 import { DiscordRequest } from "../utils.js";
 import { sleep } from "../functions/helpers.js";
 import { parseDate } from "./timestamp.js";
 import { formatDMLineup } from "./lineup/lineup.js";
 import { getAllPlayers } from "../functions/playersCache.js";
+import { leagueChoices } from "../config/leagueData.js";
+import { getAllLeagues } from "../functions/leaguesCache.js";
 
 const matchLogChannelId = '1151131972568092702'
 
@@ -24,6 +26,40 @@ export const formatMatch = (league, homeTeam, awayTeam, match, showId, isInterna
       const refsArray = match.refs.split(',')
       response += '\r'+refsArray.map(ref=> `<@${ref}>`).join(', ')
     }
+  }
+  return response
+}
+
+export const updateMatch = async ({currentLeague, homeTeam, awayTeam, match, homeScore, awayScore, ff}) => {
+  const channel = currentLeague.channel || currentLeague.value
+  const post = formatMatch(currentLeague, homeTeam, awayTeam, {...match, homeScore, awayScore, isFF: ff}, false, match.isInternational)
+  const response = formatMatch(currentLeague, homeTeam, awayTeam, {...match, homeScore, awayScore, isFF: ff}, true, match.isInternational)
+  if(match.messageId) {
+    await DiscordRequest(`/channels/${channel}/messages/${match.messageId}`, {
+      method: 'PATCH',
+      body: {
+        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        content: post
+      }
+    })
+  }
+  if(match.logId) {
+    await DiscordRequest(`/channels/${matchLogChannelId}/messages/${match.logId}`, {
+      method: 'PATCH',
+      body: {
+        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        content: response
+      }
+    })
+  }
+  if(match.scheduleMessage) {
+    await DiscordRequest(`/channels/${serverChannels.scheduleChannelId}/messages/${match.scheduleMessage}`, {
+      method: 'PATCH',
+      body: {
+        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        content: response
+      }
+    })
   }
   return response
 }
@@ -136,9 +172,9 @@ export const formatDMMatch = (league, homeTeam, awayTeam, match, homeLineup, awa
   return {content:response, embeds}
 }
 
-export const internalCreateMatch = async ({league, home, away, isInternational=false, dateTimestamp, matchday, teams, matches, nationalities, seasonsCollect, order}) => {
-  const currentLeague = fixturesChannels.find(({value})=> value === league)
-  let response = `<${currentLeague.emoji}> **| ${currentLeague.name} ${matchday}** - ${dateTimestamp ? `<t:${dateTimestamp}:F>` : 'No date'}`  
+export const internalCreateMatch = async ({league, home, away, isInternational=false, dateTimestamp, matchday, teams, matches, nationalities, seasonsCollect, leagueConfig, group, order}) => {
+  const currentLeague = await leagueConfig.findOne({value: league})
+  let response = `<${currentLeague.emoji}> **| ${currentLeague.name}${group? ` ${group}` : ' '} ${matchday}** - ${dateTimestamp ? `<t:${dateTimestamp}:F>` : 'No date'}`  
   const homeScore = '?'
   const awayScore = '?'
   let insertResult
@@ -169,6 +205,8 @@ export const internalCreateMatch = async ({league, home, away, isInternational=f
     awayScore,
     isInternational,
     season,
+    createdDate: Date.now(),
+    group,
     ...orderInsert
   })
   response += `\rID: ${insertResult.insertedId}`
@@ -190,8 +228,8 @@ const createMatch = async ({interaction_id, token, options, dbClient, isInternat
     const parsedDate = parseDate(date, timezone)
     dateTimestamp = msToTimestamp(Date.parse(parsedDate))
   }
-  const response = await dbClient(async ({teams, matches, nationalities, seasonsCollect})=> {
-    return internalCreateMatch({league, home, away, isInternational, dateTimestamp, matchday, teams, matches, nationalities, seasonsCollect})
+  const response = await dbClient(async ({teams, matches, nationalities, seasonsCollect, leagueConfig})=> {
+    return internalCreateMatch({league, home, away, isInternational, dateTimestamp, matchday, teams, matches, nationalities, seasonsCollect, leagueConfig})
   })
 
   return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
@@ -216,7 +254,8 @@ export const internationalMatch = async ({interaction_id, token,  options, dbCli
 
 export const matchId = async ({interaction_id, token, options, dbClient}) => {
   const {home, away} = optionsToObject(options)
-  return await dbClient(async ({matches})=> {
+  return await dbClient(async ({matches, leagueConfig})=> {
+    const allLeagues = await leagueConfig.find({}).toArray()
     const foundMatches = await matches.find({home, away}).sort({dateTimestamp: 1}).toArray()
     if(foundMatches.length === 0) {
       return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
@@ -230,7 +269,7 @@ export const matchId = async ({interaction_id, token, options, dbClient}) => {
         }
       })
     }
-    const response = foundMatches.map(({league, matchday, home, away, dateTimestamp, _id})=> `${fixturesChannels.find(fixLeague=>fixLeague.value === league)?.name || ''} ${matchday} <@&${home}> - <@&${away}> <t:${dateTimestamp}:F> ${_id}`).join('\r')
+    const response = foundMatches.map(({league, matchday, home, away, dateTimestamp, _id})=> `${allLeagues.find(fixLeague=>fixLeague.value === league)?.name || ''} ${matchday} <@&${home}> - <@&${away}> <t:${dateTimestamp}:F> ${_id}`).join('\r')
     return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
       method: 'POST',
       body: {
@@ -258,7 +297,7 @@ export const matchId = async ({interaction_id, token, options, dbClient}) => {
   })
 }
 
-export const editAMatchInternal = async ({id, home, away, league, matchday, date, timezone = 0, timestamp, teams, matches, nationalities, order}) => {
+export const editAMatchInternal = async ({id, home, away, league, matchday, date, timezone = 0, timestamp, teams, matches, nationalities, leagueConfig, order}) => {
   const matchId = new ObjectId(id)
   const match = await matches.findOne(matchId)
   if(!match) {
@@ -287,7 +326,7 @@ export const editAMatchInternal = async ({id, home, away, league, matchday, date
     }
   }
   const leaguePick = league || match.league
-  const currentLeague = fixturesChannels.find(({value})=> value === leaguePick)
+  const currentLeague = await leagueConfig.findOne({value: leaguePick})
   const channel = currentLeague.channel || currentLeague.value
   const matchDayPick = matchday || match.matchday
   const orderInsert = order ? {order} : {}
@@ -334,8 +373,8 @@ export const editAMatchInternal = async ({id, home, away, league, matchday, date
 
 export const editAMatch = async ({interaction_id, token, options, dbClient}) => {
   const optionsObj = optionsToObject(options)
-  const response = await dbClient(async ({teams, matches, nationalities}) => {
-    return await editAMatchInternal({...optionsObj, teams, matches, nationalities})
+  const response = await dbClient(async ({teams, matches, nationalities, leagueConfig}) => {
+    return await editAMatchInternal({...optionsObj, teams, matches, nationalities, leagueConfig})
   })
   
   return await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
@@ -360,7 +399,7 @@ export const editInterMatch = async ({interaction_id, token, options, dbClient})
 
 export const internalEndMatch = async ({id, homeScore, awayScore, ff, dbClient}) => {
   const matchId = new ObjectId(id)
-  return dbClient(async ({teams, matches, nationalities}) => {
+  return dbClient(async ({teams, matches, nationalities, leagueConfig}) => {
     const match = await matches.findOne(matchId)
     if(!match) {
       return `Match ${id} not found`
@@ -371,50 +410,33 @@ export const internalEndMatch = async ({id, homeScore, awayScore, ff, dbClient})
       match.isInternational ? nationalities.findOne({name: match.away}) : teams.findOne({id: match.away})
     ])
     
-    const currentLeague = fixturesChannels.find(({value})=> value === match.league)
-    const channel = currentLeague.channel || currentLeague.value
+    const currentLeague = await leagueConfig.findOne({value: match.league})
     await matches.updateOne({"_id": matchId}, {$set: {
       homeScore,
       awayScore,
       isFF: ff,
       finished: true
     }})
-    const post = formatMatch(currentLeague, homeTeam, awayTeam, {...match, homeScore, awayScore, isFF: ff}, false, match.isInternational)
-    const response = formatMatch(currentLeague, homeTeam, awayTeam, {...match, homeScore, awayScore, isFF: ff}, true, match.isInternational)
-    if(match.messageId) {
-      await DiscordRequest(`/channels/${channel}/messages/${match.messageId}`, {
-        method: 'PATCH',
-        body: {
-          type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          content: post
-        }
-      })
+    const winner = homeScore !== awayScore ? (homeScore>awayScore ? match.home: match.away) : undefined
+    if(currentLeague.knockout && winner) {
+      const stageIndex = elimMatchDaysSorted.findIndex(matchday=> matchday === currentLeague.matchday)
+      const matchOrder = (match.order || 0)
+      const setPayload = {}
+      if(matchOrder % 2 === 0){
+        setPayload.home = winner
+      } else {
+        setPayload.away = winner
+      }
+      await matches.updateOne({league: match.league, matchday:elimMatchDaysSorted[stageIndex+1], order:Math.floor(matchOrder/2)}, {$set: setPayload})
     }
-    if(match.logId) {
-      await DiscordRequest(`/channels/${matchLogChannelId}/messages/${match.logId}`, {
-        method: 'PATCH',
-        body: {
-          type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          content: response
-        }
-      })
-    }
-    if(match.scheduleMessage) {
-      await DiscordRequest(`/channels/${serverChannels.scheduleChannelId}/messages/${match.scheduleMessage}`, {
-        method: 'PATCH',
-        body: {
-          type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          content: response
-        }
-      })
-    }
+    const response = await updateMatch({currentLeague, homeTeam, awayTeam, homeScore, awayScore, match, ff})
     return `Updated \r`+response
   })
 }
 export const internalEndMatchStats = async ({id, matchDetails, guild_id, callerId, dbClient}) => {
   const matchId = new ObjectId(id)
   const allPlayers = await getAllPlayers(guild_id)
-  return dbClient(async ({teams, matches, nationalities, players, playerStats}) => {
+  return dbClient(async ({teams, matches, nationalities, players, playerStats, leagueConfig}) => {
     const match = await matches.findOne(matchId)
     if(!match) {
       return `Match ${id} not found`
@@ -477,7 +499,7 @@ export const internalEndMatchStats = async ({id, matchDetails, guild_id, callerI
     ))
     const statsToSave = [...homeEntries, ...awayEntries]
     
-    const currentLeague = fixturesChannels.find(({value})=> value === match.league)
+    const currentLeague = await leagueConfig.findOne({value: match.league})
     const channel = currentLeague.channel || currentLeague.value
     const updatedMatch = await matches.findOneAndUpdate({"_id": matchId}, {$set: {
       homeScore,
@@ -486,7 +508,8 @@ export const internalEndMatchStats = async ({id, matchDetails, guild_id, callerI
       awayStats,
       dateOfMatch: matchDetails.dateOfMatch,
       isFF: false,
-      finished: true
+      finished: true,
+      finishedBy: callerId
     }}, {returnDocument: ReturnDocument.AFTER})
     //console.log(updatedMatch)
     await playerStats.deleteMany({matchId})
@@ -560,18 +583,18 @@ export const resetMatch = async ({interaction_id, token, application_id, options
   await waitingMsg({interaction_id, token})
 
   const matchId = new ObjectId(id)
-  const content = await dbClient(async ({teams, matches, nationalities}) => {
+  const content = await dbClient(async ({teams, matches, nationalities, leagueConfig}) => {
     const match = await matches.findOne(matchId)
     if(!match) {
       return `Match ${id} not found`
     }
+    const currentLeague = await leagueConfig.findOne({value: match.league})
     
     const [homeTeam, awayTeam] = await Promise.all([
       match.isInternational ? nationalities.findOne({name: match.home}) : teams.findOne({active: true, id: match.home}),
       match.isInternational ? nationalities.findOne({name: match.away}) : teams.findOne({active: true, id: match.away})
     ])
     
-    const currentLeague = fixturesChannels.find(({value})=> value === match.league)
     const channel = currentLeague.channel || currentLeague.value
     const resetValues = {
       homeScore: '?',
@@ -580,7 +603,6 @@ export const resetMatch = async ({interaction_id, token, application_id, options
       finished: null
     }
     const updatedMatch = await matches.findOneAndUpdate({"_id": matchId}, {$set: resetValues})
-    console.log(updatedMatch)
     const post = formatMatch(currentLeague, homeTeam, awayTeam, {...updatedMatch, ...resetValues}, false, match.isInternational)
     const response = formatMatch(currentLeague, homeTeam, awayTeam, {...updatedMatch, ...resetValues}, true, match.isInternational)
     if(match.messageId) {
@@ -606,20 +628,28 @@ export const resetMatch = async ({interaction_id, token, application_id, options
   return updateResponse({application_id, token, content})
 }
 
-export const internalPublishMatch = async ({league, matchday, postping=true, teams, matches, image, nationalities, matchDays}) => {
-  const currentLeague = fixturesChannels.find(({value})=> value === league)
+export const internalPublishMatch = async ({league, matchday, postping=true, seasonsCollect, teams, matches, nationalities, matchDays, leagueConfig}) => {
+  const currentLeague = await leagueConfig.findOne({value:league})
   const channel = currentLeague.channel || currentLeague.value
-  const imageToPost = image || currentLeague.defaultImage
-  if(imageToPost) {
-    await DiscordRequest(`/channels/${channel}/messages`, {
-      method: 'POST',
-      body: {
-        content: imageToPost,
-      }
-    })
+  const season = await getCurrentSeason(seasonsCollect)
+  const matchDay = await matchDays.findOne({league, season, matchday})
+  let imageMessageId = null
+  if(matchDay && matchDay.posted !== true ) {
+    const imageToPost = matchDay?.image || currentLeague.defaultImage
+    if(imageToPost) {
+      const resp = await DiscordRequest(`/channels/${channel}/messages`, {
+        method: 'POST',
+        body: {
+          content: imageToPost,
+        }
+      })
+      const postResp = await resp.json()
+      imageMessageId = postResp.id
+    }
   }
   const [allTeams, allNationalTeams] = await Promise.all([teams.find({}).toArray(), nationalities.find({}).toArray()])
-  const matchCursor = matches.find({league, matchday, messageId: null}, {sort: {dateTimestamp: 1}})
+  const matchCursor = matches.find({league, matchday, season, messageId: null}, {sort: {dateTimestamp: 1}})
+  let matchCount = 0
   for await (const match of matchCursor) {
     const homeTeam = match.isInternational ? allNationalTeams.find(({name})=> name === match.home) : allTeams.find(({id})=> id === match.home)
     const awayTeam = match.isInternational ? allNationalTeams.find(({name})=> name === match.away) : allTeams.find(({id})=> id === match.away)
@@ -647,59 +677,98 @@ export const internalPublishMatch = async ({league, matchday, postping=true, tea
       await sleep(300)
       await DiscordRequest(`/channels/${message.channel_id}/messages/${message.id}/reactions/${awayEmoji}:${awayEmojiId.substring(0, awayEmojiId.length -1)}/@me`, {method: 'PUT', body:{}})
     }
+    matchCount++
     //forced to wait otherwise we get blocked by the API limits
     await sleep(500)
   }
+  let endMessageId = null
   if(postping) {
     const pingRole = currentLeague.pingRole ? `<@&${currentLeague.pingRole}>`:'Everyone'
     const endMessage = `[ ${pingRole} ]--[ WELCOME BACK TO THE ${currentLeague.name}! VOTE YOUR WINNERS! ]`
-    await DiscordRequest(`/channels/${channel}/messages`, {
+    const resp = await DiscordRequest(`/channels/${channel}/messages`, {
       method: 'POST',
       body: {
         content: endMessage,
       }
     })
+    const endMessageResp = await resp.json()
+    endMessageId = endMessageResp.id
   }
-  await matchDays.updateOne({league, matchday}, {$set: {posted:true}})
+  await Promise.all([
+    matchDays.updateOne({league, matchday}, {$set: {posted:true, imageMessageId, endMessageId}}),
+    leagueConfig.updateOne({value: league}, {$set: {currentMatchDay: matchday}})
+  ])
+  return `Posted ${matchCount} matches.`
+}
+
+export const unpublishMatch = async ({callerId, interaction_id, token, application_id, options, dbClient}) => {
+  if(callerId !== '269565950154506243') {
+    return quickResponse({interaction_id, token, content: 'Command restricted', isEphemeral: true})
+  }
+  await waitingMsg({interaction_id, token})
+  const {league, matchday} = optionsToObject(options)
+  const content = await dbClient(async({matches, seasonsCollect, matchDays, leagueConfig})=> {
+    const currentLeague = await leagueConfig.findOne({value: league})
+    const channel = currentLeague.channel || currentLeague.value
+    const season = await getCurrentSeason(seasonsCollect)
+    const matchDay = await matchDays.findOne({league, season, matchday})
+    if(matchDay){
+      if(matchDay.imageMessageId ) {
+        await DiscordRequest(`/channels/${channel}/messages/${matchday.imageMessageId}`, {
+          method: 'DELETE',
+        })
+      }
+      if(matchDay.endMessageId) {
+        await DiscordRequest(`/channels/${channel}/messages/${matchday.endMessageId}`, {
+          method: 'DELETE',
+        })
+      }
+    }
+    const matchCursor = matches.find({league, matchday, season, messageId: {$ne: null}}, {sort: {dateTimestamp: 1}})
+    let matchCount = 0
+    for await (const match of matchCursor) {
+      try{
+        await DiscordRequest(`/channels/${channel}/messages/${match.messageId}`, {
+          method: 'DELETE'
+        })
+      } catch (e) {
+        console.log('Failed to delete message')
+        console.log(e.message)
+      }
+      await matches.updateOne({_id:match._id}, {$set: {messageId:null}})
+      matchCount++
+      sleep(500)
+    }
+    await matchDays.updateOne({league, matchday}, {$set: {posted:false, imageMessageId:null, endMessageId:null}})
+    return `${currentLeague.name} ${matchday} cleared. ${matchCount} matches unposted.`
+  })
+  return updateResponse({application_id, token, content})
 }
 
 export const publishMatch = async ({interaction_id, token, application_id, options, dbClient}) => {
   const {league, matchday, postping} = optionsToObject(options)
-  DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        content: `...`,
-        flags: 1 << 6
-      }
-    }
-  })
-  await dbClient(async ({teams, matches, nationalities, matchDays}) => 
-    internalPublishMatch({league, matchday, postping, teams, matches, matchDays, nationalities})
+  await waitingMsg({interaction_id, token})
+  const content = await dbClient(async ({teams, matches, nationalities, matchDays, seasonsCollect, leagueConfig}) => 
+    internalPublishMatch({league, matchday, postping, teams, matches, matchDays, nationalities, seasonsCollect, leagueConfig})
   )
-  return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-    method: 'PATCH',
-    body: {
-      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      content: 'Done',
-    }
-  })
+
+  return updateResponse({application_id, token, content})
 }
 
 export const getMatchesSummary = async({dbClient}) => {
   const matchesData = await getMatchesOfDay({forSite: true, finished: true, dbClient})
   const timestamp = msToTimestamp(Date.now())
   const messages = [`# <t:${timestamp}:d> Results`]
-  const leagues = new Array(fixturesChannels.length)
+  const allLeagues = await getAllLeagues()
+  const leagues = new Array(allLeagues.length)
   matchesData.forEach((match => {
-    const indexToAdd = fixturesChannels.findIndex((league) => league.name === match.league.name)
+    const indexToAdd = allLeagues.findIndex((league) => league.name === match.league.name)
     leagues[indexToAdd] = [...(leagues[indexToAdd]||[]), match]
   }))
   
   leagues.forEach((leagueMatches, index) => {
     if(leagueMatches?.length > 0) {
-      const message = `## ${fixturesChannels[index].name} <${fixturesChannels[index].emoji}>\r`
+      const message = `## ${allLeagues[index].name} <${allLeagues[index].emoji}>\r`
       const matchesMessage = leagueMatches.map(({isInternational, homeTeam, awayTeam, homeScore, awayScore, isFF}) => (
         isInternational ? (
           `> ${homeTeam.flag} **${homeTeam.name} ${homeScore} : ${awayScore}${isFF ? ' **ff**': ''} ${awayTeam.name}** ${awayTeam.flag}`
@@ -730,6 +799,7 @@ export const getMatchesOfDay = async ({date='today', finished=false, dbClient, f
       nationalities.find({}).toArray(),
       matches.find({dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, ...finishedArg}).sort({dateTimestamp:1}).toArray(),
     ])
+    const allLeagues = await getAllLeagues()
     if(forSite) {
       lineupsOfDay = await lineups.find({matchId: {$in: matchesOfDay.map(match=> match._id.toString())}}).toArray()
     }
@@ -737,7 +807,7 @@ export const getMatchesOfDay = async ({date='today', finished=false, dbClient, f
       return matchesOfDay.map(match => {
         const homeTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.home) : allTeams.find(({id})=> id === match.home)
         const awayTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.away) : allTeams.find(({id})=> id === match.away)
-        const league = fixturesChannels.find(({value})=> value === match.league)
+        const league = allLeagues.find(({value})=> value === match.league)
         const homeLineup = lineupsOfDay.find(lineup => lineup.matchId === match._id.toString() && match.home === lineup.team)
         const awayLineup = lineupsOfDay.find(lineup => lineup.matchId === match._id.toString() && match.home === lineup.team)
         return {
@@ -754,11 +824,19 @@ export const getMatchesOfDay = async ({date='today', finished=false, dbClient, f
       for (const match of matchesOfDay) {
         const homeTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.home) : allTeams.find(({id})=> id === match.home)
         const awayTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.away) : allTeams.find(({id})=> id === match.away)
-        const currentLeague = fixturesChannels.find(({value})=> value === match.league)
+        const channels = []
+        if(homeTeam.channel){
+          channels.push(homeTeam.channel)
+        }
+        if(awayTeam.channel) {
+          channels.push(awayTeam.channel)
+        }
+        const currentLeague = allLeagues.find(({value})=> value === match.league)
         const matchToPush = {
           content: formatMatch(currentLeague, homeTeam, awayTeam, match, true, match.isInternational),
           matchId: match._id.toString(),
           shortName: `${homeTeam.name} vs ${awayTeam.name}`,
+          channels,
           components: [{
           type: 1,
           components: [{
@@ -776,11 +854,17 @@ export const getMatchesOfDay = async ({date='today', finished=false, dbClient, f
             label: `Enter Exported Stats`,
             style: 3,
             custom_id: `match_stats_${match._id}`
+          }, {
+            type: 2,
+            label: `Streamer`,
+            style: 1,
+            custom_id: `streamer_${match._id}`
           }]
         }]}
         response.push(matchToPush)
       }
       if(isSchedule) {
+        const channelsToPush = new Map()
         for await (const match of response) {
           console.log(match)
           const {matchId, content, shortName, components} = match
@@ -811,6 +895,28 @@ export const getMatchesOfDay = async ({date='today', finished=false, dbClient, f
               }
             })
           }
+          if(match.channels) {
+            for (const channel of match.channels) {
+              const currentChannel = channelsToPush.get(channel) || []
+              channelsToPush.set(channel, [content, ...currentChannel])
+            }
+          }
+        }
+        for await (const [channel, contents] of Array.from(channelsToPush)) {
+          await DiscordRequest(`/channels/${channel}/messages`, {
+            method: 'POST',
+            body: {
+              content: 'Matches of the day:'
+            }
+          })
+          await sleep(500)
+          for await (const content of contents) {
+            await DiscordRequest(`/channels/${channel}/messages`, {
+              method: 'POST',
+              body: {content}
+            })
+            await sleep(500)
+          }
         }
       }
       return response
@@ -831,7 +937,8 @@ export const getPastMatches = async ({dbClient}) => {
     for (const match of matchesOfDay) {
       const homeTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.home) : allTeams.find(({id})=> id === match.home)
       const awayTeam = match.isInternational ? allNationalTeams.find(({name})=>name===match.away) : allTeams.find(({id})=> id === match.away)
-      const currentLeague = fixturesChannels.find(({value})=> value === match.league)
+      const allLeagues = await getAllLeagues()
+      const currentLeague = allLeagues.find(({value})=> value === match.league)
       response.push({content: formatMatch(currentLeague, homeTeam, awayTeam, match, true, match.isInternational), matchId: match._id.toString()})
     }
     return response
@@ -876,8 +983,8 @@ export const getMatch = async ({id, dbClient}) => {
     }
     const homeRawLineup = matchLineups.find(lineup=> lineup.team === homeTeam.id)
     const awayRawLineup = matchLineups.find(lineup=> lineup.team === awayTeam.id)
-
-    const league = fixturesChannels.find(({value})=> value === match.league)
+    const allLeagues = await getAllLeagues()
+    const league = allLeagues.find(({value})=> value === match.league)
     const homeLineup = toViewLineup(homeRawLineup, allPlayers, lineupStats)
     const awayLineup = toViewLineup(awayRawLineup, allPlayers, lineupStats)
     return {match, homeTeam, awayTeam, league, allNationalTeams, homeLineup, awayLineup}
@@ -946,10 +1053,8 @@ export const remindMissedMatches = async ({dbClient}) => {
       method: 'POST',
       body: {
         type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: `## All the matches for today are filled, thanks!`,
-          flags: 0
-        }
+        content: `## All the matches for today are filled, thanks!`,
+        flags: 0
       }
     })
   }
@@ -988,16 +1093,7 @@ export const matches = async ({interaction_id, token, application_id, options=[]
   const {date = "today", post} = optionsToObject(options)
   const response = await getMatchesOfDay({date, dbClient})
   if(response.length>0) {
-    await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-      method: 'POST',
-      body: {
-        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: response[0].content,
-          flags: !post ? InteractionResponseFlags.EPHEMERAL : 0
-        }
-      }
-    })
+    await quickResponse({interaction_id, token, content: response[0].content, isEphemeral: !post})
   }
   await response.forEach(async ({content, matchId}, index) => {
     if(index>0) {
@@ -1023,6 +1119,11 @@ export const matches = async ({interaction_id, token, application_id, options=[]
               label: `Enter stats`,
               style: 3,
               custom_id: `match_stats_${matchId}`
+            }, {
+              type: 2,
+              label: `Streamer`,
+              style: 1,
+              custom_id: `streamer_${match._id}`
             }]
           }]
         }
@@ -1049,7 +1150,7 @@ export const matchCmd = {
     type: 3,
     name: 'league',
     description: "Which league it is for",
-    choices: fixturesChannels.map(({name, value})=> ({name, value})),
+    choices: leagueChoices,
     required: true
   },{
     type: 3,
@@ -1107,7 +1208,7 @@ export const internationalMatchCmd = {
     type: 3,
     name: 'league',
     description: "Which league it is for",
-    choices: fixturesChannels.map(({name, value})=> ({name, value})),
+    choices: leagueChoices,
     required: true
   },{
     type: 3,
@@ -1266,7 +1367,7 @@ export const publishMatchCmd = {
       type: 3,
       name: 'league',
       description: "Which league it is for",
-      choices: fixturesChannels.map(({name, value})=> ({name, value})),
+      choices: leagueChoices,
       required: true
     },{
       type: 3,
@@ -1278,6 +1379,26 @@ export const publishMatchCmd = {
       type: 5,
       name: 'postping',
       description: "Post the ping in the channel?"
+    }
+  ]
+}
+export const unPublishMatchCmd = {
+  name: 'unpublishmatch',
+  description: 'Unpublish a matchday -- WARNING DON\'T TOUCH',
+  type: 1,
+  options: [
+    {
+      type: 3,
+      name: 'league',
+      description: "Which league it is for",
+      choices: leagueChoices,
+      required: true
+    },{
+      type: 3,
+      name: 'matchday',
+      description: "The matchday, or competition stage",
+      choices: matchDays.slice(0,24),
+      required: true
     }
   ]
 }

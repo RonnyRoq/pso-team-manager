@@ -17,6 +17,13 @@ export const seasonPhases = [{
   desc: 'post regular season'
 }]
 
+let currentSeason
+
+export const updateCacheCurrentSeason = async (seasonsCollect) => 
+  currentSeason = await seasonsCollect.findOne({endedAt: null})
+  
+export const getFastCurrentSeason = () => currentSeason?.season
+
 export const getCurrentSeasonPhaseDb = async ({seasonsCollect}) => {
   const seasonObj = await seasonsCollect.findOne({endedAt: null})
   let phase = seasonPhases.find(sphase => sphase.name === seasonObj.phase)?.desc || seasonPhases[0].desc
@@ -73,7 +80,7 @@ export const progressCurrentSeasonPhase = async ({interaction_id, token, guild_i
         console.log(`Tried to end loan of ${getPlayerNick(player)} but couldn't find a team to return him to.`)
       }
     }
-    let allExpiringContracts
+    let allExpiringContracts = []
     let allTeams
     if(newSeason) {
       const fullExpiringContracts = await contracts.find({until: {$lte : seasonObj.season}, endedAt: null, isLoan: {$ne: true}, isManager: null}, {limit: 50}).toArray()

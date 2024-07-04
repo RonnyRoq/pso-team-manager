@@ -1,7 +1,7 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { DiscordRequest } from "../../utils.js"
 import { optionsToObject, updateResponse, waitingMsg } from "../../functions/helpers.js"
-import { serverChannels, serverRoles } from "../../config/psafServerConfig.js"
+import { globalTransferBan, globalTransferBanMessage, serverChannels, serverRoles, transferBanStatus } from "../../config/psafServerConfig.js"
 import { seasonPhases } from "../season.js"
 
 
@@ -11,13 +11,16 @@ const preDealChecks = async({guild_id, player, member, contracts, teams, confirm
   if(!member.roles.includes(serverRoles.clubManagerRole)) {
     return {message: 'This command is restricted to Club Managers'}
   }
+  if(globalTransferBan) {
+    return {message: globalTransferBanMessage}
+  }
   const [discPlayerResp, destTeam, ongoingLoan, ongoingConfirmation] = await Promise.all([
     DiscordRequest(`/guilds/${guild_id}/members/${player}`, {}),
     teams.findOne({active: true, $or: member.roles.map(id=>({id}))}),
     contracts.findOne({isLoan: true, endedAt: null, playerId: player}),
     confirmations.findOne({playerId: player})
   ])
-  if(destTeam.transferBan) {
+  if(destTeam.transferBan === transferBanStatus.transferBan) {
     return {message: `Your team <@&${destTeam.id}> is banned from doing transfers.`}
   }
   if(ongoingLoan) {
@@ -129,10 +132,11 @@ export const loan = async ({interaction_id, guild_id, application_id, token, mem
     const currentSeasonPhase = seasonPhases.findIndex(({name})=> seasonObj.phase === name)
     let currentPhaseIndex = currentSeasonPhase
     const phasesCount = seasonPhases.length
-    if(seasonObj.phaseStartedAt + (twoWeeksMs/2) < Date.now()) {
+    if(seasonObj.phaseStartedAt + (twoWeeksMs) < Date.now()) {
+      console.log('increasing')
       currentPhaseIndex = (currentPhaseIndex+1) % phasesCount
     }
-    const options = [activePhase(currentPhaseIndex+1, phasesCount), activePhase(currentPhaseIndex+2, phasesCount), activePhase(currentPhaseIndex+3, phasesCount)]
+    const options = [activePhase(currentPhaseIndex, phasesCount), activePhase(currentPhaseIndex+1, phasesCount), activePhase(currentPhaseIndex+2, phasesCount)]
 
     const content = `When would <@${player}>'s loan end?`
     const components = [{

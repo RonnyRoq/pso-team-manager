@@ -1,7 +1,7 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { DiscordRequest } from "../utils.js"
-import { msToTimestamp, getPlayerNick, sleep, waitingMsg, optionsToObject, updateResponse, quickResponse } from "../functions/helpers.js"
-import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
+import { msToTimestamp, getPlayerNick, sleep, waitingMsg, optionsToObject, updateResponse, quickResponse, addPlayerPrefix, isSteamIdIncorrect, getRegisteredRole } from "../functions/helpers.js"
+import { globalTransferBan, globalTransferBanMessage, serverChannels, serverRoles, transferBanStatus } from "../config/psafServerConfig.js"
 import commandsRegister from "../commandsRegister.js"
 import { seasonPhases } from "./season.js"
 
@@ -69,17 +69,26 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
   })
   const {nationality, extranat, steamprofileurl, uniqueid} = optionsToObject(options)
   const steam = steamprofileurl
-  
-  const content = await dbClient(async ({players, nationalities})=> {
-    const [dbPlayer, allCountries] = await Promise.all([
+  const isPSAF = guild_id === process.env.GUILD_ID
+  const isWC = guild_id === process.env.WC_GUILD_ID
+    
+  const content = await dbClient(async ({players, nationalities, contracts, teams})=> {
+    const [dbPlayer, allCountries, activeContracts] = await Promise.all([
       players.findOne({id: callerId}),
       nationalities.find({}).toArray(),
+      contracts.find({playerId: callerId, endedAt: null}).toArray()
     ])
+    const activeContract = activeContracts.find(contract=>contract.isLoan) || activeContracts.find(contract=>!contract.isLoan)
+    let currentTeam = null
+    if(activeContract) {
+      console.log(activeContract)
+      currentTeam = await teams.findOne({id: activeContract.team})
+    }
     const nat1 = dbPlayer?.nat1 || nationality
     const nat2 = dbPlayer?.nat1 ? dbPlayer.nat2 : (extranat !== nationality ? extranat : null)
     const nat3 = dbPlayer?.nat3
     let steamId = dbPlayer?.steam || ""
-    if(!steamId || !steamId.includes("steamcommunity.com/profiles/") || !steamId.includes("steamcommunity.com/id/")) {
+    if(!steamId || !(steamId.includes("steamcommunity.com/profiles/") || steamId.includes("steamcommunity.com/id/"))) {
       console.log(`Existing steam ID not found ( ${steamId} ), using the one entered with the command`)
       steamId = steam
     }
@@ -89,23 +98,29 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
     const {flag: flag2 = ''} = allCountries.find(({name})=> name === nat2) || {}
     const {flag: flag3 = ''} = allCountries.find(({name})=> name === nat3) || {}
     let userDetails = `${flag1}${flag2}${flag3}<@${callerId}>\rSteam: ${dbPlayer?.steam}\rUnique ID: ${dbPlayer?.uniqueId}`
-    
-    if(member.roles.includes(serverRoles.registeredRole) && dbPlayer) {
-      return `You're already registered:\r${userDetails}`
+    if(isPSAF) {
+      if(member.roles.includes(serverRoles.registeredRole) && dbPlayer) {
+        return `You're already registered:\r${userDetails}`
+      }
+      if(member.roles.includes(serverRoles.matchBlacklistRole)) {
+        return 'Can\'t register while blacklisted.'
+      }
+      if(!member.roles.includes(serverRoles.verifiedRole)){
+        return 'Please verify before confirming.'
+      }
     }
-    if(member.roles.includes(serverRoles.matchBlacklistRole)) {
-      return 'Can\'t register while blacklisted.'
-    }
-    if(!member.roles.includes(serverRoles.verifiedRole)){
-      return 'Please verify before confirming.'
+    if(isWC) {
+      if(member.roles.includes(serverRoles.registeredRole) && dbPlayer) {
+        return `You're already registered:\r${userDetails}`
+      }
     }
     if(!steamId) {
       console.log('no steam', steamId)
       return 'Please enter your Steam ID. If you can\'t, please open a ticket and get your PSO Unique ID ready.'
     }
-    if(!steamId.includes("steamcommunity.com/profiles/") && !steamId.includes("steamcommunity.com/id/") ) {
-      console.log('Invalid Steam ID', steamId)
-      return 'Invalid Steam ID. Please enter the URL shown when you are in your Steam profile page.'
+    const steamCheckFailed = isSteamIdIncorrect(steamId)
+    if(steamCheckFailed){
+      return steamCheckFailed
     }
     if(!nationality) {
       return 'Please select a nationality'
@@ -120,8 +135,18 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
       return `Can't find ${extranat}, please select one of the nationalities of the autofill`
     }
 
+    let nick = getPlayerNick(member)
+    const teamSeparator = ' | '
+
+    if(nick.includes(teamSeparator)) {
+      nick = nick.substring(nick.indexOf(teamSeparator) + teamSeparator.length)
+      if(currentTeam) {
+        nick = addPlayerPrefix(currentTeam.shortName, nick)
+      }
+    }
+
     const updatedPlayer = {
-      nick: dbPlayer?.nick || getPlayerNick(member),
+      nick,
       nat1,
       nat2,
       nat3,
@@ -130,8 +155,8 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
     }
     await players.updateOne({id: callerId}, {$set: updatedPlayer}, {upsert: true})
     const payload = {
-      nick: updatedPlayer.nick,
-      roles: [...new Set([...member.roles, serverRoles.registeredRole])]
+      nick,
+      roles: [...new Set([...member.roles, getRegisteredRole(guild_id)])]
     }
     userDetails = `${flag1}${flag2}${flag3}<@${callerId}>\rSteam: ${encodeURI(steamId || '')}\rUnique ID: ${uniqueId || ''}`
     DiscordRequest(`guilds/${guild_id}/members/${callerId}`, {
@@ -141,11 +166,17 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
     
     const content = `Registered:\r${userDetails}`
     await DiscordRequest(`/channels/${serverChannels.registrationsChannelId}/messages`, {
-        method: 'POST',
-        body: {
-          content,
-        }
-      })
+      method: 'POST',
+      body: {
+        content,
+      }
+    })
+    await DiscordRequest(`/channels/${serverChannels.wcRegistrationChannelId}/messages`, {
+      method: 'POST',
+      body: {
+        content,
+      }
+    })
     return content
   })
 
@@ -160,16 +191,12 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
 }
 
 export const confirm = async ({member, callerId, interaction_id, application_id, guild_id, channel_id, token, options, dbClient}) => {
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        flags: InteractionResponseFlags.EPHEMERAL
-      }
-    }
-  })
+  await waitingMsg({interaction_id, token})
   const {team, seasons} = optionsToObject(options)
+  
+  if(globalTransferBan) {
+    return updateResponse({application_id, token, content: globalTransferBanMessage})
+  }
   
   const response = await dbClient(async ({teams, players, nationalities, confirmations, pendingDeals, pendingLoans})=> {
     const [allTeams, dbPlayer, allCountries, previousConfirmation, pendingDeal, pendingLoan] = await Promise.all([
@@ -188,7 +215,7 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
     }*/
     if(currentTeam) {
       if(currentTeam.transferBan) { 
-        return `Your team <@&${currentTeam.id}> is banned from doing transfers, you cannot leave it.`
+        return `Your team <@&${currentTeam.id}> is banned from doing exit transfers, you cannot leave it.`
       }
       if(!deal) {
         console.log(`${getPlayerNick(member)} tried to confirm for ${teamToJoin.name} but no deal`)
@@ -204,10 +231,13 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
     if(!member.roles.includes(serverRoles.verifiedRole)){
       return 'Please verify before confirming.'
     }
+    if(member.roles.includes(serverRoles.presidentRole)) {
+      return 'As a PRESIDENT, YOU ARE TOO POWERFUL TO CHANGE CLUBS :\'D'
+    }
     if(!teamToJoin) {
       return 'Please select an active team.'
     }
-    if(teamToJoin.transferBan) {
+    if(teamToJoin.transferBan === transferBanStatus.transferBan) {
       return `<@&${teamToJoin.id}> is banned from doing transfers, you cannot join it.`
     }
     if(previousConfirmation) {
@@ -243,7 +273,7 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
         method: 'POST',
         body: {
           ...getConfirmTransferComponents({isActive:true, isValidated: true}),
-          content: `${flag1}${flag2}${flag3}<@${callerId}> requests to join <@&${team}> ${pendingLoan ? `on a loan until Season ${pendingLoan.until}, Beginning of ${seasonPhases[pendingLoan.phase]?.desc}`: `for ${seasons} season${seasons=== 1 ? '' :'s'}`}${deal ? 
+          content: `${member.roles.includes(serverRoles.suspisciousRole)? ':warning':''}${flag1}${flag2}${flag3}<@${callerId}> requests to join <@&${team}> ${pendingLoan ? `on a loan until Season ${pendingLoan.until}, Beginning of ${seasonPhases[pendingLoan.phase]?.desc}`: `for ${seasons} season${seasons=== 1 ? '' :'s'}`}${deal ? 
             `\r${pendingLoan ? 'LOAN' : 'TRANSFER'}: <@&${deal.teamFrom}> -> <@&${deal.destTeam}> <:EBit:1128310625873961013>**${new Intl.NumberFormat('en-US').format(deal.amount)} Ebits\rDeal link: https://discord.com/channels/${guild_id}/${serverChannels.confirmationTransferChannel}/${deal.adminMessage}`:''}`,
         }
       })
@@ -264,13 +294,7 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
   })
 
 
-  return await DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-    method: 'PATCH',
-    body: {
-      content: response,
-      flags: InteractionResponseFlags.EPHEMERAL
-    }
-  })
+  return updateResponse({application_id, token, content: response})
 }
 
 export const releasePlayer = async ({member, callerId, interaction_id, application_id, channel_id, guild_id, token, options, dbClient}) => {
@@ -305,6 +329,9 @@ export const releasePlayer = async ({member, callerId, interaction_id, applicati
     }
     if(discPlayer.roles.includes(serverRoles.clubManagerRole)) {
       return `<@${player}> is a Club Manager, please open a ticket if you're trying to release him.`
+    }
+    if(discPlayer.roles.includes(serverRoles.presidentRole)) {
+      return `<@${player}> is a PRESIDENT, he's too powerful to be released :'D`
     }
     if(pendingRelease) {
       return `You already requested for <@${player}> to be released.`
@@ -348,8 +375,6 @@ export const releasePlayer = async ({member, callerId, interaction_id, applicati
 
 export const innerRemoveRelease =  async ({reason, messageId, adminMessage, playerId, pendingReleases}) => {
   const channelId = serverChannels.confirmationChannelId
-  console.log(channelId, messageId)
-  console.log(serverChannels.confirmationTransferChannel, adminMessage)
   const [baseMessageResp, adminMessageResp] = await Promise.all([
     DiscordRequest(`/channels/${channelId}/messages/${messageId}`, {method: 'GET'}),
     DiscordRequest(`/channels/${serverChannels.confirmationTransferChannel}/messages/${adminMessage}`, {method: 'GET'})
@@ -472,23 +497,9 @@ export const checkConfirmations = async({dbClient}) => {
 }
 
 export const pendingConfirmations = (async ({interaction_id, guild_id, token, application_id, dbClient})=>{
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        flags: InteractionResponseFlags.EPHEMERAL
-      }
-    }
-  })
+  await waitingMsg({interaction_id, token})
   const updatedConfs = await checkConfirmations({guild_id, dbClient})
-  return await DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-    method: 'PATCH',
-    body: {
-      content: `Updated ${updatedConfs} confirmations`,
-      flags: InteractionResponseFlags.EPHEMERAL
-    }
-  })
+  return updateResponse({application_id, token, content: `Updated ${updatedConfs} confirmations`})
 })
 
 commandsRegister.confirm = confirm

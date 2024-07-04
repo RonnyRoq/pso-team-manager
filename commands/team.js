@@ -1,7 +1,8 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { DiscordRequest } from "../utils.js"
 import { displayTeam, genericFormatMatch, getCurrentSeason, optionsToObject } from "../functions/helpers.js"
-import { fixturesChannels } from "../config/psafServerConfig.js"
+import { leagueChoices } from "../config/leagueData.js"
+import { getAllLeagues } from "../functions/leaguesCache.js"
 
 export const team = async ({interaction_id, application_id, token, options, member, dbClient})=> {
   let response = "No teams found"
@@ -26,7 +27,6 @@ export const team = async ({interaction_id, application_id, token, options, memb
     const leagueCondition = league ? {league} : {}
     const season = await getCurrentSeason(seasonsCollect)
     const teamsMatches = await matches.find({$or: [{home: team.id}, {away: team.id}], ...finished, ...leagueCondition, season }).sort({dateTimestamp: 1}).toArray()
-    //console.log(teamsMatches.length)
     const allTeams = await teams.find({}).toArray()
     response += '\r**Upcoming matches:**'
     if(teamsMatches.length === 0 ) {
@@ -34,8 +34,9 @@ export const team = async ({interaction_id, application_id, token, options, memb
     } else {
       let i = 0
       let currentEmbed = ''
+      const allLeagues = await getAllLeagues()
       for (const match of teamsMatches) {
-        currentEmbed += '\r'+genericFormatMatch(allTeams, match)
+        currentEmbed += '\r'+genericFormatMatch(allTeams, match, allLeagues)
         i++
         if(i === 4) {
           matchEmbeds.push(currentEmbed)
@@ -73,7 +74,7 @@ export const team = async ({interaction_id, application_id, token, options, memb
       method: 'POST',
       body: {
         type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        content: `${Math.floor(i/3 + 1)}`,
+        content: `Page ${Math.floor(i/3 + 1)}`,
         embeds: currentEmbed,
         flags: InteractionResponseFlags.EPHEMERAL,
       }
@@ -98,6 +99,12 @@ export const teamCmd = {
     type: 3,
     name: 'league',
     description: 'League',
-    choices: fixturesChannels.map(({name, value})=> ({name, value}))
+    choices: leagueChoices
   }]
+}
+
+export const myTeamCmd = {
+  type: 1,
+  name: 'myteam',
+  description: 'Show my team\'s details',
 }

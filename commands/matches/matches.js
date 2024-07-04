@@ -3,13 +3,16 @@ import { getCurrentSeason, msToTimestamp } from "../../functions/helpers.js"
 
 
 export const getMatches = async ({getParams, dbClient}) => {
-  const {leagueId, matchday, date, season} = getParams
+  const {leagueId, matchday, date, season, finished} = getParams
   let query = {}
   if(leagueId) {
     query.league = leagueId
   }
   if(matchday) {
     query.matchday = matchday
+  }
+  if(finished) {
+    query.finished = true
   }
   if(date) {
     const parsedDate = parseDate(date)
