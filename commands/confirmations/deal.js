@@ -136,7 +136,7 @@ export const loan = async ({interaction_id, guild_id, application_id, token, mem
       console.log('increasing')
       currentPhaseIndex = (currentPhaseIndex+1) % phasesCount
     }
-    const options = [activePhase(currentPhaseIndex, phasesCount), activePhase(currentPhaseIndex+1, phasesCount), activePhase(currentPhaseIndex+2, phasesCount)]
+    const options = [activePhase(currentPhaseIndex, phasesCount), activePhase(currentPhaseIndex+1, phasesCount)]
 
     const content = `When would <@${player}>'s loan end?`
     const components = [{

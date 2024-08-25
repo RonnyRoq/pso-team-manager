@@ -13,7 +13,7 @@ const createSelection = async ({application_id, token, options, dbClient}) => {
     }
     await nationalTeams.updateOne({shortname}, {$set: {name, shortname, region, eligiblenationality, logo, active: true}}, {upsert: true})
     
-    return getSelectionDetails({name, shortname, region, eligiblenationality, logo}, nationality, true)
+    return getSelectionDetails({name, shortname, region, eligiblenationality, logo}, nationality, [], true)
   })
   return updateResponse({application_id, token, content})
 }
@@ -56,19 +56,27 @@ export const updateSelectionPost = async ({selection, dbClient}) => {
     const nationalPlayers = await nationalContracts.find({season, selection}).toArray()
     const content = getSelectionDetails(nationalTeam, nationality, nationalPlayers)
     const payload = {}
+    console.log(nationalTeam)
     if(nationalTeam.psafMsg) {
-      await DiscordRequest(`/channels/${serverChannels.nationalTeamsPostsChannelId}/messages/${nationalTeam.psafLogo}`, {
-        method: 'PATCH',
-        body: {
-          content: nationalTeam.logo
-        }
-      })
-      await DiscordRequest(`/channels/${serverChannels.nationalTeamsPostsChannelId}/messages/${nationalTeam.psafMsg}`, {
-        method: 'PATCH',
-        body: {
-          content
-        }
-      })
+      try {
+        await DiscordRequest(`/channels/${serverChannels.nationalTeamsPostsChannelId}/messages/${nationalTeam.psafLogo}`, {
+          method: 'PATCH',
+          body: {
+            content: nationalTeam.logo || '--'
+          }
+        })
+        await DiscordRequest(`/channels/${serverChannels.nationalTeamsPostsChannelId}/messages/${nationalTeam.psafMsg}`, {
+          method: 'PATCH',
+          body: {
+            content
+          }
+        })
+      }
+      catch(e) {
+        nationalTeam.psafMsg = null
+        nationalTeam.psafLogo = null
+        await nationalTeams.updateOne({shortname: nationalTeam.shortname}, {$set: {psafMsg: null, psafLogo: null}})
+      }
     } else {
       const psafResp = await DiscordRequest(`/channels/${serverChannels.nationalTeamsPostsChannelId}/messages`, {
         method: 'POST',
@@ -88,18 +96,25 @@ export const updateSelectionPost = async ({selection, dbClient}) => {
       payload.psafMsg = message.id
     }
     if(nationalTeam.wcMsg) {
-      await DiscordRequest(`/channels/${serverChannels.wcNationalTeamsPostsChannelId}/messages/${nationalTeam.wcLogo}`, {
-        method: 'PATCH',
-        body: {
-          content: nationalTeam.logo
-        }
-      })
-      await DiscordRequest(`/channels/${serverChannels.wcNationalTeamsPostsChannelId}/messages/${nationalTeam.wcMsg}`, {
-        method: 'PATCH',
-        body: {
-          content
-        }
-      })
+      try{
+        await DiscordRequest(`/channels/${serverChannels.wcNationalTeamsPostsChannelId}/messages/${nationalTeam.wcLogo}`, {
+          method: 'PATCH',
+          body: {
+            content: nationalTeam.logo || '--'
+          }
+        })
+        await DiscordRequest(`/channels/${serverChannels.wcNationalTeamsPostsChannelId}/messages/${nationalTeam.wcMsg}`, {
+          method: 'PATCH',
+          body: {
+            content
+          }
+        })
+      }
+      catch(e) {
+        nationalTeam.wcMsg = null
+        nationalTeam.wcLogo = null
+        await nationalTeams.updateOne({shortname: nationalTeam.shortname}, {$set: {wcMsg: null, wcLogo: null}})
+      }
     } else {
       const wcResp = await DiscordRequest(`/channels/${serverChannels.wcNationalTeamsPostsChannelId}/messages`, {
         method: 'POST',

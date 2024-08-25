@@ -1,24 +1,24 @@
 import { matchDays, serverRoles } from "../../config/psafServerConfig.js"
-import { getCurrentSeason, msToTimestamp, optionsToObject, quickResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { getCurrentSeason, isTopAdminRole, msToTimestamp, optionsToObject, quickResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { parseDate } from "../timestamp.js"
 import { editAMatchInternal, formatMatch, internalCreateMatch, internalPublishMatch } from "../match.js"
 import { shuffleArray } from "../../functions/helpers.js"
 import { getFastCurrentSeason } from "../season.js"
 import { leagueChoices } from "../../config/leagueData.js"
-import { getAllLeagues } from "../../functions/leaguesCache.js"
+import { getAllLeagues } from "../../functions/allCache.js"
 
 const thirtyMinutes = 30*60
 
 export const generateMatchday = async ({interaction_id, token, application_id, dbClient, member, options}) => {
-  if(!member.roles.includes(serverRoles.presidentRole)) {
+  if(!member.roles.find(role => isTopAdminRole(role))) {
     return quickResponse({interaction_id, token, content: 'This command is only available to presidents.', isEphemeral:true})
   }
   const {league, matchday, date, image} = optionsToObject(options)
   const parsedDate = parseDate(date)
   const startOfDay = new Date(parsedDate)
-  startOfDay.setUTCHours(17,0,0,0)
+  startOfDay.setHours(17,0,0,0)
   const endOfDay = new Date(parsedDate)
-  endOfDay.setUTCHours(20,30,0,0)
+  endOfDay.setHours(20,30,0,0)
   const startDateTimestamp = msToTimestamp(Date.parse(startOfDay))
   const endDateTimestamp = msToTimestamp(Date.parse(endOfDay))
   const allLeagues = await getAllLeagues()
@@ -27,7 +27,7 @@ export const generateMatchday = async ({interaction_id, token, application_id, d
   let currentTimestamp = startDateTimestamp
   await waitingMsg({interaction_id, token})
   let processedMatchesIds = []
-  const content = await dbClient(async({matches, matchDays, seasonsCollect, teams, nationalities, leagueConfig})=> {
+  const content = await dbClient(async({matches, matchDays, seasonsCollect, teams, nationalTeams, leagueConfig})=> {
     const season = await getCurrentSeason(seasonsCollect)
     const matchesOfDay = await matches.find({season, league, matchday, finished: null}).toArray()
     shuffleArray(matchesOfDay)
@@ -39,7 +39,7 @@ export const generateMatchday = async ({interaction_id, token, application_id, d
         currentTimestamp = startDateTimestamp
       }
     }
-    await Promise.allSettled(processedMatchesIds.map(id => editAMatchInternal({id, teams, nationalities, matches, leagueConfig})))
+    await Promise.allSettled(processedMatchesIds.map(id => editAMatchInternal({id, teams, nationalTeams, matches, leagueConfig})))
     await matchDays.updateOne({league, matchday, season}, {$set: {league, matchday, season, startDateTimestamp, endDateTimestamp, image}}, {upsert: true})
     return `${leagueObj.name} ${matchday}: ${processedMatchesIds.length} matches set between <t:${startDateTimestamp}:F> and <t:${endDateTimestamp}:F>`
   })
@@ -56,7 +56,7 @@ export const randomMatchesDay = async ({interaction_id, token, application_id, m
   const allLeagues = await getAllLeagues()
   const leagueObj = allLeagues.find(fixtureChan=> fixtureChan.value === league)
   await waitingMsg({interaction_id, token})
-  const content = await dbClient(async({matches, seasonsCollect, teams, leagues, nationalities, leagueConfig})=> {
+  const content = await dbClient(async({matches, seasonsCollect, teams, leagues, nationalTeams, leagueConfig})=> {
     const currentSeason = await getCurrentSeason(seasonsCollect)
     const matchesOfDay = await matches.find({season: currentSeason, league, matchday, finished: null}).toArray()
     if(matchesOfDay.length>0) {
@@ -69,7 +69,7 @@ export const randomMatchesDay = async ({interaction_id, token, application_id, m
       teamPairs.push([leagueTeams[i], leagueTeams[i+1]])
     }
     const matchesList = await Promise.allSettled(teamPairs.map(([home, away])=>
-      internalCreateMatch({league, home, away, isInternational:leagueObj.isInternational, undefined, matchday, teams, matches, nationalities, seasonsCollect, leagueConfig})
+      internalCreateMatch({league, home, away, isInternational:leagueObj.isInternational, undefined, matchday, teams, matches, nationalTeams, seasonsCollect, leagueConfig})
     ))
 
     console.log(matchesList)
@@ -93,9 +93,14 @@ export const showMatchDay = async ({interaction_id, token, application_id, dbCli
     response += `${matchDay.image}\r<t:${matchDay.startDateTimestamp}:f> - <t:${matchDay.endDateTimestamp}:f>\r`
   }
   console.log(matchDayMatches.length)
-  response += matchDayMatches.map(match=> 
-    formatMatch(leagueObj, relatedTeams.find(team=>team.id === match.home), relatedTeams.find(team=>team.id === match.away), match, true)
-  ).join('\r')
+  const matchDayEntries = []
+  for await (const match of matchDayMatches) {
+    const homeTeam = leagueObj.isInternational ? relatedTeams.find(team=>team.shortname === match.home) : relatedTeams.find(team=>team.id === match.home)
+    const awayTeam = leagueObj.isInternational ? relatedTeams.find(team=>team.shortname === match.away) : relatedTeams.find(team=>team.id === match.away)
+    const formattedMatch = await formatMatch(leagueObj, homeTeam, awayTeam, match)
+    matchDayEntries.push(formattedMatch)
+  }
+  response += matchDayEntries.join('\r')
   await updateResponse({application_id, token, content: response.substring(0, 1999)})
 }
 
@@ -161,7 +166,7 @@ export const oneTimeSeasonCmd = {
 export const publishNextMatches = async ({interaction_id, application_id, token, dbClient}) => {
   const now = msToTimestamp(Date.now())
   await waitingMsg({interaction_id, token})
-  const content = await dbClient(async ({seasonsCollect, teams, matches, nationalities, matchDays, leagueConfig}) => {
+  const content = await dbClient(async ({seasonsCollect, teams, matches, nationalTeams, matchDays, leagueConfig}) => {
     const activeLeagues = await leagueConfig.find({active: true}).toArray()
     const activeLeaguesId = activeLeagues.map(league=>league.value)
     const nextMatchDays = await matchDays.find({startDateTimestamp: {$gte: now}, league: {$in: activeLeaguesId}}, {startDateTimestamp: 1}).toArray()
@@ -173,7 +178,7 @@ export const publishNextMatches = async ({interaction_id, application_id, token,
     })
     const matchDaysToPost = Array.from(matchDaysPerLeague).filter(([, matchDay])=> !matchDay.posted).map(([, matchDay])=> matchDay)
     for await(const matchDay of matchDaysToPost) {
-      await internalPublishMatch({league: matchDay.league, matchday: matchDay.matchday, seasonsCollect, teams, matches, nationalities, matchDays, leagueConfig})
+      await internalPublishMatch({league: matchDay.league, matchday: matchDay.matchday, seasonsCollect, teams, matches, nationalTeams, matchDays, leagueConfig})
     }
     return `Posted ${matchDaysToPost.length} matchdays`
   })
@@ -186,7 +191,7 @@ export const autoPublish = async ({dbClient}) => {
 
   const endOfDay = new Date()
   endOfDay.setHours(23, 59, 59, 0)
-  return dbClient(async ({seasonsCollect, teams, matches, nationalities, leagueConfig, matchDays})=> {
+  return dbClient(async ({seasonsCollect, teams, matches, nationalTeams, leagueConfig, matchDays})=> {
     const activeLeagues = await leagueConfig.find({active: true}).toArray()
     const todayMatchDays = await matchDays.find({startDateTimestamp:{$gte: msToTimestamp(startOfDay.getTime())}, endDateTimestamp: {$lte: msToTimestamp(endOfDay.getTime())}, league: {$in: activeLeagues.map(league=>league.value)}}, {startDateTimestamp: -1}).toArray()
     const leaguesToPost = todayMatchDays.map(matchday=> matchday.league)
@@ -201,7 +206,7 @@ export const autoPublish = async ({dbClient}) => {
     console.log(matchDaysToPost)
 
     for await(const matchDay of matchDaysToPost) {
-      await internalPublishMatch({league: matchDay.league, matchday: matchDay.matchday, seasonsCollect, teams, matches, nationalities, matchDays, leagueConfig})
+      await internalPublishMatch({league: matchDay.league, matchday: matchDay.matchday, seasonsCollect, teams, matches, nationalTeams, matchDays, leagueConfig})
     }
   })
 }

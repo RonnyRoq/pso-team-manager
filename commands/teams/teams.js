@@ -1,7 +1,7 @@
 import { displayTeam, waitingMsg } from "../../functions/helpers.js";
 
 
-export const teams = async ({interaction_id, token, applicationId, dbClient}) => {
+export const teams = async ({interaction_id, token, application_id, dbClient}) => {
   await waitingMsg({interaction_id, token})
   
   const teamsResponse = await dbClient(async ({teams})=>{

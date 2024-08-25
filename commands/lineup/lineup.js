@@ -1,13 +1,14 @@
 import {
   InteractionResponseType,
 } from 'discord-interactions';
-import { getPlayerTeam, getPlayerNick, optionsToObject, msToTimestamp, postMessage, genericFormatMatch, waitingMsg, updateResponse, genericInterFormatMatch, getRegisteredRole, getCurrentSeason, isServerSupported, isLineupChannel, handleSubCommands } from '../../functions/helpers.js';
+import { getPlayerTeam, getPlayerNick, optionsToObject, msToTimestamp, postMessage, genericFormatMatch, waitingMsg, updateResponse, genericInterFormatMatch, getRegisteredRole, isServerSupported, isLineupChannel, handleSubCommands } from '../../functions/helpers.js';
 import { getAllPlayers } from '../../functions/playersCache.js';
 import { lineupBlacklist, lineupRolesBlacklist, lineupRolesWhitelist, serverChannels, serverRoles, wcLineupBlacklist, wcLineupRolesWhilelist } from '../../config/psafServerConfig.js';
 import { DiscordRequest } from '../../utils.js';
-import { getAllLeagues } from '../../functions/leaguesCache.js';
+import { getAllLeagues, getAllNationalities } from '../../functions/allCache.js';
+import { getFastCurrentSeason } from '../season.js';
 
-const nonLineupAttributes = ['_id', 'team', 'matchId', 'vs']
+export const nonLineupAttributes = ['_id', 'team', 'matchId', 'vs']
 const steam = '<:steam:1201620242015719454>'
 
 const positionsOrder = {
@@ -210,64 +211,76 @@ export const formatEightLineup = ({gk, lb, cb, rb, lcm, rcm, lst, rst, sub1, sub
   }
 }
 
-const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam, member, guild_id, isInternational, channel_id }) => {
+const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam, member, guild_id, channel_id }) => {
   if(isOfficialLineup(guild_id, channel_id)) {
     let playerTeam= ''
     const startOfDay = new Date()
-    startOfDay.setUTCHours(startOfDay.getHours()-1,0,0,0)
+    startOfDay.setHours(startOfDay.getHours()-1,0,0,0)
     const endOfDay = new Date()
-    endOfDay.setUTCHours(23,59,59,999)
+    endOfDay.setHours(23,59,59,999)
     const startDateTimestamp = msToTimestamp(Date.parse(startOfDay))
     const endDateTimestamp = msToTimestamp(Date.parse(endOfDay))
     
-    return await dbClient(async ({teams, matches, nationalities, players, lineups, nationalTeams, nationalContracts, seasonsCollect})=>{
-      const season = await getCurrentSeason(seasonsCollect)
-      const [dbPlayer, nations, nationalSelections, selfNationalContract] = await Promise.all([
-        players.findOne({id: callerId}),
-        nationalities.find({}).toArray(),
+    return await dbClient(async ({teams, matches, players, lineups, nationalTeams, nationalContracts})=>{
+      const season = getFastCurrentSeason()
+      const [nations, nationalSelections, selfNationalContract, memberTeam, allTeams] = await Promise.all([
+        getAllNationalities(),
         nationalTeams.find({active: true}).toArray(),
-        nationalContracts.findOne({season, playerId: callerId})
+        nationalContracts.findOne({season, playerId: callerId}),
+        getPlayerTeam(member, teams),
+        teams.find({active: true})
       ])
-      const memberTeam = await (!isInternational ? getPlayerTeam(member, teams) : nationalSelections.find(selection=> selection.shortName=== selfNationalContract.selection))
-      const teamId = isInternational ? memberTeam.shortname: memberTeam?.id
-      const nation = isInternational ? memberTeam.eligiblenationality : nations.find(item=> item.name === dbPlayer.nat1)
-      const nextMatches = await matches.find({isInternational: isInternational ? isInternational : {$ne: true}, dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, finished: {$in: [false, null]}, $or: [{home: teamId}, {away: teamId}]}).sort({dateTimestamp:1}).toArray()
-      const nextMatch = nextMatches[0]
-      const theMatchId = nextMatch?._id?.toString() || ''
-      let previousLineupToSave = {}
-      /*if(edit) {
-        if(!nextMatch){
-          return `Cannot find the lineup you're trying to edit`
+      const memberSelection = await nationalSelections.find(selection=> selection?.shortName=== selfNationalContract?.selection)
+      const teamIds = [memberTeam?.id, memberSelection?.shortname].filter(item=> item)
+      const nextMatches = await matches.find({season, dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, finished: {$in: [false, null]}, $or: [{home: {$in: teamIds}}, {away: {$in: teamIds}}]}).sort({dateTimestamp:1}).toArray()
+      const savedLineup = await lineups.findOneAndUpdate({postedBy: callerId, id: lineup.id}, {
+        $setOnInsert: {
+          postedBy: callerId,
+          id: Math.random().toString(36).slice(-6)
+        },
+        $set: {
+          ...lineup
         }
-        const previousLineup = await lineups.findOne({matchId:theMatchId, team: teamId})
-        if(!previousLineup) {
-          return `Cannot find the lineup you're trying to edit`
+      }, {upsert: true, returnDocument: 'after'})
+      console.log(savedLineup)
+      let nextMatch, theMatchId, teamId
+      if(nextMatches.length > 1) {
+        return {
+          content: 'Which match is it for?', 
+          components: [{
+            type: 1,
+            components: nextMatches.map(match=> {
+              const home = allTeams.find(team=> team.id === match.home)
+              const away = allTeams.find(team=> team.id === match.away)
+              return {
+                type: 2,
+                label: `${home.name} vs ${away.name}`.substring(0, 79),
+                style: 2,
+                custom_id: `lineup_${savedLineup.id}_${match._id.toString()}`,
+              }
+            }).slice(0, 4)
+          }]
         }
-        previousLineupToSave = Object.fromEntries(Object.entries(previousLineup).filter(([key])=>!nonLineupAttributes.includes(key)))
-      }*/
-      const matchId = theMatchId
-      if(nextMatch) {
+      } else if(nextMatches.length === 1) {
+        nextMatch = nextMatches[0]
+        theMatchId = nextMatch?._id?.toString() || ''
         const allLeagues = await getAllLeagues()
-        if(!isInternational){
-          const teamsOfMatch = await teams.find({$or:[{id:nextMatch.home}, {id:nextMatch.away}]}).toArray()
+        teamId = teamIds.includes(nextMatch.home) ? nextMatch.home : nextMatch.away
+        if(!nextMatch.isInternational){
+          const teamsOfMatch = await teams.find({id: {$in: [nextMatch.home,nextMatch.away]}}).toArray()
           playerTeam = genericFormatMatch(teamsOfMatch, nextMatch, allLeagues) + '\r'
         } else {
-          genericInterFormatMatch(nations, nationalSelections, nextMatch, allLeagues)
+          playerTeam = genericInterFormatMatch(nations, nationalSelections, nextMatch, allLeagues)
         }
-        await lineups.updateOne({matchId, team: teamId}, {
-          $setOnInsert: {
-            matchId,
-            team: teamId,
-            postedBy: callerId,
-          },
+        await lineups.updateOne({postedBy:callerId, id:savedLineup.id}, {
           $set: {
-            ...previousLineupToSave,
-            ...lineup
+            matchId: theMatchId,
+            team: teamId,
           }
         }, {upsert: true})
       }
       let lineupPlayers = await players.find({id: {$in: Object.values(lineup)}}, {projection: {id:1, steam: 1, ingamename: 1}}).toArray()
-      playerTeam += isInternational ? nation.flag + ' ' + nation.name + ' ' : memberTeam.emoji+' ' + memberTeam.name + ' '
+      //playerTeam += (isInternational ? selectionFlags : memberTeam.emoji) + ' ' + memberTeam.name + ' '
       //lineupPlayers = lineupPlayers.filter(lineupPlayer=> lineupPlayer.steam)
       objLineup = Object.fromEntries(Object.entries(objLineup).map(([position, objPlayer])=> {
         const player = (lineupPlayers.find(lineupPlayer => lineupPlayer.id === objPlayer.id))
@@ -279,7 +292,6 @@ const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam,
       let threadMessage = `\r<@${callerId}> posted:\r${playerTeam}lineup ${lineup.vs? `vs ${lineup.vs}`: ''}\r`
       threadMessage += formatGenericLineup({vs: lineup.vs, ...objLineup}, true)
       
-
       const messageResp = await postMessage({channel_id, content: response})
       const message = await messageResp.json()
       if(nextMatch?.thread) {
@@ -295,16 +307,16 @@ const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam,
           console.error(e)
         }
       }
-      if(matchId){
-        await lineups.updateOne({matchId, team: teamId}, {$set: {message: message.id}})
+      if(theMatchId){
+        await lineups.updateOne({matchId: theMatchId, team: teamId}, {$set: {message: message.id}})
       }
-      return response
+      return {content: `${nextMatch ? `Your lineup code: ${savedLineup?.id}\r` : ''}${response}`}
     })
   } else {
     let response = `<@${callerId}> posted:\r${playerTeam? playerTeam : ''}lineup ${lineup.vs? `vs ${lineup.vs}`: ''}\r`
     response += formatGenericLineup({vs: lineup.vs, ...objLineup})
     await postMessage({channel_id, content: response})
-    return response
+    return {content: response}
   }
 }
 
@@ -317,7 +329,7 @@ const verifyClubLineup = (discPlayer, playerId) => {
     response.message = `<@${playerId}> is not eligible to play`
   }
   if(!discPlayer.roles.some(role => lineupRolesWhitelist === role)) {
-    response.message =`<@${playerId}> isn't verified/registered`
+    response.message =`<@${playerId}> isn't registered`
   }
   return response
 }
@@ -380,8 +392,8 @@ export const lineup = async({options, callerId, token, member, edit = false, gui
     await postMessage({channel_id, content})
     return updateResponse({application_id, token, content})
   }
-  const content = await saveLineup({dbClient, lineup, callerId, objLineup, member, edit, application_id, guild_id, isInternational:false, token, channel_id, isEightPlayers: false})
-  return updateResponse({application_id, token, content})
+  const {content, components} = await saveLineup({dbClient, lineup, callerId, objLineup, member, edit, application_id, guild_id, isInternational:false, token, channel_id, isEightPlayers: false})
+  return updateResponse({application_id, token, content, components})
 }
 
 export const internationalLineup = async ({options, member, callerId, guild_id, interaction_id, application_id, token, channel_id, dbClient}) => {
@@ -407,8 +419,8 @@ export const internationalLineup = async ({options, member, callerId, guild_id, 
     return updateResponse({application_id, token, content})
   }
   await waitingMsg({interaction_id, token})
-  const content = await saveLineup({dbClient, lineup, callerId, objLineup, member, guild_id, application_id, isInternational:true, interaction_id, token, channel_id, isEightPlayers: false})
-  return updateResponse({application_id, token, content})
+  const {content, components} = await saveLineup({dbClient, lineup, callerId, objLineup, member, guild_id, application_id, isInternational:true, interaction_id, token, channel_id, isEightPlayers: false})
+  return updateResponse({application_id, token, content, components})
 }
 
 export const editEightLineup = ({options, interaction_id, callerId, token, application_id, channel_id, member, guild_id, dbClient}) => 
@@ -436,8 +448,8 @@ export const eightLineup = async ({options, interaction_id, callerId, token, app
   if(forbiddenUsersList.length>0) {
     return postMessage({channel_id, content: `<@${callerId}> - Can't post this lineup, restricted users: ${forbiddenUsersList.join(', ')}`})
   }
-  const content = await saveLineup({dbClient, lineup, callerId, objLineup, member, guild_id, application_id, edit, isInternational:false, interaction_id, token, channel_id, isEightPlayers: true})
-  return updateResponse({application_id, token, content})
+  const {content, components} = await saveLineup({dbClient, lineup, callerId, objLineup, member, guild_id, application_id, edit, isInternational:false, interaction_id, token, channel_id, isEightPlayers: true})
+  return updateResponse({application_id, token, content, components})
 }
 
 const findPlayerNick = (playersList, id) => {
@@ -453,9 +465,9 @@ export const boxLineup = async ({res, options, member, guild_id, dbClient}) => {
   const allPlayers = await getAllPlayers(guild_id)
   if(process.env.GUILD_ID === guild_id) {
     const startOfDay = new Date()
-    startOfDay.setUTCHours(startOfDay.getHours()-1,0,0,0)
+    startOfDay.setHours(startOfDay.getHours()-1,0,0,0)
     const endOfDay = new Date()
-    endOfDay.setUTCHours(23,59,59,999)
+    endOfDay.setHours(23,59,59,999)
     const startDateTimestamp = msToTimestamp(Date.parse(startOfDay))
     const endDateTimestamp = msToTimestamp(Date.parse(endOfDay))
     await dbClient(async ({teams, matches, lineups})=>{
@@ -621,8 +633,8 @@ const interLineup = async ({options, guild_id, token, application_id, callerId, 
     await postMessage({channel_id, content})
     return updateResponse({application_id, token, content})
   }
-  const content = await saveLineup({dbClient, lineup, callerId, objLineup, member, guild_id, edit:false, isInternational:true, channel_id, isEightPlayers: true})
-  return updateResponse({application_id, token, content})
+  const {content, components} = await saveLineup({dbClient, lineup, callerId, objLineup, member, guild_id, edit:false, isInternational:true, channel_id, isEightPlayers: true})
+  return updateResponse({application_id, token, content, components})
 }
 
 const wcLineupSubCommands = {

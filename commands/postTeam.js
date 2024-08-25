@@ -1,43 +1,29 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
-import { displayTeam, optionsToObject, updateResponse, waitingMsg } from "../functions/helpers.js"
+import { displayTeam, optionsToObject, postMessage, updateResponse, waitingMsg } from "../functions/helpers.js"
 import { getAllPlayers } from "../functions/playersCache.js"
 import { getPlayersList } from "./player.js"
 import { DiscordRequest } from "../utils.js"
 import { serverChannels } from "../config/psafServerConfig.js"
+import { getAllNationalities } from "../functions/allCache.js"
 
-export const postTeam = async ({guild_id, options, channel_id, res, dbClient})=> {
+export const postTeam = async ({guild_id, interaction_id, token, application_id, options, channel_id, dbClient})=> {
   const {team} = optionsToObject(options)
+  await waitingMsg({interaction_id, token})
   const allPlayers = await getAllPlayers(guild_id)
-  const content = await dbClient(async ({teams, nationalities, players, contracts})=>{
+  const content = await dbClient(async ({teams, players, contracts})=>{
     const [dbTeam, allNations, teamContracts] = await Promise.all([
       teams.findOne({active:true, id: team}),
-      nationalities.find({}).toArray(),
+      getAllNationalities(),
       contracts.find({team}).toArray()
     ])
     const displayCountries = Object.fromEntries(allNations.map(({name, flag})=> ([name, flag])))
     let response = displayTeam(dbTeam, true) +'\r'
     response += await getPlayersList(allPlayers, team, displayCountries, players, teamContracts)
-    await DiscordRequest(`/channels/${channel_id}/messages`, {
-      method: 'POST',
-      body: {
-        content: dbTeam.logo || 'No Logo',
-      }
-    })
+    await postMessage({channel_id, content:dbTeam.logo || 'No Logo'})
     return response
   })
-  await DiscordRequest(`/channels/${channel_id}/messages`, {
-    method: 'POST',
-    body: {
-      content
-    }
-  })
-  return res.send({
-    type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-    data: {
-      content: 'done',
-      flags: InteractionResponseFlags.EPHEMERAL,
-    }
-  })
+  await postMessage({channel_id, content})
+  return updateResponse({application_id, token, content: 'Done'})
 }
 
 export const postAllTeams = async ({guild_id, application_id, dbClient, interaction_id, token}) => {
@@ -51,10 +37,10 @@ export const postAllTeams = async ({guild_id, application_id, dbClient, interact
     }
   })
   const allPlayers = await getAllPlayers(guild_id)
-  await dbClient(async ({teams, nationalities, players, contracts})=>{
+  await dbClient(async ({teams, players, contracts})=>{
     const [dbTeams, allNations, allContracts] = await Promise.all([
       teams.find({active:true}, {sort: {id: 1}}).toArray(),
-      nationalities.find({}).toArray(),
+      getAllNationalities(),
       contracts.find({endedAt: null}).toArray()
     ])
     const displayCountries = Object.fromEntries(allNations.map(({name, flag})=> ([name, flag])))
@@ -93,10 +79,10 @@ export const postAllTeams = async ({guild_id, application_id, dbClient, interact
 export const innerUpdateTeam = async ({guild_id, team, dbClient}) => {
   const allPlayers = await getAllPlayers(guild_id)
   
-  return await dbClient(async ({teams, nationalities, players, contracts})=>{
+  return await dbClient(async ({teams, players, contracts})=>{
     const [dbTeam, allNations, teamContracts] = await Promise.all([
       teams.findOne({active:true, id: team}),
-      nationalities.find({}).toArray(),
+      getAllNationalities(),
       contracts.find({team, endedAt: null}).toArray()
     ])
     const displayCountries = Object.fromEntries(allNations.map(({name, flag})=> ([name, flag])))
@@ -117,6 +103,14 @@ export const innerUpdateTeam = async ({guild_id, team, dbClient}) => {
           content: content.substring(0, 1999)
         }
       })
+      try {
+        const logoResp = await DiscordRequest(`/channels/${serverChannels.clubsChannelId}/messages/${dbTeam.logoMsg}`)
+        const logo = await logoResp.json()
+        console.log(logo)
+        await teams.updateOne({active:true, id: team}, {$set: {refreshedLogo: logo.content}})
+      } catch(e){
+        console.log(`can't get the logo for ${dbTeam.name}`)
+      }
     }
   })
 }

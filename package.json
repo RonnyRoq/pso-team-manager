@@ -12,10 +12,10 @@
     "register": "node commands.js",
     "dl-config": "node downloadConfig.js",
     "local": "node localCommands.js",
-    "dev": "nodemon app.js",
+    "dev": "nodemon app.js --inspect",
     "site": "nodemon sitetest.js"
   },
-  "author": "Ronan Roquais",
+  "author": "Ronny Rocks",
   "license": "MIT",
   "dependencies": {
     "body-parser": "^1.20.2",
@@ -32,6 +32,7 @@
     "express-session": "^1.17.3",
     "form-data": "^4.0.0",
     "image-downloader": "^4.3.0",
+    "image-validator": "^1.2.1",
     "memorystore": "^1.6.7",
     "mime-types": "^2.1.35",
     "mongodb": "^6.0.0",

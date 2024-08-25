@@ -69,7 +69,7 @@ export const countries = [
     name: "Algeria",
     flag:	"🇩🇿",
   },{
-    name: "Czech Republic",
+    name: "Czechia",
     flag: "🇨🇿",
   },{
     name: "Austria",

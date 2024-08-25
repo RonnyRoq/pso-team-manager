@@ -385,7 +385,7 @@ export const elimMatchDaysSorted = Object.entries(elimMatchDays).sort((a,b) => b
 
 export const NONE = 'none'
 
-export const currentSeason = 3
+export const currentSeason = 6
 
 export const serverRoles = {
   clubManagerRole: '1072620773434462318',
@@ -394,6 +394,7 @@ export const serverRoles = {
   nationalTeamPlayerRole: '1103327647955685536',
   adminRole: '1081886764366573658',
   presidentRole: '1072201212356726836',
+  engineerRole: '1268908010261053531',
   clubPlayerRole: '1072620805600592062',
   psafManagementRole: '1072210995927339139',
   trialStaffRole: '1093846550226149437',
@@ -403,6 +404,7 @@ export const serverRoles = {
   suspisciousRole: '1191023206476296192',
   disabledRole: '1227919919895547914',
   unknownTeam: '1257425503657263195',
+  permanentlyBanned: '1272168536097165383',
   wcRegisteredRole: '1237110862645559337',
   wcNationalCoachRole: '1204035266050916372',
 }
@@ -452,7 +454,7 @@ export const pgLeagues = ['1209539443271270452', '1209539443271270452-8']
 export const regionalLeagues = allLeagueList.filter(league=>['GBL', 'CEL', 'ITL'].includes(league.name))
 
 export const lineupBlacklist = ['1068608785356169226', '616754792965865495']
-export const lineupRolesBlacklist = ['1072919258629144628', '1128307395668492319', serverRoles.matchBlacklistRole, serverRoles.disabledRole]
+export const lineupRolesBlacklist = ['1072919258629144628', '1128307395668492319', serverRoles.matchBlacklistRole, serverRoles.permanentlyBanned, serverRoles.disabledRole]
 export const wcLineupBlacklist = []
 export const lineupRolesWhitelist = serverRoles.registeredRole
 export const wcLineupRolesWhilelist = serverRoles.wcRegisteredRole

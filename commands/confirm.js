@@ -4,6 +4,7 @@ import { msToTimestamp, getPlayerNick, sleep, waitingMsg, optionsToObject, updat
 import { globalTransferBan, globalTransferBanMessage, serverChannels, serverRoles, transferBanStatus } from "../config/psafServerConfig.js"
 import commandsRegister from "../commandsRegister.js"
 import { seasonPhases } from "./season.js"
+import { getAllNationalities } from "../functions/allCache.js"
 
 const twoWeeksMs = 1209600033
 
@@ -72,10 +73,10 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
   const isPSAF = guild_id === process.env.GUILD_ID
   const isWC = guild_id === process.env.WC_GUILD_ID
     
-  const content = await dbClient(async ({players, nationalities, contracts, teams})=> {
+  const content = await dbClient(async ({players, contracts, teams})=> {
     const [dbPlayer, allCountries, activeContracts] = await Promise.all([
       players.findOne({id: callerId}),
-      nationalities.find({}).toArray(),
+      getAllNationalities(),
       contracts.find({playerId: callerId, endedAt: null}).toArray()
     ])
     const activeContract = activeContracts.find(contract=>contract.isLoan) || activeContracts.find(contract=>!contract.isLoan)
@@ -102,7 +103,7 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
       if(member.roles.includes(serverRoles.registeredRole) && dbPlayer) {
         return `You're already registered:\r${userDetails}`
       }
-      if(member.roles.includes(serverRoles.matchBlacklistRole)) {
+      if(member.roles.includes(serverRoles.matchBlacklistRole) || member.roles.includes(serverRoles.permanentlyBanned)) {
         return 'Can\'t register while blacklisted.'
       }
       if(!member.roles.includes(serverRoles.verifiedRole)){
@@ -198,11 +199,11 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
     return updateResponse({application_id, token, content: globalTransferBanMessage})
   }
   
-  const response = await dbClient(async ({teams, players, nationalities, confirmations, pendingDeals, pendingLoans})=> {
+  const response = await dbClient(async ({teams, players, confirmations, pendingDeals, pendingLoans})=> {
     const [allTeams, dbPlayer, allCountries, previousConfirmation, pendingDeal, pendingLoan] = await Promise.all([
       teams.find({active: true}).toArray(),
       players.findOne({id: callerId}),
-      nationalities.find({}).toArray(),
+      getAllNationalities(),
       confirmations.findOne({playerId: callerId}),
       pendingDeals.findOne({playerId: callerId, destTeam: team, approved: true}),
       pendingLoans.findOne({playerId: callerId, destTeam: team, approved: true})
@@ -225,7 +226,7 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
         return `You can only confirm for <@&${deal.destTeam}> as your club has agreed a deal with them.`
       }
     }
-    if(member.roles.includes(serverRoles.matchBlacklistRole)) {
+    if(member.roles.includes(serverRoles.matchBlacklistRole) || member.roles.includes(serverRoles.permanentlyBanned)) {
       return 'Can\'t join a team while blacklisted.'
     }
     if(!member.roles.includes(serverRoles.verifiedRole)){
@@ -336,7 +337,7 @@ export const releasePlayer = async ({member, callerId, interaction_id, applicati
     if(pendingRelease) {
       return `You already requested for <@${player}> to be released.`
     }
-    if(discPlayer.roles.includes(serverRoles.matchBlacklistRole)) {
+    if(discPlayer.roles.includes(serverRoles.matchBlacklistRole) || discPlayer.roles.includes(serverRoles.permanentlyBanned)) {
       return 'Can\'t release a blacklisted player.'
     }
     

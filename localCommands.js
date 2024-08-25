@@ -17,16 +17,52 @@ const dbClient = mongoClient(client)
 
 const agg = [
   {
+    '$lookup': {
+      'from': 'Leagues', 
+      'localField': 'id', 
+      'foreignField': 'team', 
+      'let': {
+        'teamId': '$id'
+      }, 
+      'pipeline': [
+        {
+          '$match': {
+            '$expr': {
+              '$in': [
+                '$$teamId', [
+                  '$team'
+                ]
+              ]
+            }
+          }
+        }
+      ], 
+      'as': 'matches'
+    }
+  }, {
     '$match': {
-      'name': /\(Group/i
+      'matches': {
+        '$elemMatch': {
+          'leagueId': '1209539443271270452'
+        }
+      }
     }
   }, {
     '$set': {
-      'archived': true
+      'budget': 0
+    }
+  }, {
+    '$unset': 'matches'
+  }, {
+    '$merge': {
+      'into': 'Teams', 
+      'on': 'id', 
+      'whenMatched': 'merge', 
+      'whenNotMatched': 'fail'
     }
   }
 ];
-await dbClient(async({leagueConfig})=>{
-  const result = await leagueConfig.aggregate(agg).toArray()
+await dbClient(async({teams})=>{
+  const result = await teams.aggregate(agg).toArray()
   console.log(result)
 })

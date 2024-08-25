@@ -2,23 +2,23 @@ import { allLeagues, leagueChoices } from "../../config/leagueData.js"
 import { serverChannels, serverRoles } from "../../config/psafServerConfig.js"
 import { getAllSelectionsFromDbClient } from "../../functions/countriesCache.js"
 import { getCurrentSeason, optionsToObject, postMessage, quickResponse, silentResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
-import { getAllLeagues } from "../../functions/leaguesCache.js"
+import { getAllLeagues } from "../../functions/allCache.js"
 import { editAMatchInternal } from "../match.js"
 
 export const showLeagueTeam = (leagueObj, leagueTeam) => leagueObj.isInternational ? leagueTeam.team :`<@&${leagueTeam.team}>${leagueTeam.group? ` - Group ${leagueTeam.group}`: ''}${leagueTeam.position!==undefined? ` - Spot ${leagueTeam.position+1}`: ''}`
 
 export const addToLeague = async ({interaction_id, token, options, dbClient}) => {
-  const {league, team, group, position} = optionsToObject(options)
+  const {league, team, selection, group, position} = optionsToObject(options)
   const allLeagues = await getAllLeagues()
   const leagueObj = allLeagues.find(leagueEntry => leagueEntry.value === league)
   const content = await dbClient(async ({leagues, nationalTeams})=> {
-    const autocompleteCountries = getAllSelectionsFromDbClient(nationalTeams)
-    if(leagueObj?.isInternational && !autocompleteCountries.some(country=> country.name === team)){
-      return Promise.resolve(`Can't add ${team}, not a nation.`)
+    const autocompleteCountries = await getAllSelectionsFromDbClient(nationalTeams)
+    if(leagueObj?.isInternational && !autocompleteCountries.some(country=> country.shortname === selection)){
+      return Promise.resolve(`Can't add ${selection}, not a nation.`)
     }
     const insert = {
       leagueId: league,
-      team,
+      team: leagueObj?.isInternational ? selection: team,
     }
     if(group !== undefined) {
       insert.group = group
@@ -26,7 +26,7 @@ export const addToLeague = async ({interaction_id, token, options, dbClient}) =>
     if(position !== undefined) {
       insert.position = position
     }
-    await leagues.updateOne({leagueId: league, team}, {$set: insert}, {upsert: true})
+    await leagues.updateOne({leagueId: league, team: insert.team}, {$set: insert}, {upsert: true})
     const leagueTeams = await leagues.find({leagueId:league}).sort({position: 1}).toArray()
     return `${leagueObj?.name} ${leagueTeams.length} teams:\r`
     + leagueTeams.map(leagueTeam => showLeagueTeam(leagueObj, leagueTeam)).join('\r')
@@ -35,15 +35,15 @@ export const addToLeague = async ({interaction_id, token, options, dbClient}) =>
 }
 
 export const removeFromLeague = async ({interaction_id, token, options, dbClient}) => {
-  const {league, team} = optionsToObject(options)
+  const {league, team, selection} = optionsToObject(options)
   const allLeagues = await getAllLeagues()
   const leagueObj = allLeagues.find(leagueEntry => leagueEntry.value === league)
   const content = await dbClient(async ({leagues, nationalTeams})=> {
-    const autocompleteCountries = getAllSelectionsFromDbClient(nationalTeams)
-    if(leagueObj?.isInternational && !autocompleteCountries.some(country=> country.name === team)){
-      return Promise.resolve(`Can't remove ${team}, not a nation.`)
+    const autocompleteCountries = await getAllSelectionsFromDbClient(nationalTeams)
+    if(leagueObj?.isInternational && !autocompleteCountries.some(country=> country.shortname === selection)){
+      return Promise.resolve(`Can't remove ${selection}, not a nation.`)
     }
-    await leagues.deleteOne({leagueId: league, team})
+    await leagues.deleteOne({leagueId: league, team: leagueObj?.isInternational ? selection : team})
     const leagueTeams = await leagues.find({leagueId:league}).toArray()
     return `${leagueObj?.name} ${leagueTeams.length} teams:\r`
     + leagueTeams.map(leagueTeam => showLeagueTeam(leagueObj, leagueTeam)).join('\r')
@@ -57,7 +57,7 @@ export const replaceTeamInLeague = async ({interaction_id, application_id, membe
   }
   await waitingMsg({interaction_id, token})
   const {removeteam, addteam, league} = optionsToObject(options)
-  const content = await dbClient(async({leagues, leagueConfig, teams, matches, nationalities, seasonsCollect})=>{
+  const content = await dbClient(async({leagues, leagueConfig, teams, matches, nationalTeams, seasonsCollect})=>{
     const leagueToUpdate = await leagueConfig.findOne({active: true, value: league})
     let result = ''
     if(leagueToUpdate){
@@ -65,7 +65,7 @@ export const replaceTeamInLeague = async ({interaction_id, application_id, membe
       const season = await getCurrentSeason(seasonsCollect)
       const matchesToReplace = await matches.find({league, season, $or: [{home: removeteam }, {away: removeteam}]}).toArray()
       for await (const match of matchesToReplace){
-        await editAMatchInternal({id: match._id.toString(), home: match.home === removeteam ? addteam : match.home, away: match.away === removeteam ? addteam: match.away, teams, matches, nationalities, leagueConfig})
+        await editAMatchInternal({id: match._id.toString(), home: match.home === removeteam ? addteam : match.home, away: match.away === removeteam ? addteam: match.away, teams, matches, nationalTeams, leagueConfig})
       }
       result = `${matchesToReplace.length} matches updated: ${matchesToReplace.map(match=> match._id.toString())} in ${leagueToUpdate.name}`
     }
@@ -147,7 +147,7 @@ export const addToCupCmd = {
 
 export const addToInterLeagueCmd = {
   name: 'addtointerleague',
-  description: 'Add a team to an international league',
+  description: 'Add a National Selection to an international league',
   type: 1,
   psaf: true,
   func: addToLeague,
@@ -159,10 +159,19 @@ export const addToInterLeagueCmd = {
     choices: allLeagues.filter(league=>league.isInternational && league.active).map(({name, value})=> ({name, value}))
   },{
     type: 3,
-    name: 'team',
-    description: 'Team',
+    name: 'selection',
+    description: 'Selection',
     autocomplete: true,
     required: true,
+  },{
+    type: 3,
+    name: 'group',
+    description: 'Which League group',
+    choices: groups.map(group=> ({name: group, value: group}))
+  },{
+    type: 4,
+    name: 'position',
+    description: 'Which position (elim cups only)',
   }]
 }
 

@@ -1,12 +1,12 @@
 import { CronJob } from "cron"
-import { getMatchesOfDay, getMatchesSummary, remindMissedMatches } from "./commands/match.js"
+import { getMatchesOfDay, getMatchesSummary, getRefStatsLeaderboard, remindMissedMatches } from "./commands/match.js"
 import { innerUpdateTeam } from "./commands/postTeam.js"
 import { notifyMatchStart } from "./commands/matches/notifyMatchStart.js"
 import { DiscordRequest } from "./utils.js"
 import { serverChannels } from "./config/psafServerConfig.js"
 import { updateLeagueTable } from "./commands/league/leagueTable.js"
 import { autoPublish } from "./commands/matches/matchday.js"
-import { internalUpdateRegister, internalValidateSteamId, updateSteamNames } from "./commands/system.js"
+import { detectSteamAlts, internalUpdateRegister, internalValidateSteamId, updateSteamNames } from "./commands/system.js"
 import { updateSelectionPost } from "./commands/nationalTeams/nationalTeamManagement.js"
 import { updateCacheCurrentSeason } from "./commands/season.js"
 
@@ -63,7 +63,19 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
       }
     },
   ],[
-    '35 23 * * *',
+    '51 22 * * 1',
+    async function () {
+      await detectSteamAlts({dbClient})
+    }
+  /*],[
+    '11 22 * * *',
+    async function() {
+      const refs = await getRefStatsLeaderboard({dbClient})
+      console.log(refs)
+      await postMessage({channel_id: serverChannels.botTestingChannelId, content: 'Match result stats:'+refs.map(ref=> `<@${ref._id}>: ${ref.finishedCount}`).join('\r')})
+    }*/
+  ],[
+    '35 22 * * *',
     async function() {
       for await (const league of allLeagues) {
         await updateLeagueTable({dbClient, league})

@@ -1,5 +1,5 @@
 import { InteractionResponseType } from "discord-interactions"
-import { getAllLeagues } from "./leaguesCache.js"
+import { getAllLeagues } from "./allCache.js"
 
 export const autoCompleteLeague = async (currentOption, dbClient, res) => {
   const toSearch = (currentOption.value || "").toLowerCase()

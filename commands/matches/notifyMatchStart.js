@@ -1,11 +1,11 @@
 import { InteractionResponseType } from "discord-interactions"
-import { serverChannels, serverRoles } from "../../config/psafServerConfig.js"
-import { isNumeric, msToTimestamp, optionsToObject, sleep } from "../../functions/helpers.js"
+import { serverChannels } from "../../config/psafServerConfig.js"
+import { getCurrentSeason, isNumeric, msToTimestamp, optionsToObject, sleep } from "../../functions/helpers.js"
 import { getAllPlayers } from "../../functions/playersCache.js"
 import { DiscordRequest } from "../../utils.js"
 import { formatDMMatch } from "../match.js"
 import { parseDate } from "../timestamp.js"
-import { getAllLeagues } from "../../functions/leaguesCache.js"
+import { getAllLeagues, getAllNationalities } from "../../functions/allCache.js"
 
 export const lineupToArray = (lineup) => {
   // eslint-disable-next-line no-unused-vars
@@ -15,31 +15,42 @@ export const lineupToArray = (lineup) => {
 export const notifyMatchStart = async ({dbClient}) => {
   const now = Math.floor(Date.now() / 1000)
   const plusTen = now + 10*60
-  const {allTeams, allNationalTeams, notifyMatches, matchLineups} = await dbClient(async ({matches, teams, nationalities, lineups, players})=> {
-    const [allTeams, allNationalTeams, startingMatches] = await Promise.all([
+  const {allTeams, allNationalTeams, notifyMatches, matchLineups, allNationalities} = await dbClient(async ({matches, teams, nationalTeams, lineups, contracts, seasonsCollect, nationalContracts})=> {
+    const [allTeams, allNationalTeams, startingMatches, allNationalities, season] = await Promise.all([
       teams.find({}).toArray(),
-      nationalities.find({}).toArray(),
+      nationalTeams.find({}).toArray(),
       matches.find({dateTimestamp: {$gte: now.toString(), $lte: plusTen.toString()}, password: null, finished: null}).toArray(),
+      getAllNationalities(),
+      getCurrentSeason(seasonsCollect)
     ])
+    
     const matchLineups = await lineups.find({matchId: {$in: startingMatches.map(match=>match._id.toString())}}).toArray()
     const notifyMatches = await Promise.all(startingMatches.map(async match => {
-      let interPlayers = []
+      let homePlayers = []
+      let awayPlayers = []
       if(match.isInternational) {
-        interPlayers = await players.find({nat1: {$in: [match.home, match.away]}}).toArray()
+        homePlayers = await nationalContracts.find({selection: match.home, season}).toArray()
+        awayPlayers = await nationalContracts.find({selection: match.away, season}).toArray()
+      } else {
+        homePlayers = await contracts.find({endedAt: null, team: match.home}).toArray()
+        awayPlayers = await contracts.find({endedAt: null, team: match.away}).toArray()
       }
+      homePlayers = homePlayers.map(contract=> contract.playerId)
+      awayPlayers = awayPlayers.map(contract=> contract.playerId)
       if(!match.password){
         const password = Math.random().toString(36).slice(-4)
         await matches.updateOne({_id: match._id}, {$set: {password}})
         return Promise.resolve({
           ...match,
           password,
-          interPlayers
+          homePlayers,
+          awayPlayers,
         })
       }
       return Promise.resolve(match)
     }))
     console.log(notifyMatches)
-    return {allTeams, allNationalTeams, notifyMatches, matchLineups}
+    return {allTeams, allNationalTeams, notifyMatches, matchLineups, allNationalities}
   })
   const allPlayers = await getAllPlayers(process.env.GUILD_ID)
   const allLeagues = await getAllLeagues()
@@ -47,8 +58,10 @@ export const notifyMatchStart = async ({dbClient}) => {
     const league = allLeagues.find(({value})=> value === startingMatch.league)
     let homeTeam, awayTeam
     if(startingMatch.isInternational){
-      homeTeam = allNationalTeams.find(nation => nation.name === startingMatch.home)
-      awayTeam = allNationalTeams.find(nation => nation.name === startingMatch.away)
+      homeTeam = allNationalTeams.find(selection => selection.shortname === startingMatch.home)
+      awayTeam = allNationalTeams.find(selection => selection.shortname === startingMatch.away)
+      homeTeam.flag = allNationalities.filter(nat=>homeTeam.eligiblenationality === nat.name)
+      awayTeam.flag = allNationalities.filter(nat=>awayTeam.eligiblenationality === nat.name)
     } else {
       homeTeam = allTeams.find(team => startingMatch.home === team.id)
       awayTeam = allTeams.find(team => startingMatch.away === team.id)
@@ -77,7 +90,6 @@ export const notifyMatchStart = async ({dbClient}) => {
     }
     if(matchRefs[0]) {
       for await (const matchRef of matchRefs) {
-        console.log(matchRef)
         if(matchRef && !recipients.includes(matchRef)) {
           try{
             const userChannelResp = await DiscordRequest('/users/@me/channels', {
@@ -127,11 +139,8 @@ export const notifyMatchStart = async ({dbClient}) => {
     let homeIds =[]
     if(homeLineup){
       homeIds = lineupToArray(homeLineup)
-    } else if(startingMatch.isInternational) {
-      //Special case we actually get ALL international players for the match here
-      homeIds = allPlayers.filter(player=> player.roles.includes(serverRoles.nationalTeamPlayerRole) && startingMatch.interPlayers.includes(player.user.id)).map(player=> player?.user?.id)
     } else {
-      homeIds = allPlayers.filter(player => player.roles.includes(startingMatch.home)).map(player=> player?.user?.id)
+      homeIds = startingMatch.homePlayers
     }
     if(homeIds[0]) {
       await Promise.allSettled(homeIds.map(async homePlayer => {
@@ -162,11 +171,8 @@ export const notifyMatchStart = async ({dbClient}) => {
     let awayIds = []
     if(awayLineup) {
       awayIds = lineupToArray(awayLineup)
-    } else if(startingMatch.isInternational) {
-      //Special case we actually get ALL international players for the match here
-      awayIds = []
     } else {
-      awayIds = allPlayers.filter(player => player.roles.includes(startingMatch.away)).map(player=> player?.user?.id)
+      awayIds = startingMatch.awayPlayers
     }
     if(awayIds[0]) {
       await Promise.allSettled(awayIds.map(async awayPlayer => {

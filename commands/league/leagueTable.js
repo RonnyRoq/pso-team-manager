@@ -1,33 +1,42 @@
 import fs from 'fs';
 import { createCanvas } from 'canvas'
-import { NONE, elimMatchDaysSorted, serverChannels, serverRoles } from "../../config/psafServerConfig.js"
-import { getCurrentSeason, optionsToObject, quickResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { NONE, currentSeason, elimMatchDaysSorted, serverChannels, serverRoles } from "../../config/psafServerConfig.js"
+import { followUpResponse, getCurrentSeason, getFlags, optionsToObject, quickResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { DiscordRequest} from '../../utils.js'
 import { leagueChoices } from '../../config/leagueData.js';
-import { getAllLeagues } from '../../functions/leaguesCache.js';
+import { getAllLeagues } from '../../functions/allCache.js';
 
 //Ensure this function doesnt crash if you ask for a league which doesnt have a table
-const internalLeagueTable = async ({dbClient, league}) => {
-  const {allTeams, leagueMatches, leagueTeams, allCountries} = await dbClient(async ({matches, leagues, teams, nationalities, seasonsCollect}) => {
+const internalLeagueTable = async ({dbClient, league, season}) => {
+  const [allTeams, leagueMatches, leagueTeams, allNationalTeams] = await dbClient(async ({matches, leagues, teams, nationalTeams, seasonsCollect}) => {
     const currentSeason = await getCurrentSeason(seasonsCollect)
-    const [allTeams, leagueMatches, leagueTeams, allCountries] = await Promise.all([
+    let seasonReq = season || currentSeason
+    return Promise.all([
       teams.find({}).toArray(),
-      matches.find({season: currentSeason, league, finished: true}).toArray(),
+      matches.find({season: seasonReq, league, finished: true}).toArray(),
       leagues.find({leagueId:league}).toArray(),
-      nationalities.find({}).toArray()
+      nationalTeams.find({}).toArray()
     ])
-    return {allTeams, leagueMatches, leagueTeams, allCountries}
   })
   const leagueTeamsId = leagueTeams.map(leagueTeam=> leagueTeam.team)
   const allLeagues = await getAllLeagues()
   const leagueObj = allLeagues.find(fixChannel => fixChannel.value === league)
+  const nationalTeamsWithEmojis = []
+  for await(const selection of allNationalTeams) {
+    const flags = await getFlags(selection)
+    nationalTeamsWithEmojis.push({...selection, emoji: flags, id: selection.shortname})
+  }
   const currentTeams = (leagueObj?.isInternational ? 
-    allCountries.filter(country => leagueTeamsId.includes(country.name)).map(country=>({...country, id: country.name, emoji: country.flag})) 
-    : allTeams.map(team => {
-      const leagueTeam = leagueTeams.find(leagueTeam=> leagueTeam.team === team.id)||{}
-      return {...team, penaltyPoints: leagueTeam.penaltypoints || 0, group: leagueTeam.group || NONE, position: leagueTeam.position}
-    })
-  ).map(team=> ({...team, wins:0, draws: 0, losses: 0, ffs: 0, goals: 0, against:0, played:0, ffDraws:0, wonAgainst:[]}))
+    nationalTeamsWithEmojis
+    : allTeams
+  ).map(team => {
+    const leagueTeam = leagueTeams.find(leagueTeam=> leagueTeam.team === team.id)||{}
+    return {
+      ...team, 
+      penaltyPoints: leagueTeam.penaltypoints || 0, group: leagueTeam.group || NONE, position: leagueTeam.position,
+      wins:0, draws: 0, losses: 0, ffs: 0, goals: 0, against:0, played:0, ffDraws:0, wonAgainst:[]
+    }
+  })
   leagueMatches.forEach(({isFF, homeScore, awayScore, home, away}) => {
     console.log(leagueObj?.name, home, away)
     const hScore = Number.parseInt(homeScore)
@@ -72,9 +81,7 @@ const internalLeagueTable = async ({dbClient, league}) => {
     const currentGroup = teamsPerGroup[group] || []
     teamsPerGroup[group] = [...currentGroup, team]
   })
-  console.log(JSON.stringify(teamsPerGroup, undefined, 2))
   const groupEntries = Object.entries(teamsPerGroup).sort(([a], [b])=> a.localeCompare(b))
-  console.log(JSON.stringify(groupEntries, undefined, 2))
   const sortedGroups = groupEntries.map(([group, groupTeams])=> {
     const sortedTeams = groupTeams.map(team=> ({...team, points: (team.wins*3)+team.draws-team.ffs-team.ffDraws-team.penaltyPoints, goalDifference: team.goals-team.against})).sort((a, b)=> {
       if(a.points !== b.points) {
@@ -101,30 +108,28 @@ const internalLeagueTable = async ({dbClient, league}) => {
 const formatTeamTree = (name) => name.substring(0, 17).padEnd(18)
 const nextStep = [1, 2, 5, 6, 9, 10, 13, 14]
 export const internalElimTree = async ({dbClient, league}) => {
-  const {allTeams, leagueMatches, leagueTeams, allCountries} = await dbClient(async ({matches, leagues, teams, nationalities, seasonsCollect}) => {
+  const [allTeams, leagueMatches, leagueTeams, allNationalTeams] = await dbClient(async ({matches, leagues, teams, nationalTeams, seasonsCollect}) => {
     const currentSeason = await getCurrentSeason(seasonsCollect)
-    const [allTeams, leagueMatches, leagueTeams, allCountries] = await Promise.all([
+    return Promise.all([
       teams.find({}).toArray(),
       matches.find({season: currentSeason, league}).toArray(),
       leagues.find({leagueId:league}).toArray(),
-      nationalities.find({}).toArray()
+      nationalTeams.find({}).toArray()
     ])
-    return {allTeams, leagueMatches: leagueMatches, leagueTeams, allCountries}
   })
-  const leagueTeamsId = leagueTeams.map(leagueTeam=> leagueTeam.team)
   const allLeagues = await getAllLeagues()
   const leagueObj = allLeagues.find(fixChannel => fixChannel.value === league)
-  const currentTeams = (leagueObj?.isInternational ? 
-    allCountries.filter(country => leagueTeamsId.includes(country.name)).map(country=>({...country, id: country.name, emoji: country.flag})) 
-    : allTeams.filter(team=> leagueTeams.find(leagueTeam=> leagueTeam.team === team.id) || team.id === serverRoles.unknownTeam)
-      .map(team => {
-        const leagueTeam = leagueTeams.find(leagueTeam=> leagueTeam.team === team.id)||{}
-        return {...team, penaltyPoints: leagueTeam.penaltypoints || 0, group: leagueTeam.group || NONE, position: leagueTeam.position}
-      })
-  ).map(team=> ({...team, wins:0, draws: 0, losses: 0, ffs: 0, goals: 0, against:0, played:0, ffDraws:0, wonAgainst:[]}))
-  .sort((a, b)=> a.position-b.position)
-  console.log(currentTeams)
-
+  const nationalTeamsWithEmojis = []
+  for await(const selection of allNationalTeams) {
+    const flags = await getFlags(selection)
+    nationalTeamsWithEmojis.push({...selection, emoji: flags, id: selection.shortname})
+  }
+  const currentTeams = (leagueObj?.isInternational ? nationalTeamsWithEmojis : allTeams
+  ).filter(team=> leagueTeams.find(leagueTeam=> leagueTeam.team === team.id) || team.id === serverRoles.unknownTeam).map(team => {
+    const leagueTeam = leagueTeams.find(leagueTeam=> leagueTeam.team === team.id)||{}
+    return {...team, penaltyPoints: leagueTeam.penaltypoints || 0, group: leagueTeam.group || NONE, position: leagueTeam.position, wins:0, draws: 0, losses: 0, ffs: 0, goals: 0, against:0, played:0, ffDraws:0, wonAgainst:[]}
+  }).sort((a, b)=> a.position-b.position)
+  
   const sortedMatches = leagueMatches.map( leagueMatch => {
     const matchdayIndex = elimMatchDaysSorted.findIndex(elimMatchDay=>elimMatchDay === leagueMatch.matchday)
     const homeTeam = currentTeams.find(team=> team.id === leagueMatch.home)
@@ -143,14 +148,11 @@ export const internalElimTree = async ({dbClient, league}) => {
       return a.order - b.order
     }
   })
-  console.log(sortedMatches.map(({matchday, order})=>({matchday, order})))
   if(sortedMatches.length > 0) {
     let currentMatchDay = sortedMatches[0].matchdayIndex
     const initialMatchDay = currentMatchDay
     let i=0
     let lines = []
-    console.log(i, sortedMatches.length, sortedMatches[i].matchdayIndex, currentMatchDay)
-    let lastStepMatchesLength = 0
     let insertedLines = []
     let lastInsertedLines = []
     let currentMatchInMatchday = 0
@@ -159,7 +161,6 @@ export const internalElimTree = async ({dbClient, league}) => {
       if(currentMatchDay !== currentMatch.matchdayIndex){
         lastInsertedLines = insertedLines
         insertedLines = []
-        lastStepMatchesLength = i
         currentMatchInMatchday = 0
         currentMatchDay = currentMatch.matchdayIndex
       }
@@ -297,7 +298,7 @@ export const imageLeagueTable = async ({interaction_id, token, application_id, d
 export const formatLeagueTree = async ({league, dbClient, short = false}) => {
   const sortedGroups = await internalElimTree({dbClient, league})
   const content = sortedGroups.map(([group, sortedTeams]) => {
-    const response = `${group !== NONE ? `## GROUP ${group}\r`: `${group}`}` +
+    const response = `${group !== NONE ? `## GROUP ${group}\r`: ``}` +
     (
       short ? `> Pos | Name | Pts (Games) | FF \r` +
       sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name.substring(0, 19)}** | ${team.points}Pts (${team.played}) | ${team.ffs} `).join('\r')
@@ -311,14 +312,14 @@ export const formatLeagueTree = async ({league, dbClient, short = false}) => {
   return content
 }
 
-export const formatLeagueTable = async ({league, dbClient, short = false}) => {
+export const formatLeagueTable = async ({league, dbClient, short = false, season}) => {
   const allLeagues = await getAllLeagues()
   const leagueObj = allLeagues.find(currentLeague=> currentLeague.value === league)
   if(leagueObj.knockout){
     const res = await internalElimTree({dbClient, league})
     return res
   } else {
-    const sortedGroups = await internalLeagueTable({dbClient, league})
+    const sortedGroups = await internalLeagueTable({dbClient, league, season})
     const content = sortedGroups.map(([group, sortedTeams]) => {
       const response = `${group !== NONE ? `## GROUP ${group}\r`: `${group}`}` +
       (
@@ -336,9 +337,16 @@ export const formatLeagueTable = async ({league, dbClient, short = false}) => {
 }
 
 export const leagueTable = async ({interaction_id, token, application_id, dbClient, options}) => {
-  const {league, short} = optionsToObject(options)
+  const {league, short, season} = optionsToObject(options)
   await waitingMsg({interaction_id, token})
-  const content = await formatLeagueTable({league, dbClient, short})
+  const content = await formatLeagueTable({league, dbClient, short, season})
+  if(content.length > 2000) {
+    const lines = content.split('\r')
+    const content1 = lines.slice(0, (lines.length/2)).join('\r')
+    const content2 = lines.slice(lines.length/2, lines.length).join('\r')
+    await followUpResponse({application_id, token, content: content1})
+    return followUpResponse({application_id, token, content: content2})
+  }
   return updateResponse({application_id, token, content})
 }
 
@@ -378,6 +386,12 @@ export const leagueTableCmd = {
     type: 5,
     name: 'short',
     description: "Short version?"
+  },{
+    type: 4,
+    name: 'season',
+    min: 3,
+    max: currentSeason,
+    description: 'Which season? (Current by default)'
   }]
 }
 

@@ -2,11 +2,10 @@ import { InteractionResponseFlags, InteractionResponseType } from "discord-inter
 import { DiscordRequest, SteamRequest, SteamRequestTypes } from "../utils.js"
 import { countries } from '../config/countriesConfig.js'
 import { getAllPlayers } from "../functions/playersCache.js"
-import { addPlayerPrefix, batchesFromArray, getCurrentSeason, getPlayerNick, getRegisteredRole, isSteamIdIncorrect, optionsToObject, postMessage, quickResponse, removePlayerPrefix, updateResponse, waitingMsg } from "../functions/helpers.js"
+import { addPlayerPrefix, batchesFromArray, getCurrentSeason, getPlayerNick, getRegisteredRole, isSteamIdIncorrect, optionsToObject, postMessage, quickResponse, removePlayerPrefix, silentResponse, updateResponse, waitingMsg } from "../functions/helpers.js"
 import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
 import { allLeagues } from "../config/leagueData.js"
-
-const matchBlacklistRole = '1095055617703543025'
+import { players } from "./player.js"
 
 export const managerContracts = async ({interaction_id, token, application_id, dbClient, guild_id}) => {
   await waitingMsg({interaction_id, token})
@@ -86,7 +85,7 @@ export const innerFixNames = async ({guild_id, dbClient}) => {
       const player = allPlayers.find(player=> player.user.id === dbPlayer.id)
       let nick = dbPlayer.nick
       const oldNick = nick
-      if(player) {   
+      if(player) {
         const teamSaved = allTeams.find(team=> console.log(team.shortName) || team.shortName && team.shortName.length > 1 && nick.includes(team.shortName+' |'))
         console.log(teamSaved)
         if(teamSaved) {
@@ -117,7 +116,7 @@ export const systemTeam = async ({interaction_id, token, options, guild_id,  dbC
       active: team.active || false,
       shortName: team.shortName || "",
       displayName: team.displayName || "",
-      budget: team.budget || 5000000,
+      budget: team.budget || 0,
       city: team.city || ""
     }
     const teamRole = roles.find(({id})=> id === role.value)
@@ -130,17 +129,8 @@ export const systemTeam = async ({interaction_id, token, options, guild_id,  dbC
     } else {
       response = `${teamRole.name} added`
     }
-  
-    return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-      method: 'POST',
-      body: {
-        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: response,
-          flags: 1 << 6
-        }
-      }
-    })
+
+    return silentResponse({interaction_id, token, content: response})
   })
 }
 
@@ -238,7 +228,7 @@ export const blacklistTeam = async ({interaction_id, application_id, token, guil
     DiscordRequest(`guilds/${guild_id}/members/${user.id}`, {
       method: 'PATCH',
       body: {
-        roles: [...new Set([...roles, matchBlacklistRole])]
+        roles: [...new Set([...roles, serverRoles.matchBlacklistRole])]
       }
     })
   )))
@@ -275,16 +265,7 @@ export const initCountries = async ({interaction_id, token, dbClient}) => {
       await nationalities.updateOne({name}, {$set: {name, flag}}, {upsert: true})
     })
     const natCount = await nationalities.countDocuments({})
-    return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-      method: 'POST',
-      body: {
-        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: `${natCount} nationalities updated`,
-          flags: 1 << 6
-        }
-      }
-    })
+    return silentResponse({interaction_id, token, content: `${natCount} nationalities updated`})
   })
 };
 
@@ -418,6 +399,53 @@ const validateSteamId = async ({dbClient, application_id, token}) => {
   const content = await internalValidateSteamId({dbClient})
   return updateResponse({application_id, token, content})
 }
+
+export const detectSteamAlts = async ({dbClient}) => (
+  dbClient(async({players})=> {
+    const playersWithAlts = await players.aggregate([
+      {
+        '$match': {
+          'steam': {
+            '$ne': null
+          }
+        }
+      }, {
+        '$group': {
+          '_id': '$steam', 
+          'playerIds': {
+            '$push': '$id'
+          }
+        }
+      }, {
+        '$match': {
+          'playerIds.1': {
+            '$exists': true
+          }
+        }
+      }
+    ]).toArray()
+    const discPlayers = await getAllPlayers(process.env.GUILD_ID)
+    const realAlts = playersWithAlts.filter(playerWithAlts => {
+      const playersWithtoutFlag = playerWithAlts.playerIds.filter(playerId => {
+        const discPlayer = discPlayers.find(player=> player.user.id === playerId)
+        if(discPlayer) {
+          return !discPlayer.roles.includes(serverRoles.disabledRole)
+        }
+        return true // change to false if you want to ignore when people have disabled their account
+      })
+      return playersWithtoutFlag.length > 1
+    })
+    let content = '# Players with Alts: \r' +
+      realAlts.map(playerWithAlts=> playerWithAlts.playerIds.map(playerId=> `<@${playerId}>`).join(' ') + ' ' + playerWithAlts._id).join('\r')
+    while(content.length >= 2000) {
+      const lastCutIndex = content.lastIndexOf('\r', 1999)
+      const content1 = content.substring(0, lastCutIndex)
+      content = content.substring(lastCutIndex)
+      await postMessage({channel_id: serverChannels.botTestingChannelId, content: content1})
+    }
+    await postMessage({channel_id: serverChannels.botTestingChannelId, content})
+  })
+)
 
 export const updateSteamNames = async ({dbClient}) => (
   dbClient(async({players}) => {

@@ -9,19 +9,19 @@ export const arrangeDaySchedule = async({dbClient, application_id, interaction_i
   const {date} = optionsToObject(options)
   const parsedDate = parseDate(date)
   const midnight = new Date(parsedDate)
-  midnight.setUTCHours(0,0,0,0)
+  midnight.setHours(0,0,0,0)
   const totalEndDay = new Date(parsedDate)
-  totalEndDay.setUTCHours(23,59,59,0)
+  totalEndDay.setHours(23,59,59,0)
   const startOfDay = new Date(parsedDate)
-  startOfDay.setUTCHours(17,0,0,0)
+  startOfDay.setHours(17,0,0,0)
   const endOfDay = new Date(parsedDate)
-  endOfDay.setUTCHours(20,30,0,0)
+  endOfDay.setHours(20,30,0,0)
   const startDateTimestamp = msToTimestamp(Date.parse(startOfDay))
   const endDateTimestamp = msToTimestamp(Date.parse(endOfDay))
   const startDayTimestamp = msToTimestamp(Date.parse(midnight))
   const endDayTimestamp = msToTimestamp(Date.parse(totalEndDay))
 
-  const content = await dbClient(async({matches, teams, nationalities, leagueConfig})=> {
+  const content = await dbClient(async({matches, teams, nationalTeams, leagueConfig})=> {
     const matchesOfDay = await matches.find({dateTimestamp: { $gt: startDayTimestamp, $lt: endDayTimestamp}, $or: [{finished:false}, {finished:null}]}).sort({dateTimestamp:1}).toArray()
     shuffleArray(matchesOfDay)
     
@@ -36,10 +36,10 @@ export const arrangeDaySchedule = async({dbClient, application_id, interaction_i
       }
     }
     for await (const id of processedMatchesIds) {
-      await editAMatchInternal({id, teams, nationalities, matches, leagueConfig})
+      await editAMatchInternal({id, teams, nationalTeams, matches, leagueConfig})
     }
     console.log('done')
-    //await Promise.allSettled(processedMatchesIds.map(id => editAMatchInternal({id, teams, nationalities, matches})))
+    //await Promise.allSettled(processedMatchesIds.map(id => editAMatchInternal({id, teams, nationalTeams, matches})))
     return `${processedMatchesIds.length} matches set between <t:${startDateTimestamp}:F> and <t:${endDateTimestamp}:F>`
   })
   return updateResponse({application_id, token, content})

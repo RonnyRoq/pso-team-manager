@@ -1,7 +1,7 @@
 import { optionsToObject, silentResponse } from "../../functions/helpers.js"
 import { leagueChoices } from "../../config/leagueData.js"
 import { showLeagueTeam } from "./addToLeague.js"
-import { getAllLeagues } from "../../functions/leaguesCache.js"
+import { getAllLeagues } from "../../functions/allCache.js"
 
 
 export const leagueTeams = async ({options, dbClient, interaction_id, token}) => {
@@ -10,6 +10,7 @@ export const leagueTeams = async ({options, dbClient, interaction_id, token}) =>
     return leagues.find({leagueId: league}).toArray()
   })
   const allLeagues = await getAllLeagues()
+  console.log(allLeagues)
   const leagueObj = allLeagues.find(fixtureLeague=> fixtureLeague.value === league)
   console.log(leagueObj)
   const content = `${leagueObj.name} ${teams.length} teams:\r`

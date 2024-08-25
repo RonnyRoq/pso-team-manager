@@ -18,12 +18,7 @@ export const disbandTeam = async ({interaction_id, token, options}) => {
           type: 1,
           components: [{
             type: 2,
-            label: `Confirm - remove blacklist`,
-            style: 4,
-            custom_id: `confirm_delete_${team}`
-          },{
-            type: 2,
-            label: `Confirm - keep players blacklisted`,
+            label: `Confirm - players will stay blacklisted`,
             style: 4,
             custom_id: `confirm_delete_${team}_keepblacklist`
           }]

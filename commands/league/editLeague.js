@@ -1,7 +1,8 @@
 import { leagueChoices } from "../../config/leagueData.js"
 import { handleSubCommands, optionsToObject, postMessage, updateResponse } from "../../functions/helpers.js"
-import { getAllLeagues, refreshAllLeagues } from "../../functions/leaguesCache.js"
+import { getAllLeagues, refreshAllLeagues } from "../../functions/allCache.js"
 import { serverChannels } from "../../config/psafServerConfig.js"
+import { ReturnDocument } from "mongodb"
 
 export const getLeaguesInfo = async ({dbClient, short}) => {
   return dbClient(({leagueConfig})=> {
@@ -26,6 +27,33 @@ export const editLeague = async ({dbClient, token, application_id, options}) => 
     return `Updated:\r${JSON.stringify({...currentLeague, ...payload}, undefined, 2)}`
   })
   return updateResponse({application_id, token, content})
+}
+
+export const apiUpdateLeague = async (options, dbClient) => {
+  const {name, logo, emoji='', channel, order, league} = options
+
+  return dbClient(async ({leagueConfig})=> {
+    const currentLeague = await leagueConfig.findOne({value: league})
+    let active
+    if(options.active === true) {
+      active = true
+    } else if (options.active === false) {
+      active = false
+    } else {
+      active = currentLeague.active
+    }
+    const payload = {
+      name: name || currentLeague.name,
+      defaultImage: logo || currentLeague.defaultImage,
+      emoji: emoji.replace('<', '').replace('>', '') || currentLeague.emoji,
+      channel: channel || currentLeague.channel,
+      order: order || currentLeague.order,
+      active,
+    }
+    const updatedLeague = await leagueConfig.findOneAndUpdate({value: league}, { $set: payload},  {returnDocument: ReturnDocument.AFTER})
+    refreshAllLeagues(leagueConfig)
+    return updatedLeague
+  })
 }
 
 const activateLeague = async (options) => updateLeagueStatus(options, true)

@@ -1,8 +1,9 @@
-import { InteractionResponseType, InteractionResponseFlags } from "discord-interactions"
-import { DiscordRequest, isValidHttpUrl } from "../utils.js"
-import { displayTeam, isNumeric, optionsToObject } from "../functions/helpers.js"
+import { isValidHttpUrl } from "../utils.js"
+import { displayTeam, handleSubCommands, isNumeric, optionsToObject, updateResponse } from "../functions/helpers.js"
+import { serverRoles } from "../config/psafServerConfig.js"
+import { releaseTeamPlayers } from "./transfers.js"
 
-export const editTeam = async ({interaction_id, token, options, dbClient}) => {
+export const editTeam = async ({application_id, token, options, dbClient}) => {
   let response = "No teams found"
   const {team, palmares, emoji, city, flag, shortname, name, logo, channel} = Object.fromEntries(options.map(({name, value})=> [name, value]))
   const roles = [{id: team}]
@@ -34,51 +35,58 @@ export const editTeam = async ({interaction_id, token, options, dbClient}) => {
     await teams.updateOne({id: team.id}, {$set: payload})
     const updatedTeam = await teams.findOne({id:team.id})
     response = displayTeam(updatedTeam)
-    return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-      method: 'POST',
-      body: {
-        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: response,
-          flags: InteractionResponseFlags.EPHEMERAL
-        }
-      }
-    })
+    return updateResponse({application_id, token, content: response})
   })
 }
 
-export const activateTeam = async ({interaction_id, token, application_id, options, dbClient}) => {
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        flags: 1 << 6
-      }
-    }
-  })
-  const {team} = optionsToObject(options)
-  const content = await dbClient(async ({teams})=>{
+export const updateTeamStatus = async ({team, active=false, dbClient})=> {
+  return dbClient(async ({teams})=>{
     const dbTeam = await teams.findOne({id: team})
-    if(dbTeam.active) {
-      return `<@&${team}> is already active.`
-    } else {
-      await teams.updateOne({id: team}, {$set: {active: true}})
-      return `Activated <@&${team}>. Transfers are now available.`
+    if(!dbTeam) {
+      return `Cannot find <@&${team}>`
     }
-  })
-  return await DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-    method: 'PATCH',
-    body: {
-      content,
-      flags: InteractionResponseFlags.EPHEMERAL
+    if(active && dbTeam?.active) {
+      return `<@&${team}> is already active.`
+    } else if(!active && !dbTeam?.active) {
+      return `<@&${team}> is already inactive`
+    } else {
+      await teams.updateOne({id: team}, {$set: {active: active}})
+      return `Updated <@&${team}>. Transfers are now ${active ? 'available':'unavailable'}.`
     }
   })
 }
 
+const disableTeam = async (params) => updateTeamStatusCommand({...params, active: false})
+const activateTeam = async (params) => updateTeamStatusCommand({...params, active: true})
+
+const updateTeamStatusCommand = async ({token, application_id, options, dbClient, active}) => {
+  const {team} = optionsToObject(options)
+  console.log(team, active)
+  const content = await updateTeamStatus({team, active, dbClient})
+  return updateResponse({application_id, token, content})
+}
+
+const releasePlayers = async ({member, token, guild_id, application_id, options, dbClient}) => {
+  if(!member.roles.includes(serverRoles.presidentRole)) {
+    return updateResponse({content:'reserved to presidents', application_id, token})
+  }
+  const {team} = optionsToObject(options)
+  const content = await releaseTeamPlayers({team, guild_id, dbClient})
+  return updateResponse({application_id, token, content})
+}
+
+const editTeamSubCommands = {
+  'details': editTeam,
+  'activate': activateTeam,
+  'disable': disableTeam,
+  'releaseplayers': releasePlayers,
+}
+
+const editTeamGroup = (commandOptions) => 
+  handleSubCommands(commandOptions, editTeamSubCommands)
 
 export const editTeamCmd =  {
-  name: 'editteam',
+  name: 'details',
   description: 'Edit team details',
   type: 1,
   options: [{
@@ -122,7 +130,7 @@ export const editTeamCmd =  {
 }
 
 export const activateTeamCmd = {
-  name: 'activateteam',
+  name: 'activate',
   description: 'Activate a team',
   type: 1,
   options: [{
@@ -132,3 +140,43 @@ export const activateTeamCmd = {
     required: true
   }]
 }
+
+
+const disableTeamCmd = {
+  name: 'disable',
+  description: 'Disable a team',
+  type: 1,
+  options: [{
+    type: 8,
+    name: 'team',
+    description: 'Team',
+    required: true
+  }]
+}
+
+const releasePlayersCmd = {
+  name: 'releaseplayers',
+  description: 'Release all the players. THIS CANNOT BE UNDONE',
+  type: 1,
+  options: [{
+    type: 8,
+    name: 'team',
+    description: 'Team',
+    required: true
+  }]
+}
+
+export const teamCmd = {
+  name: 'editteam',
+  description: 'Edit a team',
+  func: editTeamGroup,
+  psaf: true,
+  options: [
+    editTeamCmd,
+    activateTeamCmd,
+    disableTeamCmd,
+    releasePlayersCmd
+  ]
+}
+
+export default [teamCmd]

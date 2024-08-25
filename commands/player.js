@@ -3,37 +3,18 @@ import {fileURLToPath} from 'url';
 import { InteractionResponseType } from "discord-interactions"
 import download from "image-downloader"
 import { DiscordRequest } from "../utils.js"
-import { getPlayerNick, msToTimestamp, optionsToObject, sleep, updateResponse, waitingMsg, isMemberStaff, quickResponse } from "../functions/helpers.js"
+import { getPlayerNick, msToTimestamp, optionsToObject, sleep, updateResponse, waitingMsg, isMemberStaff, postMessage } from "../functions/helpers.js"
 import { getAllPlayers } from "../functions/playersCache.js"
-import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
+import { serverRoles } from "../config/psafServerConfig.js"
 import { seasonPhases } from "./season.js"
 import { getAllCountries } from "../functions/countriesCache.js"
+import { getAllNationalities } from '../functions/allCache.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const nationalTeamPlayerRole = '1103327647955685536'
 const staffRoles = ['1081886764366573658', '1072210995927339139', '1072201212356726836']
-
-
-const getConfirmPictureComponents = ({isValidated, isActive}={}) => ({
-  components: [{
-    type: 1,
-    components: [{
-      type: 2,
-      label: "Confirm",
-      style: 3,
-      custom_id: "confirm_picture",
-      disabled: !isValidated
-    },{
-      type: 2,
-      label: "Cancel",
-      style: 4,
-      custom_id: "cancel_picture",
-      disabled: !isActive
-    }]
-  }]
-})
 
 export const player = async ({options, interaction_id, callerId, guild_id, application_id, member, token, dbClient}) => {
   const [{value}] = options || [{}]
@@ -54,20 +35,21 @@ export const player = async ({options, interaction_id, callerId, guild_id, appli
   const discPlayer = await playerResp.json()
   const name = getPlayerNick(discPlayer)
   let response = name
-  await dbClient(async ({players, nationalities, teams, contracts})=> {
+  await dbClient(async ({players, teams, contracts})=> {
     const dbPlayer = await players.findOne({id: playerId})
     const allTeams = await teams.find({active:true}).toArray()
     const allTeamIds = allTeams.map(({id})=> id)
     const playerContracts = await contracts.find({playerId}).toArray()
     const team = discPlayer.roles.find(role => allTeamIds.includes(role))
     response = `<@${playerId}> - ${team ? `<@&${team}>` : 'Free Agent'}\r`
+    const allNationalities = await getAllNationalities()
     if(dbPlayer) {
       if(dbPlayer.ingamename) {
         response+= `In game name: ${dbPlayer.ingamename}\r`
       }
-      const country = await nationalities.findOne({name: dbPlayer.nat1})
-      const country2 = await nationalities.findOne({name: dbPlayer.nat2})
-      const country3 = await nationalities.findOne({name: dbPlayer.nat3})
+      const country = allNationalities.find(country => country.name === dbPlayer.nat1)
+      const country2 = allNationalities.find(country => country.name === dbPlayer.nat2)
+      const country3 = allNationalities.find(country => country.name === dbPlayer.nat3)
       if(country){
         response += `${country.flag} ${discPlayer.roles.includes(nationalTeamPlayerRole) ? 'International': ''}${country2? `, ${country2.flag}`: ''}${country3? `, ${country3.flag}`: ''}\r`
       }
@@ -130,7 +112,7 @@ export const editPlayer = async ({options=[], member, callerId, resolved, intera
   const discPlayer = await playerResp.json()
   let response = 'Nothing edited'
   const name = getPlayerNick(discPlayer)
-  return await dbClient(async ({players, nationalities, teams})=> {
+  return await dbClient(async ({players, teams})=> {
     const allTeams = await teams.find({active:true}).toArray()
     const allTeamIds = allTeams.map(({id})=> id)
     if(player !== callerId && member.roles.filter(role => staffRoles.includes(role)).length === 0) {
@@ -161,10 +143,11 @@ export const editPlayer = async ({options=[], member, callerId, resolved, intera
     const updatedPlayer = await players.findOne({id: player}) || {}
     const team = discPlayer.roles.find(role => allTeamIds.includes(role))
     response = `<@${player}> - ${team ? `<@&${team}>` : 'Free Agent'}\r`
+    const allNationalities = await getAllNationalities()
     if(updatedPlayer) {
-      const country = await nationalities.findOne({name: updatedPlayer.nat1})
-      const country2 = await nationalities.findOne({name: updatedPlayer.nat2})
-      const country3 = await nationalities.findOne({name: updatedPlayer.nat3})
+      const country = allNationalities.find(country=> country.name === updatedPlayer.nat1)
+      const country2 = allNationalities.find(country=> country.name === updatedPlayer.nat2)
+      const country3 = allNationalities.find(country=> country.name === updatedPlayer.nat3)
       if(country){
         response += `${country.flag} ${discPlayer.roles.includes(nationalTeamPlayerRole) ? 'International': ''}${country2? `, ${country2.flag}`: ''}${country3? `, ${country3.flag}`: ''}\r`
       }
@@ -206,7 +189,7 @@ export const updatePlayerPicture = async ({options=[], callerId, resolved, inter
   const playerResp = await DiscordRequest(`/guilds/${guild_id}/members/${player}`, { method: 'GET' })
   const discPlayer = await playerResp.json()
   let response = 'Nothing edited'
-  return await dbClient(async ({players, nationalities, teams})=> {
+  return await dbClient(async ({players, teams})=> {
     const allTeams = await teams.find({active:true}).toArray()
     const allTeamIds = allTeams.map(({id})=> id)
     const dbPlayer = await players.findOne({id: player}) || {}
@@ -216,10 +199,11 @@ export const updatePlayerPicture = async ({options=[], callerId, resolved, inter
     const updatedPlayer = await players.findOne({id: player}) || {}
     const team = discPlayer.roles.find(role => allTeamIds.includes(role))
     response = `<@${player}> - ${team ? `<@&${team}>` : 'Free Agent'}\r`
+    const allNationalities = await getAllNationalities()
     if(updatedPlayer) {
-      const country = await nationalities.findOne({name: updatedPlayer.nat1})
-      const country2 = await nationalities.findOne({name: updatedPlayer.nat2})
-      const country3 = await nationalities.findOne({name: updatedPlayer.nat3})
+      const country = allNationalities.find(country=> country.name === updatedPlayer.nat1)
+      const country2 = allNationalities.find(country=> country.name === updatedPlayer.nat2)
+      const country3 = allNationalities.find(country=> country.name === updatedPlayer.nat3)
       if(country){
         response += `${country.flag} ${discPlayer.roles.includes(nationalTeamPlayerRole) ? 'International': ''}${country2? `, ${country2.flag}`: ''}${country3? `, ${country3.flag}`: ''}\r`
       }
@@ -233,39 +217,6 @@ export const updatePlayerPicture = async ({options=[], callerId, resolved, inter
     
     return updateResponse({application_id, token, content: response})
   })
-}
-
-const postPlayerPicture = async ({options, callerId, member, resolved, interaction_id, guild_id, application_id, token, dbClient}) => {
-  const playerName = getPlayerNick(member)
-  const {picture} = optionsToObject(options)
-  const image = resolved?.attachments?.[picture]?.proxy_url
-  const content = `${playerName} posted:\r${image}`
-  await quickResponse({interaction_id, token, content: `${playerName} posted:\r${image}`})
-  if(image) {
-    const response = await dbClient(async ({pendingPictures})=> {
-      const confirmResp = await DiscordRequest(`/channels/${serverChannels.confirmationPictures}/messages`, {
-        method: 'POST',
-        body: {
-          ...getConfirmPictureComponents({isActive: true, isValidated:true}),
-          content
-        }
-      })
-      const confirmMsg = await confirmResp.json()
-      const pendingPic = await pendingPictures.findOne({playerId: callerId}).toArray()
-      if(pendingPic) {
-        if(pendingPic.adminMsg) {
-          await DiscordRequest(`/channels/${serverChannels.confirmationPictures}/messages/${pendingPic.adminMsg}`, {
-            method: 'PUT',
-            body: {
-              ...getConfirmPictureComponents({isActive: true, isValidated:true}),
-              content: 'Cancelled by new upload'
-            }
-          })
-          
-        }
-      }
-    })
-  }
 }
 
 export const getPlayersList = async (totalPlayers, teamToList, displayCountries, players, contracts) => {
@@ -290,12 +241,12 @@ export const getPlayersList = async (totalPlayers, teamToList, displayCountries,
       ...foundPlayer,
       contract,
       isManager: player.roles.includes(serverRoles.clubManagerRole),
-      isBlackListed: player.roles.includes(serverRoles.matchBlacklistRole)
+      isBlackListed: player.roles.includes(serverRoles.matchBlacklistRole) || player.roles.includes(serverRoles.permanentlyBanned)
     })
   })
   let response = `<@&${teamToList}> players: ${displayPlayers.length}/30${displayPlayers.length>30? '\r## Too many players':''}\r`
-  response += `${displayPlayers.map(({ user, nat1, nat2, nat3, contract, steam, isManager, isBlackListed }) => 
-    `${isManager?':crown: ':''}${isBlackListed?':no_entry_sign: ':''}${nat1?displayCountries[nat1]:''}${nat2?displayCountries[nat2]:''}${nat3?displayCountries[nat3]:''} <@${user.id}>${steam? '<:steam:1201620242015719454>': ''}${contract?.until && !isManager? (contract?.isLoan ? ` - LOAN Season ${contract?.until}, beginning of ${seasonPhases[contract?.phase].desc}`: ` - Season ${contract?.until-1}`) : ''}`
+  response += `${displayPlayers.map(({ user, nat1, nat2, nat3, contract, steam, isManager, profilePicture, isBlackListed }) => 
+    `${isManager?':crown: ':''}${isBlackListed?':no_entry_sign: ':''}${nat1?displayCountries[nat1]:''}${nat2?displayCountries[nat2]:''}${nat3?displayCountries[nat3]:''} <@${user.id}>${steam? '<:steam:1201620242015719454>': ''}${profilePicture?'👕':''}${contract?.until && !isManager? (contract?.isLoan ? ` - LOAN Season ${contract?.until}, beginning of ${seasonPhases[contract?.phase].desc}`: ` - Season ${contract?.until-1}`) : ''}`
   ).join('\r')}`
   return response
 }
@@ -311,16 +262,18 @@ export const allPlayers = async ({guild_id, interaction_id, application_id, toke
     }
   })
   const allPlayers = await getAllPlayers(guild_id)
-  await dbClient(async ({teams, players, nationalities})=>{
-    const allTeams = await teams.find({active: true}).toArray()
-    const allNations = await nationalities.find({}).toArray()
+  await dbClient(async ({teams, players, contracts})=>{
+    const [allTeams, allNations] = await Promise.all([
+      teams.find({active: true}).toArray(),
+      getAllNationalities()
+    ])
     const displayCountries = Object.fromEntries(allNations.map(({name, flag})=> ([name, flag])))
     
     const embeds = []
     let currentEmbed =''
     let i = 0
     for(const team of allTeams) {
-      currentEmbed += await getPlayersList(allPlayers, team.id, displayCountries, players) +'\r\r'
+      currentEmbed += await getPlayersList(allPlayers, team.id, displayCountries, players, contracts) +'\r\r'
       i++
       if(i > 4) {
         i=0
@@ -328,52 +281,33 @@ export const allPlayers = async ({guild_id, interaction_id, application_id, toke
           title: 'PSAF Players',
           description: currentEmbed
         })
-        await DiscordRequest('/channels/1150376229178978377/messages', {
-          method: 'POST',
-          body: {
-            embeds: [{title: 'PSAF Players', description: currentEmbed}]
-          }
+        await postMessage({
+          channel_id:'1150376229178978377', 
+          embeds: [{title: 'PSAF Players', description: currentEmbed}]
         })
         await sleep(1000)
         currentEmbed = ''
       }
     }
     if(i!== 0) {
-      await DiscordRequest('/channels/1150376229178978377/messages', {
-        method: 'POST',
-        body: {
-          embeds: [{title: 'PSAF Players', description: currentEmbed}]
-        }
+      await postMessage({
+        channel_id:'1150376229178978377', 
+        embeds: [{title: 'PSAF Players', description: currentEmbed}]
       })
     }
     return []
   })
-
-  return await DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-    method: 'PATCH',
-    body: {
-      content: 'done',
-      flags: 1 << 6
-    }
-  })
+  return updateResponse({application_id, token, content: 'Done'})
 }
 
 export const players = async ({guild_id, interaction_id, application_id, token, options, dbClient}) => {
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        flags: 1 << 6
-      }
-    }
-  })
+  await waitingMsg({interaction_id, token})
   const totalPlayers = await getAllPlayers(guild_id)
   const {team} = Object.fromEntries(options.map(({name, value})=> [name, value]))
   
-  const response = await dbClient(async ({players, nationalities, contracts})=> {
+  const response = await dbClient(async ({players, contracts})=> {
     const [allNations, teamContracts] = await Promise.all([
-      nationalities.find({}).toArray(),
+      getAllNationalities(),
       contracts.find({team, endedAt: null}).toArray()
     ])
     const displayCountries = Object.fromEntries(allNations.map(({name, flag})=> ([name, flag])))
@@ -486,20 +420,6 @@ export const updatePlayerPictureCmd = {
     type: 11,
     name: 'picture',
     description: 'Profile picture for cards',
-    required: true
-  }]
-}
-
-export const postPlayerPictureCmd = {
-  name: 'postpicture',
-  description: 'Post your player picture',
-  type: 1,
-  psaf: true,
-  func: postPlayerPicture,
-  options: [{
-    type: 11,
-    name: 'picture',
-    description: 'Picture for cards. Transparent bg-480x560',
     required: true
   }]
 }

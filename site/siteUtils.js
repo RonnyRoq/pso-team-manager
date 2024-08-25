@@ -1,9 +1,9 @@
 import DiscordOauth2 from 'discord-oauth2'
 import crypto from 'crypto'
-import { isStaffRole } from "../functions/helpers.js"
+import { isAdminRole, isStaffRole } from "../functions/helpers.js"
 import { scope } from "../config/constants.js"
 
-const redirectUri = "https://pso.shinmugen.net/site/"
+const redirectUri = "https://pso.shinmugen.net/web/"
 const oauth = new DiscordOauth2({
   clientId: process.env.APP_ID,
   clientSecret: process.env.AUTHSC,
@@ -57,7 +57,23 @@ export const isMemberStaff = async (guildMember) => {
   return (guildMember.roles.find(role => isStaffRole(role)))
 }
 
+export const isMemberAdmin = async (guildMember) => {
+  return (guildMember.roles.find(role => isAdminRole(role)))
+}
+
 export const isStaff = async (req) => {
+  if(!req?.session?.access_token) {
+    console.log(req?.session?.access_token)
+    return false
+  }
   const guildMember = await getGuildMember(req)
   return isMemberStaff(guildMember)
+}
+export const isAdmin = async (req) => {
+  if(!req?.session?.access_token) {
+    console.log(req?.session?.access_token)
+    return false
+  }
+  const guildMember = await getGuildMember(req)
+  return isMemberAdmin(guildMember)
 }

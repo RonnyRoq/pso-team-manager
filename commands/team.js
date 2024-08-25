@@ -1,10 +1,12 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { DiscordRequest } from "../utils.js"
-import { displayTeam, genericFormatMatch, getCurrentSeason, optionsToObject } from "../functions/helpers.js"
+import { displayTeam, genericFormatMatch, getCurrentSeason, optionsToObject, updateResponse, waitingMsg } from "../functions/helpers.js"
 import { leagueChoices } from "../config/leagueData.js"
-import { getAllLeagues } from "../functions/leaguesCache.js"
+import { getAllLeagues, getAllNationalities } from "../functions/allCache.js"
+import { getPlayersList } from "./player.js"
+import { getAllPlayers } from "../functions/playersCache.js"
 
-export const team = async ({interaction_id, application_id, token, options, member, dbClient})=> {
+export const team = async ({interaction_id, application_id, token, guild_id, options, member, dbClient})=> {
   let response = "No teams found"
   let matchEmbeds = []
   const {team, allmatches, league} = optionsToObject(options || [])
@@ -14,8 +16,9 @@ export const team = async ({interaction_id, application_id, token, options, memb
   } else {
     roles = [{id: team}]
   }
+  await waitingMsg({interaction_id, token})
   
-  await dbClient(async ({teams, matches, seasonsCollect})=>{
+  const content = await dbClient(async ({teams, matches, seasonsCollect, contracts, players})=>{
     const team = await teams.findOne({active:true, $or:roles})
     if(!team)
     {
@@ -23,6 +26,9 @@ export const team = async ({interaction_id, application_id, token, options, memb
       return
     }
     response = displayTeam(team)
+    const [allPlayers, allNations] = await Promise.all([getAllPlayers(guild_id), getAllNationalities()])
+    const displayCountries = Object.fromEntries(allNations.map(({name, flag})=> ([name, flag])))
+    const content = await getPlayersList(allPlayers, team.id, displayCountries, players, contracts )
     const finished = allmatches ? {} : {finished: null}
     const leagueCondition = league ? {league} : {}
     const season = await getCurrentSeason(seasonsCollect)
@@ -48,6 +54,7 @@ export const team = async ({interaction_id, application_id, token, options, memb
         matchEmbeds.push(currentEmbed)
       }
     }
+    return content
   })
   const embeds = matchEmbeds.map(matchEmbed => ({
     "type": "rich",
@@ -55,17 +62,7 @@ export const team = async ({interaction_id, application_id, token, options, memb
     "title": "Matches",
     "description": matchEmbed,
   }))
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        content: response,
-        embeds: embeds.slice(0, 3),
-        flags: InteractionResponseFlags.EPHEMERAL,
-      }
-    }
-  })
+  await updateResponse({application_id, token, content: response, embeds})
   let i = 3
   while (i<embeds.length) {
     const currentEmbed = embeds.slice(i, i+3)
@@ -81,6 +78,14 @@ export const team = async ({interaction_id, application_id, token, options, memb
     })
     i+=3
   }
+  await DiscordRequest(`/webhooks/${application_id}/${token}`, {
+    method: 'POST',
+    body: {
+      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      content,
+      flags: InteractionResponseFlags.EPHEMERAL,
+    }
+  })
 }
 
 export const teamCmd = {

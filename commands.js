@@ -4,9 +4,8 @@ import { nowCmd } from './commands/now.js';
 import { timestampCmd } from './commands/timestamp.js';
 import { helpCmd } from './commands/help.js';
 import { myTeamCmd, teamCmd } from './commands/team.js';
-import { editInternationalMatchCmd, editMatchCmd, endMatchCmd, internationalMatchCmd, matchCmd, matchIdCmd, matchesCmd, moveTheMatchCmd, pastMatchesCmd, publishMatchCmd, resetMatchCmd, unPublishMatchCmd } from './commands/match.js';
+import { editMatchCmd, endMatchCmd, matchCmd, matchIdCmd, matchesCmd, moveTheMatchCmd, pastMatchesCmd, publishMatchCmd, resetMatchCmd, unPublishMatchCmd } from './commands/match.js';
 import { blacklistTeamCmd, emojiCmd, expireThingsCmd, fixNamesCmd, managerContractsCmd, systemTeamCmd } from './commands/system.js';
-import { activateTeamCmd, editTeamCmd } from './commands/editTeams.js';
 import { editPlayerCmd, myPlayerCmd, playerCmd, playersCmd } from './commands/player.js';
 import { allNationalTeamsCmd, nationalTeamCmd, postNationalTeamsCmd, registerElectionsCmd, showElectionCandidatesCmd, showVotesCmd, voteCoachCmd } from './commands/nationalTeam.js';
 import { confirmCmd, registerCmd, releaseCmd, updateConfirmCmd } from './commands/confirm.js';
@@ -124,11 +123,11 @@ const ALL_COMMANDS = [nowCmd, timestampCmd, helpCmd];
 
 const GUILD_COMMANDS = [
   teamCmd, matchCmd, editMatchCmd, moveTheMatchCmd, endMatchCmd, publishMatchCmd, unPublishMatchCmd, myTeamCmd,
-  matchIdCmd, matchesCmd, internationalMatchCmd, editInternationalMatchCmd, resetMatchCmd,
+  matchIdCmd, matchesCmd, resetMatchCmd,
   playerCmd, editPlayerCmd, playersCmd, myPlayerCmd,
-  confirmCmd, updateConfirmCmd, renewCmd, dealCmd, activateTeamCmd, listDealsCmd, loanCmd, releaseCmd, registerCmd,
+  confirmCmd, updateConfirmCmd, renewCmd, dealCmd, listDealsCmd, loanCmd, releaseCmd, registerCmd,
   nationalTeamCmd, allNationalTeamsCmd, postNationalTeamsCmd,
-  transferCmd, teamTransferCmd, FREEPLAYER, FINE, BONUS, editTeamCmd, addUniqueIdCmd,
+  transferCmd, teamTransferCmd, FREEPLAYER, FINE, BONUS, addUniqueIdCmd,
   emojiCmd, showBlacklistCmd, showNoContractsCmd, registerElectionsCmd, showElectionCandidatesCmd, voteCoachCmd, showVotesCmd,
   disbandTeamCmd, expireContractsCmd, addSteamIdCmd, setRatingCmd, setNameCmd,
   leagueTeamsCmd, leagueTableCmd, imageLeagueTableCmd, postLeagueTableCmd, generateMatchdayCmd,

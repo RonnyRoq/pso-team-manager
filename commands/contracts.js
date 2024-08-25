@@ -42,7 +42,10 @@ export const showExpiringContracts = async ({guild_id, interaction_id, token, ap
   const allActiveTeamIds = allActiveTeams.map(({id})=> id)
   const allContractsPlayerIds = allContracts.map(({playerId})=> playerId)
   const playersWithATeamAndExpiringContract = totalPlayers.filter(player => {
-    const teamId = !player.roles.includes(serverRoles.clubManagerRole) &&  !player.roles.includes(serverRoles.matchBlacklistRole) && player.roles.find(role => allActiveTeamIds.includes(role))
+    const teamId = !player.roles.includes(serverRoles.clubManagerRole)
+     && !player.roles.includes(serverRoles.matchBlacklistRole)
+     && !player.roles.includes(serverRoles.permanentlyBanned)
+     && player.roles.find(role => allActiveTeamIds.includes(role))
     const hasContract = teamId ? allContractsPlayerIds.includes(player.user.id) : false
     return teamId && hasContract
   })

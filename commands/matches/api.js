@@ -1,5 +1,6 @@
 import { ObjectId } from "mongodb"
 import { getFastCurrentSeason } from "../season.js"
+import { getRefStatsLeaderboard } from "../match.js"
 
 export const getMatch = async ({matchId, dbClient}) => {
   const matchIdAsId = new ObjectId(matchId)
@@ -34,4 +35,8 @@ export const getMatchDay = async ({league, matchday, dbClient}) => {
       playerStats: matchdayPlayerStats,
     }
   })
+}
+
+export const getRefLeaderboard = async ({dbClient}) => {
+  return getRefStatsLeaderboard({dbClient})
 }

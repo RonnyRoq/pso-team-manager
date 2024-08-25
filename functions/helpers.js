@@ -1,6 +1,7 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions";
 import { serverChannels, serverRoles, transferBanStatus } from "../config/psafServerConfig.js";
 import { DiscordRequest } from "../utils.js";
+import { getAllNationalities } from "./allCache.js";
 
 export const isPSAF = (guild_id) => guild_id === process.env.GUILD_ID
 
@@ -87,10 +88,10 @@ export const genericInterFormatMatch = (nations, nationalSelections, match, allL
   const league = allLeagues.find(({value})=> value === match.league)
   const homeTeam = nationalSelections.find(({shortname})=> shortname === match.home)
   const awayTeam = nationalSelections.find(({shortname})=> shortname === match.away)
-  const homeNation = nations.find(nation=>nation.name===homeTeam.eligiblenationality)
-  const awayNation = nations.find(nation=>nation.name===awayTeam.eligiblenationality)
+  const homeFlags = nations.filter(nation=>homeTeam.eligibleNationalities.includes(nation.name)).map(nation=>nation.flag).join('')
+  const awayFlags = nations.filter(nation=>awayTeam.eligibleNationalities.includes(nation.name)).map(nation=>nation.flag).join('')
   let response = `<${league.emoji}> **| ${league.name} ${match.matchday}** - <t:${match.dateTimestamp}:F>`
-    response += `\r> ${homeNation.flag} ${homeTeam.name} ${match.finished ? `**${match.homeScore} - ${match.awayScore}**`: ' :vs: '} ${awayTeam.name} ${awayNation.flag}`
+    response += `\r> ${homeFlags} ${homeTeam.name} ${match.finished ? `**${match.homeScore} - ${match.awayScore}**`: ' :vs: '} ${awayTeam.name} ${awayFlags}`
   return response
 }
 
@@ -113,7 +114,15 @@ export const removeSubCommands = (commands) => (
   )
 )
 
-export const isStaffRole = (role) => [serverRoles.presidentRole, serverRoles.adminRole, serverRoles.psafManagementRole, serverRoles.trialStaffRole, serverRoles.psoStaffRole].includes(role)
+export const getFlags = async (selection) => {
+  const allNationalities = await getAllNationalities()
+  return allNationalities.filter(nat => nat.name === selection.eligiblenationality).map(nat=>nat.flag).join('')
+}
+
+export const isStaffRole = (role) => [serverRoles.presidentRole, serverRoles.engineerRole, serverRoles.adminRole, serverRoles.psafManagementRole, serverRoles.trialStaffRole, serverRoles.psoStaffRole].includes(role)
+
+export const isAdminRole = (role) => [serverRoles.presidentRole, serverRoles.engineerRole, serverRoles.adminRole].includes(role)
+export const isTopAdminRole = (role) => [serverRoles.presidentRole, serverRoles.engineerRole].includes(role)
 
 export const isMemberStaff = async (guildMember) => {
   return (guildMember.roles.find(role => isStaffRole(role)))
@@ -185,7 +194,7 @@ export const waitingMsg = async ({interaction_id, token}) =>
   })
 
 export const quickResponse = async ({interaction_id, token, content, isEphemeral}) =>
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+  DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
     method: 'POST',
     body: {
       type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -199,26 +208,67 @@ export const quickResponse = async ({interaction_id, token, content, isEphemeral
 export const silentResponse = async ({interaction_id, token, content}) =>
   quickResponse({interaction_id, token, content, isEphemeral: true})
 
-export const updateResponse = async ({application_id, token, content}) => 
+export const updateResponse = async ({application_id, token, content, embeds, components}) => 
   DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
     method: 'PATCH',
     body: {
       content,
-      flags: 1 << 6
+      embeds,
+      components,
+      flags: InteractionResponseFlags.EPHEMERAL
     }
   })
 
-export const postMessage = async({channel_id, content='', components = [], attachments = []}) =>
+export const followUpResponse = async ({application_id, token, content, embeds, components}) => 
+  DiscordRequest(`/webhooks/${application_id}/${token}`, {
+    method: 'POST',
+    body: {
+      content,
+      embeds,
+      components,
+      flags: InteractionResponseFlags.EPHEMERAL
+    }
+  })
+
+export const postMessage = async({channel_id, content='', components = [], attachments = [], embeds = []}) =>
   DiscordRequest(`/channels/${channel_id}/messages`, 
   {
     method: 'POST',
     body: {
       content,
       components,
-      attachments
+      attachments,
+      embeds
     }
   })
+export const updatePost = async({channel_id, messageId, content, components, attachments, embeds}) => {
+  const body = {}
+  if(content)
+    body.content = content
+  if(components)
+    body.components = components
+  if(attachments)
+    body.attachments = attachments
+  if(embeds)
+    body.embeds = embeds
+  return DiscordRequest(`/channels/${channel_id}/messages/${messageId}`, 
+  {
+    method: 'PATCH',
+    body
+  })
+}
 
+export const getPost = async({channel_id, messageId}) => {
+  return DiscordRequest(`/channels/${channel_id}/messages/${messageId}`, 
+    {
+      method: 'GET',
+    })
+}
+
+export const deleteMessage = async ({channel_id, messageId}) => 
+  DiscordRequest(`/channels/${channel_id}/messages/${messageId}`, {
+    method: 'DELETE',
+  })
 //stolen from stackoverflow
 export const isNumeric = (str) => {
   if (typeof str != "string") return false // we only process strings!  

@@ -16,10 +16,9 @@ import { timestamp } from './commands/timestamp.js';
 import { help, helpAdmin } from './commands/help.js';
 import { allPlayers, autoCompleteNation, editPlayer, player, players } from './commands/player.js';
 import { team } from './commands/team.js';
-import { editInterMatch, editMatch, endMatch, internationalMatch, match, matchId, matches, pastMatches, publishMatch, resetMatch, unpublishMatch } from './commands/match.js';
+import { editMatch, endMatch, match, matchId, matches, pastMatches, publishMatch, resetMatch, unpublishMatch } from './commands/match.js';
 import { blacklistTeam, doubleContracts, emoji, expireThings, fixNames, initCountries, managerContracts, systemTeam } from './commands/system.js';
-import { activateTeam, editTeam } from './commands/editTeams.js';
-import { addSelection, allNationalTeams, autoCompleteSelections, nationalTeam, postNationalTeams, registerElections, removeSelection, showElectionCandidates, showVotes, voteCoach } from './commands/nationalTeam.js';
+import { addSelection, autoCompleteSelections, nationalTeam, postNationalTeams, registerElections, removeSelection, showElectionCandidates, showVotes, voteCoach } from './commands/nationalTeam.js';
 import { confirm, pendingConfirmations, register, releasePlayer } from './commands/confirm.js';
 import { approveDealAction, approveLoanAction, declineDealAction, declineLoanAction, finishLoanRequest, removeConfirmation, removeDeal, removeLoan, removeRelease } from './commands/confirmations/actions.js';
 import commandsRegister from './commandsRegister.js';
@@ -49,8 +48,11 @@ import { arrangeDaySchedule } from './commands/matches/arrangeDaySchedule.js';
 import { addUniqueId } from './commands/player/uniqueId.js';
 import { editLeague } from './commands/league/editLeague.js';
 import { initCronJobs } from './cronjobs.js';
-import { initAllLeagues } from './functions/leaguesCache.js';
+import { cacheKeys, initCache } from './functions/allCache.js';
 import { autoCompleteLeague } from './functions/autoComplete.js';
+import { cancelPicture, confirmPicture } from './commands/player/playerPicture.js';
+import { getWeb } from './web.js';
+import { selectMatchLineup } from './commands/lineup/actions.js';
 
 const keyPath = process.env.CERTKEY;
 const certPath = process.env.CERT;
@@ -125,11 +127,14 @@ function start() {
   const PORTHTTPS = process.env.PORTHTTPS || 8443;
   
   // Parse request body and verifies incoming requests using discord-interactions package
-  app.use(express.json({ verify: VerifyDiscordRequest(process.env.PUBLIC_KEY) }));
+  if(online){
+    app.use(express.json({ verify: VerifyDiscordRequest(process.env.PUBLIC_KEY) }));
+  }
   
   //app.use(pinoHttp)
-  app.use('/site', getSite(false, uri, dbClient))
-  app.use('/api', getApi(false, dbClient))
+  app.use('/site', getSite(!online, uri, dbClient))
+  app.use('/api', getApi(!online, dbClient))
+  app.use('/web', getWeb(!online, uri, dbClient))
   /**
    * Interactions endpoint URL where Discord will send HTTP requests
    */
@@ -153,6 +158,9 @@ function start() {
         }
         if(data.name === "nationalteam"){
           return autoCompleteNation(optionChanged, dbClient, res)
+        }
+        if(data.name === "selectionmatch"){
+          return autoCompleteSelections(optionChanged, dbClient, res)
         }
         if(optionChanged.name === "selection") {
           return autoCompleteSelections(optionChanged, dbClient, res)
@@ -178,6 +186,8 @@ function start() {
           confirm_transfer: transferAction,
           confirm_release: releaseAction,
           cancel_release: removeRelease,
+          confirm_picture: confirmPicture,
+          cancel_picture: cancelPicture,
         }
         
         const { message } = req.body
@@ -229,6 +239,9 @@ function start() {
           }
           if(custom_id.startsWith("decline_matchmove_")) {
             return declineMoveMatch(componentOptions)
+          }
+          if(custom_id.startsWith("lineup_")) {
+            return selectMatchLineup(componentOptions)
           }
           return res.send({
             type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -350,14 +363,6 @@ function start() {
             return endMatch(commandOptions)
           }
 
-          if (name === "intermatch") {
-            return internationalMatch(commandOptions)
-          }
-
-          if (name === "editintermatch") {
-            return editInterMatch(commandOptions);
-          }
-
           if (name === "publishmatch") {
             return publishMatch(commandOptions)
           }
@@ -389,11 +394,7 @@ function start() {
           if(name === "nationalteam") {
             return nationalTeam(commandOptions)
           }
-
-          if(name === "allnationalteams") {
-            return allNationalTeams(commandOptions)
-          }
-
+          
           if(name === "postnationalteams") {
             return postNationalTeams(commandOptions)
           }
@@ -599,9 +600,6 @@ function start() {
               }
             })
           }
-          if (name === "activateteam") {
-            return activateTeam(commandOptions)
-          }
 
           if (name === "registerelections") {
             return registerElections(commandOptions)
@@ -722,10 +720,6 @@ function start() {
             return systemTeam(commandOptions)
           }
 
-          if (name==="editteam") {
-            return editTeam(commandOptions)
-          }
-
           if(name === "postallteams") {
             return postAllTeams(commandOptions)
           }
@@ -839,6 +833,7 @@ function start() {
   let allActiveTeams = []
   let allNationalSelections = []
   let allLeagues = []
+  let allNationalities = []
   var httpServer = http.createServer(app);
   httpServer.listen(PORT, async ()=> {
     console.log('Listening http on port', PORT);
@@ -849,10 +844,22 @@ function start() {
         // Send a ping to confirm a successful connection
         await client.db("PSOTeams").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        global.isConnected = true
       } finally {
         // Ensures that the client will close when you finish/error
         await client.close();
       }
+      await dbClient(async ({seasonsCollect, teams, nationalTeams, nationalities, leagueConfig})=> {
+        await updateCacheCurrentSeason(seasonsCollect)
+        allActiveTeams = await teams.find({active: true}).toArray()
+        allActiveTeams.sort(() => Math.random() - 0.5)
+        allNationalSelections = await nationalTeams.find({active: true}).toArray()
+        allNationalSelections.sort(() => Math.random() - 0.5)
+        allLeagues = await leagueConfig.find(({archived: {$ne: true}})).sort({order: 1}).toArray()
+        allNationalities = await nationalities.find({}).toArray()
+        initCache(cacheKeys.leagues, allLeagues)
+        initCache(cacheKeys.nationalities, allNationalities)
+      })
     }
   });
   if(online) {
@@ -873,14 +880,16 @@ function start() {
       } finally {
         await client.close();
       }
-      await dbClient(async ({seasonsCollect, teams, nationalTeams, leagueConfig})=> {
+      await dbClient(async ({seasonsCollect, teams, nationalTeams, nationalities, leagueConfig})=> {
         await updateCacheCurrentSeason(seasonsCollect)
         allActiveTeams = await teams.find({active: true}).toArray()
         allActiveTeams.sort(() => Math.random() - 0.5)
         allNationalSelections = await nationalTeams.find({active: true}).toArray()
         allNationalSelections.sort(() => Math.random() - 0.5)
         allLeagues = await leagueConfig.find(({archived: {$ne: true}})).sort({order: 1}).toArray()
-        initAllLeagues(allLeagues)
+        allNationalities = await nationalities.find({}).toArray()
+        initCache(cacheKeys.leagues, allLeagues)
+        initCache(cacheKeys.nationalities, allNationalities)
       })
       initCronJobs({dbClient, allActiveTeams, allNationalSelections, allLeagues})
     })

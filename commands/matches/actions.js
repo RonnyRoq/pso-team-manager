@@ -2,7 +2,7 @@ import { ObjectId } from "mongodb"
 import { updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { DiscordRequest } from "../../utils.js"
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
-import { internalEndMatch, internalEndMatchStats } from "../match.js"
+import { getMatchTeams, internalEndMatch, internalEndMatchStats } from "../match.js"
 
 export const refereeMatch = async ({interaction_id, token, custom_id, application_id, message, callerId, dbClient}) => {
   await waitingMsg({interaction_id, token})
@@ -28,7 +28,7 @@ export const refereeMatch = async ({interaction_id, token, custom_id, applicatio
       content = message.content + `\r<@${callerId}>`
       response = 'Added you to the list of refs for this match'
     }
-    await matches.updateOne({_id: matchId}, {$set: {refs: refs.join(',')}})
+    await matches.updateOne({_id: matchId}, {$set: {refs: refs.join(','), referees: refs}})
     await DiscordRequest(`/channels/${message.channel_id}/messages/${message.id}`, {
       method: 'PATCH',
       body: {
@@ -80,22 +80,11 @@ export const streamerMatch = async ({interaction_id, token, custom_id, applicati
 export const matchResultPrompt = async ({interaction_id, token, custom_id, dbClient}) => {
   const [,,id] = custom_id.split('_')
   const matchId = new ObjectId(id)
-  await dbClient(async ({matches, nationalities, teams})=> {
+  await dbClient(async ({matches, nationalTeams, teams})=> {
     const match = await matches.findOne(matchId)
     const {isInternational, home, away, homeScore, awayScore} = match || {}
-    let homeTeam, awayTeam
-    if(isInternational) {
-      [homeTeam, awayTeam] = await Promise.all([
-        nationalities.findOne({name: home}),
-        nationalities.findOne({name: away})
-      ])
-    } else {
-      [homeTeam, awayTeam] = await Promise.all([
-        teams.findOne({id: home}),
-        teams.findOne({id: away})
-      ])
-    }
-
+    
+    const [homeTeam, awayTeam] = await getMatchTeams(home, away, isInternational, nationalTeams, teams)
     const modal = {
       title: `${homeTeam.name} - ${awayTeam.name}`.substring(0, 44),
       custom_id: `match_result_${id}`,
@@ -151,22 +140,11 @@ export const matchResultPrompt = async ({interaction_id, token, custom_id, dbCli
 export const matchStatsPrompt = async ({interaction_id, token, custom_id, dbClient}) => {
   const [,,id] = custom_id.split('_')
   const matchId = new ObjectId(id)
-  await dbClient(async ({matches, nationalities, teams})=> {
+  await dbClient(async ({matches, nationalTeams, teams})=> {
     const match = await matches.findOne(matchId)
     const {isInternational, home, away, homeScore, awayScore} = match || {}
-    let homeTeam, awayTeam
-    if(isInternational) {
-      [homeTeam, awayTeam] = await Promise.all([
-        nationalities.findOne({name: home}),
-        nationalities.findOne({name: away})
-      ])
-    } else {
-      [homeTeam, awayTeam] = await Promise.all([
-        teams.findOne({id: home}),
-        teams.findOne({id: away})
-      ])
-    }
-
+    const [homeTeam, awayTeam] = await getMatchTeams(home, away, isInternational, nationalTeams, teams)
+    
     const modal = {
       title: `${homeTeam.name} ${homeScore} - ${awayScore} ${awayTeam.name}`.substring(0, 44),
       custom_id: `match_stats_${id}`,
