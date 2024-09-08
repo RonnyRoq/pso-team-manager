@@ -1,7 +1,7 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions";
 import { ObjectId, ReturnDocument } from "mongodb";
-import { elimMatchDaysSorted, matchDays, serverChannels, serverRoles } from "../config/psafServerConfig.js";
-import { deleteMessage, getCurrentSeason, getFlags, getPlayerNick, handleSubCommands, msToTimestamp, optionsToObject, postMessage, quickResponse, updatePost, updateResponse, waitingMsg } from "../functions/helpers.js";
+import { elimMatchDaysSorted, matchDays, serverChannels } from "../config/psafServerConfig.js";
+import { deleteMessage, getCurrentSeason, getFlags, getPlayerNick, handleSubCommands, isTopAdminRole, msToTimestamp, optionsToObject, postMessage, quickResponse, updatePost, updateResponse, waitingMsg } from "../functions/helpers.js";
 import { DiscordRequest } from "../utils.js";
 import { sleep } from "../functions/helpers.js";
 import { parseDate } from "./timestamp.js";
@@ -412,13 +412,13 @@ export const internalEndMatchStats = async ({id, matchDetails, guild_id, callerI
       console.log(dbPlayers)
       const dbPlayerIds = dbPlayers.map(dbPlayer=>dbPlayer.id)
       matchPlayers = allPlayers.filter(player => dbPlayerIds.includes(player.user.id))
-        .map(player=> ({...player, ingamename: dbPlayers.find(dbPlayer=> dbPlayer.id === player.user.id)?.ingamename}))
-      console.log(matchPlayers)
+        .map(player=> ({...player, ingamename: dbPlayers.find(dbPlayer=> dbPlayer.id === player.user.id)?.ingamename || getPlayerNick(player)})).sort((a, b)=> b.ingamename.length - a.ingamename.length)
     } else {
       matchPlayers = allPlayers.filter(player=> player.roles.includes(match.home) || player.roles.includes(match.away))
       const dbPlayers = await players.find({$or: matchPlayers.map(player=> ({id: player.user.id}))}).toArray()
-      matchPlayers = matchPlayers.map(player=> ({...player, ingamename: dbPlayers.find(dbPlayer=> dbPlayer.id === player.user.id)?.ingamename}))
+      matchPlayers = matchPlayers.map(player=> ({...player, ingamename: dbPlayers.find(dbPlayer=> dbPlayer.id === player.user.id)?.ingamename || getPlayerNick(player)})).sort((a, b)=> b.ingamename.length - a.ingamename.length)
     }
+    console.log(matchPlayers)
   
     const shortHome = matchDetails.home.trim().toLowerCase().substring(0, 6)
     const shortAway = matchDetails.away.trim().toLowerCase().substring(0, 6)
@@ -430,17 +430,14 @@ export const internalEndMatchStats = async ({id, matchDetails, guild_id, callerI
     const homeLineup = isSwapped ? matchDetails.awayLineup : matchDetails.homeLineup
     const awayLineup = isSwapped ? matchDetails.homeLineup : matchDetails.awayLineup
     
-    //console.log(matchPlayers)
-    const homeEntries = Object.entries(homeLineup).map(([pos, stats])=> (
-      {
+    const homeEntries = Object.entries(homeLineup).map(([pos, stats])=> ({
         matchId: match._id,
         homeAway: 'home',
         team: match.home,
         pos,
         savedBy: callerId,
         ...stats,
-        id: matchPlayers.find(player=> getPlayerNick(player).toLowerCase().includes(stats.name.substring(0,5).toLowerCase())
-          || (player.ingamename && player.ingamename.toLowerCase().includes(stats.name.substring(0,5).toLowerCase())))?.user?.id
+        id: matchPlayers.find(player => player.ingamename.toLowerCase().includes(stats.name.substring(0, 15)))?.user?.id
       }
     ))
     const awayEntries = Object.entries(awayLineup).map(([pos, stats])=> (
@@ -451,8 +448,7 @@ export const internalEndMatchStats = async ({id, matchDetails, guild_id, callerI
         pos,
         savedBy: callerId,
         ...stats,
-        id: matchPlayers.find(player=> getPlayerNick(player).toLowerCase().includes(stats.name.substring(0,5).toLowerCase())
-          || (player.ingamename && player.ingamename.toLowerCase().includes(stats.name.substring(0,5).toLowerCase())))?.user?.id
+        id: matchPlayers.find(player => player.ingamename.toLowerCase().includes(stats.name.substring(0, 15)))?.user?.id
       }
     ))
     const statsToSave = [...homeEntries, ...awayEntries]
@@ -615,7 +611,7 @@ export const internalPublishMatch = async ({league, matchday, postping=true, sea
 }
 
 export const unpublishMatch = async ({member, interaction_id, token, application_id, options, dbClient}) => {
-  if(!member.roles.includes(serverRoles.presidentRole)) {
+  if(!member.roles.find(role=>isTopAdminRole(role))) {
     return quickResponse({interaction_id, token, content: 'Command restricted', isEphemeral: true})
   }
   await waitingMsg({interaction_id, token})
