@@ -437,20 +437,19 @@ export const internalEndMatchStats = async ({id, matchDetails, guild_id, callerI
         pos,
         savedBy: callerId,
         ...stats,
-        id: matchPlayers.find(player => player.ingamename.toLowerCase().includes(stats.name.substring(0, 15)))?.user?.id
-      }
-    ))
-    const awayEntries = Object.entries(awayLineup).map(([pos, stats])=> (
-      {
+        id: matchPlayers.find(player => player.ingamename.toLowerCase().includes(stats.name.substring(0, 15).toLowerCase()))?.user?.id
+      })
+    )
+    const awayEntries = Object.entries(awayLineup).map(([pos, stats])=> ({
         matchId: match._id,
         homeAway: 'away',
-        team: match.home,
+        team: match.away,
         pos,
         savedBy: callerId,
         ...stats,
-        id: matchPlayers.find(player => player.ingamename.toLowerCase().includes(stats.name.substring(0, 15)))?.user?.id
-      }
-    ))
+        id: matchPlayers.find(player => player.ingamename.toLowerCase().includes(stats.name.substring(0, 15).toLowerCase()))?.user?.id
+      })
+    )
     const statsToSave = [...homeEntries, ...awayEntries]
     
     const currentLeague = await leagueConfig.findOne({value: match.league})
@@ -747,7 +746,7 @@ export const getMatchesOfDay = async ({date='today', finished=false, dbClient, f
         const [homeTeam, awayTeam] = getMatchTeamsSync(match.home, match.away, match.isInternational, allNationalTeams, allTeams)
         const league = allLeagues.find(({value})=> value === match.league)
         const homeLineup = lineupsOfDay.find(lineup => lineup.matchId === match._id.toString() && match.home === lineup.team)
-        const awayLineup = lineupsOfDay.find(lineup => lineup.matchId === match._id.toString() && match.home === lineup.team)
+        const awayLineup = lineupsOfDay.find(lineup => lineup.matchId === match._id.toString() && match.away === lineup.team)
         return {
           ...match,
           homeLineup,

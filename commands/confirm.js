@@ -92,6 +92,8 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
     if(!steamId || !(steamId.includes("steamcommunity.com/profiles/") || steamId.includes("steamcommunity.com/id/"))) {
       console.log(`Existing steam ID not found ( ${steamId} ), using the one entered with the command`)
       steamId = steam
+    } else {
+      console.log("Keeping the steam ID already registered")
     }
     const uniqueId = dbPlayer?.uniqueId || uniqueid
 

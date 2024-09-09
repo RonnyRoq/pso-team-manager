@@ -1,5 +1,5 @@
 import { CronJob } from "cron"
-import { getMatchesOfDay, getMatchesSummary, getRefStatsLeaderboard, remindMissedMatches } from "./commands/match.js"
+import { getMatchesOfDay, getMatchesSummary, remindMissedMatches } from "./commands/match.js"
 import { innerUpdateTeam } from "./commands/postTeam.js"
 import { notifyMatchStart } from "./commands/matches/notifyMatchStart.js"
 import { DiscordRequest } from "./utils.js"

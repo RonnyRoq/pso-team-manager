@@ -85,16 +85,7 @@ export const editPlayer = async ({options=[], member, callerId, resolved, intera
   const nat1 = undefined
   const nat2 = undefined
   const nat3 = undefined
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        content: 'Searching...',
-        flags: 1 << 6
-      }
-    }
-  })
+  await waitingMsg({interaction_id, token})
   let profilePicture
   if(picture) {
     const image = resolved?.attachments?.[picture]?.proxy_url
