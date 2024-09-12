@@ -12,6 +12,7 @@ import match from "./commands/match.js"
 import playerPicture from "./commands/player/playerPicture.js"
 import season from "./commands/season.js"
 import editTeams from "./commands/editTeams.js"
+import transferList from "./commands/transfers/transferList.js"
 
 export default function() {
   return [
@@ -29,5 +30,6 @@ export default function() {
     ...playerPicture,
     ...season,
     ...editTeams,
+    ...transferList,
   ]
 }
