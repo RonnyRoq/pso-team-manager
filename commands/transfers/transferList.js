@@ -1,10 +1,10 @@
-import { optionsToObject, updateResponse, waitingMsg, postMessage } from "../functions/helpers.js";
-import { serverRoles } from "../config/psafServerConfig.js";
+import { optionsToObject, updateResponse, waitingMsg, postMessage } from "../../functions/helpers.js";
+import { serverRoles } from "../../config/psafServerConfig.js";
 import { getAllPlayers } from "../../functions/playersCache.js";
 import { serverChannels } from "../../config/psafServerConfig.js";
 
 // Command handlers
-const transferList = async ({ options, interaction_id, token, dbClient, guild_id, member }) => {
+const transferList = async ({ options, interaction_id, application_id, token, dbClient, guild_id, member }) => {
     await waitingMsg({ interaction_id, token });
     const { player, hours, positions, buyout, extra_info } = optionsToObject(options);
 
@@ -50,10 +50,10 @@ const transferList = async ({ options, interaction_id, token, dbClient, guild_id
         return content;
     });
 
-    return updateResponse({ content });
+    return updateResponse({ application_id, token, content });
 };
 
-const unlist = async ({ options, interaction_id, token, dbClient, member }) => {
+const unlist = async ({ options, interaction_id, application_id, token, dbClient, member }) => {
     await waitingMsg({ interaction_id, token });
     const { player } = optionsToObject(options);
 
@@ -82,10 +82,10 @@ const unlist = async ({ options, interaction_id, token, dbClient, member }) => {
         return content;
     });
 
-    return updateResponse({ content });
+    return updateResponse({ application_id, token, content });
 };
 
-const lft = async ({ options, interaction_id, token, dbClient, callerId }) => {
+const lft = async ({ options, interaction_id, application_id, token, dbClient, callerId }) => {
     await waitingMsg({ interaction_id, token });
     const { hours, positions, extra_info } = optionsToObject(options);
 
@@ -111,9 +111,9 @@ const lft = async ({ options, interaction_id, token, dbClient, callerId }) => {
         return message;
     });
 
-    const content = [`<@${callerId}>`,`${hours} hours`,JSON.stringify(positions), extra_info ? '\r'+extra_info: ''].join('\r')
+    const content = [`<@${callerId}>`,`${hours} hours`,positions, extra_info ? '\r'+extra_info: ''].join('\r')
     await postMessage({ content, channel_id: serverChannels.lookingForTeamChannelId });
-    return updateResponse({ content: message });
+    return updateResponse({ application_id, token, content: message });
 };
 
 // API route functions
