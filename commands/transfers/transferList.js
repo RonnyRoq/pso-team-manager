@@ -1,15 +1,14 @@
-import { InteractionResponseFlags } from "discord-interactions";
-import { optionsToObject, silentResponse, updateResponse, waitingMsg, postMessage } from "../functions/helpers.js";
+import { optionsToObject, updateResponse, waitingMsg, postMessage } from "../functions/helpers.js";
 import { serverRoles } from "../config/psafServerConfig.js";
-
-const logWebhook = process.env.WEBHOOK;
+import { getAllPlayers } from "../../functions/playersCache.js";
+import { serverChannels } from "../../config/psafServerConfig.js";
 
 // Command handlers
-const transferList = async ({ options, interaction_id, token, dbClient, callerId, member }) => {
+const transferList = async ({ options, interaction_id, token, dbClient, guild_id, member }) => {
     await waitingMsg({ interaction_id, token });
     const { player, hours, positions, buyout, extra_info } = optionsToObject(options);
 
-    const { content, ephemeral } = await dbClient(async ({ transferList, teams }) => {
+    const content = await dbClient(async ({ transferList, teams }) => {
         // Check if the caller is a manager
         if (!member.roles.includes(serverRoles.clubManagerRole)) {
             return { content: "Only managers can list players for transfer.", ephemeral: true };
@@ -23,7 +22,9 @@ const transferList = async ({ options, interaction_id, token, dbClient, callerId
         }
 
         // Check if the player is in the caller's team
-        const playerInTeam = await teams.findOne({ id: callerTeam.id, playerIds: player });
+        const totalPlayers = await getAllPlayers(guild_id) 
+        const discPlayer = totalPlayers.find(currentPlayer => currentPlayer ?.user?.id === player)
+        const playerInTeam = discPlayer?.roles.includes(callerTeam.id)
         if (!playerInTeam) {
             return { content: "You can only list players from your own team.", ephemeral: true };
         }
@@ -44,19 +45,19 @@ const transferList = async ({ options, interaction_id, token, dbClient, callerId
             { upsert: true }
         );
 
-        const content = `Player <@${player}> has been listed for transfer.`;
-        await postMessage({ content });
-        return { content, ephemeral: false };
+        const content = `Player <@${player}> has been listed for transfer.\r${hours} hours\r${extra_info}${buyout ? `\rBuyout at ${buyout}Ebits`: ''}`;
+        await postMessage({ content, channel_id: serverChannels.lookingForTeamChannelId });
+        return content;
     });
 
-    return updateResponse({ content, ephemeral });
+    return updateResponse({ content });
 };
 
-const unlist = async ({ options, interaction_id, token, dbClient, callerId, member }) => {
+const unlist = async ({ options, interaction_id, token, dbClient, member }) => {
     await waitingMsg({ interaction_id, token });
     const { player } = optionsToObject(options);
 
-    const { content, ephemeral } = await dbClient(async ({ transferList, teams }) => {
+    const content = await dbClient(async ({ transferList, teams }) => {
         // Check if the caller is a manager
         if (!member.roles.includes(serverRoles.clubManagerRole)) {
             return { content: "Only managers can unlist players.", ephemeral: true };
@@ -78,17 +79,17 @@ const unlist = async ({ options, interaction_id, token, dbClient, callerId, memb
 
         const content = `Player <@${player}> has been removed from the transfer list.`;
         await postMessage({ content });
-        return { content, ephemeral: false };
+        return content;
     });
 
-    return updateResponse({ content, ephemeral });
+    return updateResponse({ content });
 };
 
 const lft = async ({ options, interaction_id, token, dbClient, callerId }) => {
     await waitingMsg({ interaction_id, token });
     const { hours, positions, extra_info } = optionsToObject(options);
 
-    const { content, ephemeral } = await dbClient(async ({ lft }) => {
+    const message = await dbClient(async ({ lft }) => {
         // Check if the player is already in the LFT list
         const existingEntry = await lft.findOne({ playerId: callerId });
 
@@ -107,11 +108,12 @@ const lft = async ({ options, interaction_id, token, dbClient, callerId }) => {
         });
 
         const message = existingEntry ? "Your LFT entry has been updated." : "You have been listed as looking for team (LFT).";
-        return { content: message, ephemeral: false };
+        return message;
     });
 
-    await postMessage({ content });
-    return updateResponse({ content, ephemeral });
+    const content = [`<@${callerId}>`,`${hours} hours`,JSON.stringify(positions), extra_info ? '\r'+extra_info: ''].join('\r')
+    await postMessage({ content, channel_id: serverChannels.lookingForTeamChannelId });
+    return updateResponse({ content: message });
 };
 
 // API route functions
