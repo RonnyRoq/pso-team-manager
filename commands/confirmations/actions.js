@@ -2,7 +2,7 @@ import { InteractionResponseFlags, InteractionResponseType } from "discord-inter
 import { innerRemoveConfirmation, innerRemoveDeal, innerRemoveRelease } from "../confirm.js"
 import { DiscordRequest } from "../../utils.js"
 import { serverChannels, serverRoles } from "../../config/psafServerConfig.js"
-import { getPlayerNick, silentResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { getPlayerNick, postMessage, silentResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { seasonPhases } from "../season.js"
 import { twoWeeksMs } from "../../config/constants.js"
 import { ObjectId } from "mongodb"
@@ -86,16 +86,9 @@ export const declineLoanAction =  async ({member, application_id, interaction_id
   return updateResponse({application_id, token, content})
 }
 
-export const approveDealAction = async ({member, application_id, interaction_id, token, dbClient, custom_id, callerId}) => {
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        flags: InteractionResponseFlags.EPHEMERAL
-      }
-    }
-  })
+export const approveDealAction = async ({member, application_id, interaction_id, token, dbClient, custom_id, guild_id, callerId}) => {
+  await waitingMsg({interaction_id, token})
+  console.log(guild_id)
   if(!member.roles.includes(serverRoles.clubManagerRole)) {
     return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
       method : 'PATCH',
@@ -107,7 +100,7 @@ export const approveDealAction = async ({member, application_id, interaction_id,
   }
   const dealId = custom_id.substr("approve_deal_".length)
   const _id = new ObjectId(dealId)
-  const content = await dbClient(async ({pendingDeals}) => {
+  const content = await dbClient(async ({pendingDeals, teams}) => {
     const pendingDeal = await pendingDeals.findOne({_id, approved: null})
     if(!pendingDeal) {
       return "Can't find the deal you're trying to approve."
@@ -120,15 +113,23 @@ export const approveDealAction = async ({member, application_id, interaction_id,
 
     await innerRemoveDeal({reason: `Approved by <@${callerId}>`, ...pendingDeal, dbClient})
     await pendingDeals.updateOne({_id}, {$set: {approved: true}})
+    const team = await teams.findOne({id: pendingDeal.destTeam})
+    try{
+      const userChannelResp = await DiscordRequest('/users/@me/channels', {
+        method: 'POST',
+        body:{
+          recipient_id: pendingDeal.playerId
+        }
+      })
+      const userChannel = await userChannelResp.json()
+      console.log(`Your manager has accepted a transfer offer from ${team?.name} (Message: https://discord.com/channels/${process.env.GUILD_ID}/${serverChannels.dealsChannelId}/${pendingDeal.messageId}). Head to https://discord.com/channels/${process.env.GUILD_ID}/${serverChannels.confirmationChannelId} to finalise the transfer with /confirm.`)
+      await postMessage({channel_id: userChannel.id, content: `Your manager has accepted a transfer offer from ${team?.name} (Message: https://discord.com/channels/${process.env.GUILD_ID}/${serverChannels.dealsChannelId}/${pendingDeal.messageId}). Head to https://discord.com/channels/${process.env.GUILD_ID}/${serverChannels.confirmationChannelId} to finalise the transfer with /confirm.`})
+    } catch (e) {
+      console.log(e.message)
+    }
     return 'Deal approved'
   })
-  return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-    method : 'PATCH',
-    body: {
-      content,
-      flags: InteractionResponseFlags.EPHEMERAL
-    }
-  })
+  return updateResponse({application_id, token, content})
 }
 
 
