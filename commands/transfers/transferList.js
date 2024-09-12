@@ -1,31 +1,31 @@
-import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
-import { DiscordRequest } from "../utils.js"
-import { optionsToObject, silentResponse, updateResponse, waitingMsg } from "../functions/helpers.js"
-import { serverRoles } from "../config/psafServerConfig.js"
+import { InteractionResponseFlags } from "discord-interactions";
+import { optionsToObject, silentResponse, updateResponse, waitingMsg, postMessage } from "../functions/helpers.js";
+import { serverRoles } from "../config/psafServerConfig.js";
 
-const logWebhook = process.env.WEBHOOK
+const logWebhook = process.env.WEBHOOK;
 
 // Command handlers
-const transferList = async ({ options, guild_id, interaction_id, token, dbClient, callerId, member, application_id }) => {
-    await waitingMsg({interaction_id, token})
-    const { player, hours, positions, buyout, extra_info } = optionsToObject(options)
+const transferList = async ({ options, interaction_id, token, dbClient, callerId, member }) => {
+    await waitingMsg({ interaction_id, token });
+    const { player, hours, positions, buyout, extra_info } = optionsToObject(options);
 
-    const {content, ephemeral} = await dbClient(async ({ transferList, teams }) => {
+    const { content, ephemeral } = await dbClient(async ({ transferList, teams }) => {
         // Check if the caller is a manager
         if (!member.roles.includes(serverRoles.clubManagerRole)) {
-            return {content: "Only managers can list players for transfer.", ephemeral: true}
+            return { content: "Only managers can list players for transfer.", ephemeral: true };
         }
 
-        // Check if the caller is in the same team as the player
-        const callerTeam = await teams.findOne({ managerIds: callerId })
+        // Find the caller's team based on roles
+        const roles = member.roles.map(roleId => ({ teamRoleId: roleId }));
+        const callerTeam = await teams.findOne({ active: true, $or: roles });
         if (!callerTeam) {
-            return {content: "You must be a manager of a team to list players for transfer.", ephemeral: true}
+            return { content: "You must be a manager of a team to list players for transfer.", ephemeral: true };
         }
 
         // Check if the player is in the caller's team
-        const playerInTeam = await teams.findOne({ id: callerTeam.id, playerIds: player })
+        const playerInTeam = await teams.findOne({ id: callerTeam.id, playerIds: player });
         if (!playerInTeam) {
-            return {content: "You can only list players from your own team.", ephemeral: true}
+            return { content: "You can only list players from your own team.", ephemeral: true };
         }
 
         // Add or update the player in the transfer list
@@ -42,114 +42,78 @@ const transferList = async ({ options, guild_id, interaction_id, token, dbClient
                 }
             },
             { upsert: true }
-        )
+        );
 
-        const content = `Player <@${player}> has been listed for transfer.`
-        await DiscordRequest(logWebhook, {
-            method: 'POST',
-            body: { content }
-        })
-        return {content, ephemeral: false}
-    })
+        const content = `Player <@${player}> has been listed for transfer.`;
+        await postMessage({ content });
+        return { content, ephemeral: false };
+    });
 
-    return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-        method: 'PATCH',
-        body: {
-            content,
-            flags: ephemeral ? InteractionResponseFlags.EPHEMERAL : undefined
-        }
-    })
-}
+    return updateResponse({ content, ephemeral });
+};
 
-const unlist = async ({ options, interaction_id, token, dbClient, callerId, member, application_id }) => {
-    await waitingMsg({interaction_id, token})
-    const { player } = optionsToObject(options)
+const unlist = async ({ options, interaction_id, token, dbClient, callerId, member }) => {
+    await waitingMsg({ interaction_id, token });
+    const { player } = optionsToObject(options);
 
-    const {content, ephemeral} = await dbClient(async ({ transferList, teams }) => {
+    const { content, ephemeral } = await dbClient(async ({ transferList, teams }) => {
         // Check if the caller is a manager
         if (!member.roles.includes(serverRoles.clubManagerRole)) {
-            return {content: "Only managers can unlist players.", ephemeral: true}
+            return { content: "Only managers can unlist players.", ephemeral: true };
         }
 
-        // Check if the caller is in the same team as the player
-        const callerTeam = await teams.findOne({ managerIds: callerId })
+        // Find the caller's team based on roles
+        const roles = member.roles.map(roleId => ({ teamRoleId: roleId }));
+        const callerTeam = await teams.findOne({ active: true, $or: roles });
         if (!callerTeam) {
-            return {content: "You must be a manager of a team to unlist players.", ephemeral: true}
+            return { content: "You must be a manager of a team to unlist players.", ephemeral: true };
         }
 
         // Remove the player from the transfer list
-        const result = await transferList.deleteOne({ playerId: player, teamId: callerTeam.id })
+        const result = await transferList.deleteOne({ playerId: player, teamId: callerTeam.id });
 
         if (result.deletedCount === 0) {
-            return {content: "Player not found in your team's transfer list.", ephemeral: true}
+            return { content: "Player not found in your team's transfer list.", ephemeral: true };
         }
 
-        const content = `Player <@${player}> has been removed from the transfer list.`
-        await DiscordRequest(logWebhook, {
-            method: 'POST',
-            body: { content }
-        })
-        return {content, ephemeral: false}
-    })
+        const content = `Player <@${player}> has been removed from the transfer list.`;
+        await postMessage({ content });
+        return { content, ephemeral: false };
+    });
 
-    return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-        method: 'PATCH',
-        body: {
-            content,
-            flags: ephemeral ? InteractionResponseFlags.EPHEMERAL : undefined
-        }
-    })
-}
+    return updateResponse({ content, ephemeral });
+};
 
-const lft = async ({ options, interaction_id, token, dbClient, callerId, application_id }) => {
-    await waitingMsg({interaction_id, token})
-    const { hours, positions, extra_info } = optionsToObject(options)
+const lft = async ({ options, interaction_id, token, dbClient, callerId }) => {
+    await waitingMsg({ interaction_id, token });
+    const { hours, positions, extra_info } = optionsToObject(options);
 
-    const {content, ephemeral} = await dbClient(async ({ lft }) => {
+    const { content, ephemeral } = await dbClient(async ({ lft }) => {
         // Check if the player is already in the LFT list
-        const existingEntry = await lft.findOne({ playerId: callerId })
+        const existingEntry = await lft.findOne({ playerId: callerId });
 
+        // Remove the existing entry if it exists
         if (existingEntry) {
-            // Remove the existing entry
-            await lft.deleteOne({ playerId: callerId })
-
-            // Add the new entry
-            await lft.insertOne({
-                playerId: callerId,
-                hours,
-                positions,
-                extra_info: extra_info || "",
-                listedAt: new Date()
-            })
-
-            return {content: "Your LFT entry has been updated.", ephemeral: false}
-        } else {
-            // Add the new entry
-            await lft.insertOne({
-                playerId: callerId,
-                hours,
-                positions,
-                extra_info: extra_info || "",
-                listedAt: new Date()
-            })
-
-            return {content: "You have been listed as looking for team (LFT).", ephemeral: false}
+            await lft.deleteOne({ playerId: callerId });
         }
-    })
 
-    await DiscordRequest(logWebhook, {
-        method: 'POST',
-        body: { content }
-    })
+        // Add the new entry
+        await lft.insertOne({
+            playerId: callerId,
+            hours,
+            positions,
+            extra_info: extra_info || "",
+            listedAt: new Date()
+        });
 
-    return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-        method: 'PATCH',
-        body: {
-            content,
-            flags: ephemeral ? InteractionResponseFlags.EPHEMERAL : undefined
-        }
-    })
-}
+        const message = existingEntry ? "Your LFT entry has been updated." : "You have been listed as looking for team (LFT).";
+        return { content: message, ephemeral: false };
+    });
+
+    await postMessage({ content });
+    return updateResponse({ content, ephemeral });
+};
+
 // API route functions
 export const getLft = async ({ position, minHours, dbClient }) => {
     return dbClient(async ({ lft }) => {
@@ -229,7 +193,7 @@ export const transferListCmd = {
         required: false
     }],
     func: transferList
-}
+};
 
 export const unlistCmd = {
     name: 'unlist',
@@ -243,7 +207,7 @@ export const unlistCmd = {
         required: true
     }],
     func: unlist
-}
+};
 
 export const lftCmd = {
     name: 'lft',
@@ -279,6 +243,6 @@ export const lftCmd = {
         required: false
     }],
     func: lft
-}
+};
 
-export default [transferListCmd, unlistCmd, lftCmd]
+export default [transferListCmd, unlistCmd, lftCmd];
