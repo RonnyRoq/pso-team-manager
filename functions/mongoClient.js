@@ -30,6 +30,8 @@ const mongoClient = (client) => {
         nationalTeams: psoDb.collection("NationalTeams"),
         nationalContracts: psoDb.collection("NationalContracts"),
         pendingPictures: psoDb.collection("PendingPictures"),
+        transferList: psoDb.collection("TransferList"),
+        lft: psoDb.collection("Lft"),
       }
       return await callback(collections)
     }
