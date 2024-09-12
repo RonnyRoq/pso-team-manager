@@ -5,7 +5,6 @@ import { getAllPlayers } from "../functions/playersCache.js"
 import { addPlayerPrefix, batchesFromArray, getCurrentSeason, getPlayerNick, getRegisteredRole, isSteamIdIncorrect, optionsToObject, postMessage, quickResponse, removePlayerPrefix, silentResponse, updateResponse, waitingMsg } from "../functions/helpers.js"
 import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
 import { allLeagues } from "../config/leagueData.js"
-import { players } from "./player.js"
 
 export const managerContracts = async ({interaction_id, token, application_id, dbClient, guild_id}) => {
   await waitingMsg({interaction_id, token})
@@ -413,7 +412,10 @@ export const detectSteamAlts = async ({dbClient}) => (
         '$group': {
           '_id': '$steam', 
           'playerIds': {
-            '$push': '$id'
+            '$push': {
+              id: '$id',
+              name: '$name'
+            }
           }
         }
       }, {
@@ -427,7 +429,7 @@ export const detectSteamAlts = async ({dbClient}) => (
     const discPlayers = await getAllPlayers(process.env.GUILD_ID)
     const realAlts = playersWithAlts.filter(playerWithAlts => {
       const playersWithtoutFlag = playerWithAlts.playerIds.filter(playerId => {
-        const discPlayer = discPlayers.find(player=> player.user.id === playerId)
+        const discPlayer = discPlayers.find(player=> player.user.id === playerId.id)
         if(discPlayer) {
           return !discPlayer.roles.includes(serverRoles.disabledRole)
         }
@@ -436,7 +438,7 @@ export const detectSteamAlts = async ({dbClient}) => (
       return playersWithtoutFlag.length > 1
     })
     let content = '# Players with Alts: \r' +
-      realAlts.map(playerWithAlts=> playerWithAlts.playerIds.map(playerId=> `<@${playerId}>`).join(' ') + ' ' + playerWithAlts._id).join('\r')
+      realAlts.map(playerWithAlts=> playerWithAlts.playerIds.map(playerId=> `<@${playerId.id}> (${playerId.name})`).join(' ') + ' ' + playerWithAlts._id).join('\r')
     while(content.length >= 2000) {
       const lastCutIndex = content.lastIndexOf('\r', 1999)
       const content1 = content.substring(0, lastCutIndex)
