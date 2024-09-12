@@ -423,6 +423,8 @@ export const serverChannels = {
   standingsChannelId: '1185321370977050775',
   ratingsChannelId: '1120629390699667542',
   moveMatchChannelId: '1091692461409173544',
+  lookingForPlayerChannelId: '1072631199215927387',
+  lookingForTeamChannelId: '1072631697960607815',
   nameChangesChannelId: '1198359043153068092',
   matchResultsChannelId: '1081954664347615352',
   registrationsChannelId: '1218275545629069373',

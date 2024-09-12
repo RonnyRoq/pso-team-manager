@@ -12,6 +12,7 @@ import { apiUpdateLeague, getLeaguesInfo } from './commands/league/editLeague.js
 import { getAllNationalities } from './functions/allCache.js'
 import { updateTeamStatus } from './commands/editTeams.js'
 import { getAllSelections } from './functions/countriesCache.js'
+import { getLft, getTransferList } from './commands/transfers/transferList.js'
 
 export const getApi = (localdev=false, dbClient={}) =>{
   const api = express() // the API app
@@ -166,6 +167,18 @@ export const getApi = (localdev=false, dbClient={}) =>{
     const response = await getAllNationalities()
     return res.json(response)
   })
+
+  api.get('/lft', async (req, res) => {
+    const { position, minHours } = req.query;
+    const response = await getLft({ position, minHours, dbClient });
+    return res.json(response);
+  });
+
+  api.get('/transferlist', async (req, res) => {
+    const { position, maxBuyout } = req.query;
+    const response = await getTransferList({ position, maxBuyout, dbClient });
+    return res.json(response);
+  });
 
   api.get('/', async function (req, res) {
     console.log('main', req.session)
