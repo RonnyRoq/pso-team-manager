@@ -228,20 +228,27 @@ const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam,
         nationalTeams.find({active: true}).toArray(),
         nationalContracts.findOne({season, playerId: callerId}),
         getPlayerTeam(member, teams),
-        teams.find({active: true})
+        teams.find({active: true}).toArray()
       ])
       const memberSelection = await nationalSelections.find(selection=> selection?.shortName=== selfNationalContract?.selection)
       const teamIds = [memberTeam?.id, memberSelection?.shortname].filter(item=> item)
       const nextMatches = await matches.find({season, dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, finished: {$in: [false, null]}, $or: [{home: {$in: teamIds}}, {away: {$in: teamIds}}]}).sort({dateTimestamp:1}).toArray()
-      const savedLineup = await lineups.findOneAndUpdate({postedBy: callerId, id: lineup.id}, {
-        $setOnInsert: {
-          postedBy: callerId,
-          id: Math.random().toString(36).slice(-6)
-        },
-        $set: {
-          ...lineup
-        }
-      }, {upsert: true, returnDocument: 'after'})
+      let savedLineup
+      const lineupId = Math.random().toString(36).slice(-6)
+      if(!lineup.id) {
+        savedLineup = await lineups.findOneAndUpdate({postedBy: callerId, id: lineup.id}, {
+          $setOnInsert: {
+            postedBy: callerId,
+            id: lineupId
+          },
+          $set: {
+            ...lineup
+          }
+        }, {upsert: true, returnDocument: 'after'})
+      } else {
+        savedLineup = {postedBy: callerId, id: lineupId, ...lineup}
+        await lineup.insertOne(saveLineup)
+      }
       console.log(savedLineup)
       let nextMatch, theMatchId, teamId
       if(nextMatches.length > 1) {
