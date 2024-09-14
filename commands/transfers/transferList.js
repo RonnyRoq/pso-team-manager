@@ -187,7 +187,8 @@ export const transferListCmd = {
         name: 'buyout',
         description: 'Buyout price in millions (must be honored if offered)',
         required: true,
-        min_value: 0
+        min_value: 0,
+        max_value: 500
     }, {
         type: 3,
         name: 'extra_info',
