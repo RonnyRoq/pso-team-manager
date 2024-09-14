@@ -27,7 +27,6 @@ import { listMovesCmd, moveMatchCmd } from './commands/matches/moveMatch.js';
 import { arrangeDayScheduleCmd } from './commands/matches/arrangeDaySchedule.js';
 import { addUniqueIdCmd } from './commands/player/uniqueId.js';
 import commandsRegister from './commandsRegister.js';
-import { transferListCmd, unlistCmd, lftCmd } from './commands/transferList.js';
 
 const mapToCmd = (map) => {
   const globalCommands = []
@@ -135,7 +134,6 @@ const GUILD_COMMANDS = [
   getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd, testDMMatchCmd, pastMatchesCmd, moveMatchCmd, listMovesCmd,
   systemTeamCmd, postTeamCmd, postAllTeamsCmd, setContractCmd, updateTeamPostCmd, blacklistTeamCmd, showExpiringContractsCmd, expireThingsCmd, publishNextMatchesCmd,
   manualDoubleSteamCmd, arrangeDayScheduleCmd, managerContractsCmd, randomMatchdayCmd, fixNamesCmd, showMatchDayCmd, updateMatchDayImageCmd, oneTimeSeasonCmd,
-  transferListCmd, unlistCmd, lftCmd,
 ]
 
 const {globalCommands, psafCommands, wcCommands} = mapToCmd(commandsRegister())
