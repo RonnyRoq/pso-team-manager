@@ -11,14 +11,14 @@ const transferList = async ({ options, interaction_id, application_id, token, db
     const content = await dbClient(async ({ transferList, teams }) => {
         // Check if the caller is a manager
         if (!member.roles.includes(serverRoles.clubManagerRole)) {
-            return { content: "Only managers can list players for transfer.", ephemeral: true };
+            return "Only managers can list players for transfer.";
         }
 
         // Find the caller's team based on roles
-        const roles = member.roles.map(roleId => ({ teamRoleId: roleId }));
+        const roles = member.roles.map(roleId => ({ id: roleId }));
         const callerTeam = await teams.findOne({ active: true, $or: roles });
         if (!callerTeam) {
-            return { content: "You must be a manager of a team to list players for transfer.", ephemeral: true };
+            return "You must be a manager of a team to list players for transfer.";
         }
 
         // Check if the player is in the caller's team
@@ -26,7 +26,7 @@ const transferList = async ({ options, interaction_id, application_id, token, db
         const discPlayer = totalPlayers.find(currentPlayer => currentPlayer ?.user?.id === player)
         const playerInTeam = discPlayer?.roles.includes(callerTeam.id)
         if (!playerInTeam) {
-            return { content: "You can only list players from your own team.", ephemeral: true };
+            return "You can only list players from your own team.";
         }
 
         // Add or update the player in the transfer list
@@ -60,25 +60,25 @@ const unlist = async ({ options, interaction_id, application_id, token, dbClient
     const content = await dbClient(async ({ transferList, teams }) => {
         // Check if the caller is a manager
         if (!member.roles.includes(serverRoles.clubManagerRole)) {
-            return { content: "Only managers can unlist players.", ephemeral: true };
+            return "Only managers can unlist players.";
         }
 
         // Find the caller's team based on roles
-        const roles = member.roles.map(roleId => ({ teamRoleId: roleId }));
+        const roles = member.roles.map(roleId => ({ id: roleId }));
         const callerTeam = await teams.findOne({ active: true, $or: roles });
         if (!callerTeam) {
-            return { content: "You must be a manager of a team to unlist players.", ephemeral: true };
+            return "You must be a manager of a team to unlist players.";
         }
 
         // Remove the player from the transfer list
         const result = await transferList.deleteOne({ playerId: player, teamId: callerTeam.id });
 
         if (result.deletedCount === 0) {
-            return { content: "Player not found in your team's transfer list.", ephemeral: true };
+            return "Player not found in your team's transfer list.";
         }
 
         const content = `Player <@${player}> has been removed from the transfer list.`;
-        await postMessage({ content });
+        await postMessage({ channel_id: serverChannels.lookingForTeamChannelId, content });
         return content;
     });
 
@@ -111,7 +111,7 @@ const lft = async ({ options, interaction_id, application_id, token, dbClient, c
         return message;
     });
 
-    const content = [`<@${callerId}>`,`${hours} hours`,positions, extra_info ? '\r'+extra_info: ''].join('\r')
+    const content = [`<@${callerId}>`,`${hours} hours`,positions, extra_info || ''].join('\r')
     await postMessage({ content, channel_id: serverChannels.lookingForTeamChannelId });
     return updateResponse({ application_id, token, content: message });
 };
@@ -152,7 +152,7 @@ export const getTransferList = async ({ position, maxBuyout, dbClient }) => {
 // Command definitions
 export const transferListCmd = {
     name: 'transferlist',
-    description: 'List a player for transfer (managers only)',
+    description: 'List a player for transfer',
     type: 1,
     psaf: true,
     options: [{
