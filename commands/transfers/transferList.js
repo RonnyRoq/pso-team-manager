@@ -3,10 +3,10 @@ import { serverRoles } from "../../config/psafServerConfig.js";
 import { getAllPlayers } from "../../functions/playersCache.js";
 import { serverChannels } from "../../config/psafServerConfig.js";
 
-// Command handlers
+
 const transferList = async ({ options, interaction_id, application_id, token, dbClient, guild_id, member }) => {
     await waitingMsg({ interaction_id, token });
-    const { player, hours, positions, buyout, extra_info } = optionsToObject(options);
+    const { player, hours, position1, position2, position3, buyout, extra_info } = optionsToObject(options);
 
     const content = await dbClient(async ({ transferList, teams }) => {
         // Check if the caller is a manager
@@ -21,15 +21,18 @@ const transferList = async ({ options, interaction_id, application_id, token, db
             return "You must be a manager of a team to list players for transfer.";
         }
 
-        // Check if the player is in the caller's team
-        const totalPlayers = await getAllPlayers(guild_id) 
-        const discPlayer = totalPlayers.find(currentPlayer => currentPlayer ?.user?.id === player)
+
+        const totalPlayers = await getAllPlayers(guild_id)
+        const discPlayer = totalPlayers.find(currentPlayer => currentPlayer?.user?.id === player)
         const playerInTeam = discPlayer?.roles.includes(callerTeam.id)
         if (!playerInTeam) {
             return "You can only list players from your own team.";
         }
 
-        // Add or update the player in the transfer list
+
+        const positions = [position1, position2, position3].filter(Boolean);
+
+
         await transferList.updateOne(
             { playerId: player },
             {
@@ -45,7 +48,7 @@ const transferList = async ({ options, interaction_id, application_id, token, db
             { upsert: true }
         );
 
-        const content = `Player <@${player}> has been listed for transfer.\r${hours} hours\r${extra_info}${buyout ? `\rBuyout at ${buyout}Ebits`: ''}`;
+        const content = `Player <@${player}> has been listed for transfer.\r${hours} hours\rPositions: ${positions.join(', ')}\r${extra_info}${buyout ? `\rBuyout at ${buyout}Ebits`: ''}`;
         await postMessage({ content, channel_id: serverChannels.lookingForTeamChannelId });
         return content;
     });
@@ -63,14 +66,14 @@ const unlist = async ({ options, interaction_id, application_id, token, dbClient
             return "Only managers can unlist players.";
         }
 
-        // Find the caller's team based on roles
+
         const roles = member.roles.map(roleId => ({ id: roleId }));
         const callerTeam = await teams.findOne({ active: true, $or: roles });
         if (!callerTeam) {
             return "You must be a manager of a team to unlist players.";
         }
 
-        // Remove the player from the transfer list
+
         const result = await transferList.deleteOne({ playerId: player, teamId: callerTeam.id });
 
         if (result.deletedCount === 0) {
@@ -85,20 +88,21 @@ const unlist = async ({ options, interaction_id, application_id, token, dbClient
     return updateResponse({ application_id, token, content });
 };
 
-const lft = async ({ options, interaction_id, application_id, token, dbClient, callerId }) => {
+const lftAdd = async ({ options, interaction_id, application_id, token, dbClient, callerId }) => {
     await waitingMsg({ interaction_id, token });
-    const { hours, positions, extra_info } = optionsToObject(options);
+    const { hours, position1, position2, position3, extra_info } = optionsToObject(options);
 
     const message = await dbClient(async ({ lft }) => {
-        // Check if the player is already in the LFT list
+
         const existingEntry = await lft.findOne({ playerId: callerId });
 
-        // Remove the existing entry if it exists
         if (existingEntry) {
             await lft.deleteOne({ playerId: callerId });
         }
 
-        // Add the new entry
+        const positions = [position1, position2, position3].filter(Boolean);
+
+
         await lft.insertOne({
             playerId: callerId,
             hours,
@@ -111,12 +115,30 @@ const lft = async ({ options, interaction_id, application_id, token, dbClient, c
         return message;
     });
 
-    const content = [`<@${callerId}>`,`${hours} hours`,positions, extra_info || ''].join('\r')
+    const content = [`<@${callerId}>`,`${hours} hours`, `Positions: ${[position1, position2, position3].filter(Boolean).join(', ')}`, extra_info || ''].join('\r')
     await postMessage({ content, channel_id: serverChannels.lookingForTeamChannelId });
     return updateResponse({ application_id, token, content: message });
 };
 
-// API route functions
+const lftRemove = async ({ interaction_id, application_id, token, dbClient, callerId }) => {
+    await waitingMsg({ interaction_id, token });
+
+    const message = await dbClient(async ({ lft }) => {
+
+        const result = await lft.deleteOne({ playerId: callerId });
+
+        if (result.deletedCount === 0) {
+            return "You are not currently listed as LFT.";
+        }
+
+        return "You have been removed from the LFT list.";
+    });
+
+    await postMessage({ content: `<@${callerId}> is no longer looking for a team.`, channel_id: serverChannels.lookingForTeamChannelId });
+    return updateResponse({ application_id, token, content: message });
+};
+
+
 export const getLft = async ({ position, minHours, dbClient }) => {
     return dbClient(async ({ lft }) => {
         let query = {};
@@ -149,7 +171,6 @@ export const getTransferList = async ({ position, maxBuyout, dbClient }) => {
     });
 };
 
-// Command definitions
 export const transferListCmd = {
     name: 'transferlist',
     description: 'List a player for transfer',
@@ -169,9 +190,39 @@ export const transferListCmd = {
         max_value: 10000
     }, {
         type: 3,
-        name: 'positions',
-        description: 'Positions player can play',
+        name: 'position1',
+        description: 'Primary position player can play',
         required: true,
+        choices: [
+            { name: 'GK', value: 'GK' },
+            { name: 'LB', value: 'LB' },
+            { name: 'CB', value: 'CB' },
+            { name: 'RB', value: 'RB' },
+            { name: 'CM', value: 'CM' },
+            { name: 'LW', value: 'LW' },
+            { name: 'RW', value: 'RW' },
+            { name: 'ST', value: 'ST' }
+        ]
+    }, {
+        type: 3,
+        name: 'position2',
+        description: 'Secondary position player can play',
+        required: false,
+        choices: [
+            { name: 'GK', value: 'GK' },
+            { name: 'LB', value: 'LB' },
+            { name: 'CB', value: 'CB' },
+            { name: 'RB', value: 'RB' },
+            { name: 'CM', value: 'CM' },
+            { name: 'LW', value: 'LW' },
+            { name: 'RW', value: 'RW' },
+            { name: 'ST', value: 'ST' }
+        ]
+    }, {
+        type: 3,
+        name: 'position3',
+        description: 'Tertiary position player can play',
+        required: false,
         choices: [
             { name: 'GK', value: 'GK' },
             { name: 'LB', value: 'LB' },
@@ -214,38 +265,96 @@ export const unlistCmd = {
 
 export const lftCmd = {
     name: 'lft',
-    description: 'List yourself as looking for team',
+    description: 'Manage your Looking for Team (LFT) status',
     type: 1,
     psaf: true,
-    options: [{
-        type: 4,
-        name: 'hours',
-        description: 'Amount of hours in PSO across all accounts',
-        required: true,
-        min_value: 0,
-        max_value: 10000
-    }, {
-        type: 3,
-        name: 'positions',
-        description: 'Positions you can play',
-        required: true,
-        choices: [
-            { name: 'GK', value: 'GK' },
-            { name: 'LB', value: 'LB' },
-            { name: 'CB', value: 'CB' },
-            { name: 'RB', value: 'RB' },
-            { name: 'CM', value: 'CM' },
-            { name: 'LW', value: 'LW' },
-            { name: 'RW', value: 'RW' },
-            { name: 'ST', value: 'ST' }
-        ]
-    }, {
-        type: 3,
-        name: 'extra_info',
-        description: 'Additional information (e.g., "only looking for Div 1 teams")',
-        required: false
-    }],
-    func: lft
+    options: [
+        {
+            name: 'add',
+            type: 1,
+            description: 'Add yourself to the LFT list',
+            options: [
+                {
+                    type: 4,
+                    name: 'hours',
+                    description: 'Amount of hours in PSO across all accounts',
+                    required: true,
+                    min_value: 0,
+                    max_value: 10000
+                },
+                {
+                    type: 3,
+                    name: 'position1',
+                    description: 'Primary position you can play',
+                    required: true,
+                    choices: [
+                        { name: 'GK', value: 'GK' },
+                        { name: 'LB', value: 'LB' },
+                        { name: 'CB', value: 'CB' },
+                        { name: 'RB', value: 'RB' },
+                        { name: 'CM', value: 'CM' },
+                        { name: 'LW', value: 'LW' },
+                        { name: 'RW', value: 'RW' },
+                        { name: 'ST', value: 'ST' }
+                    ]
+                },
+                {
+                    type: 3,
+                    name: 'position2',
+                    description: 'Secondary position you can play',
+                    required: false,
+                    choices: [
+                        { name: 'GK', value: 'GK' },
+                        { name: 'LB', value: 'LB' },
+                        { name: 'CB', value: 'CB' },
+                        { name: 'RB', value: 'RB' },
+                        { name: 'CM', value: 'CM' },
+                        { name: 'LW', value: 'LW' },
+                        { name: 'RW', value: 'RW' },
+                        { name: 'ST', value: 'ST' }
+                    ]
+                },
+                {
+                    type: 3,
+                    name: 'position3',
+                    description: 'Tertiary position you can play',
+                    required: false,
+                    choices: [
+                        { name: 'GK', value: 'GK' },
+                        { name: 'LB', value: 'LB' },
+                        { name: 'CB', value: 'CB' },
+                        { name: 'RB', value: 'RB' },
+                        { name: 'CM', value: 'CM' },
+                        { name: 'LW', value: 'LW' },
+                        { name: 'RW', value: 'RW' },
+                        { name: 'ST', value: 'ST' }
+                    ]
+                },
+                {
+                    type: 3,
+                    name: 'extra_info',
+                    description: 'Additional information (e.g., "only looking for Div 1 teams")',
+                    required: false
+                }
+            ]
+        },
+        {
+            name: 'remove',
+            type: 1,
+            description: 'Remove yourself from the LFT list'
+        }
+    ]
 };
 
-export default [transferListCmd, unlistCmd, lftCmd];
+const lftHandler = async (params) => {
+    const { options } = params;
+    const subcommand = options[0].name;
+
+    if (subcommand === 'add') {
+        return lftAdd({ ...params, options: options[0].options });
+    } else if (subcommand === 'remove') {
+        return lftRemove(params);
+    }
+};
+
+export default [transferListCmd, unlistCmd, { ...lftCmd, func: lftHandler }];
