@@ -6,7 +6,7 @@ const validPositions = ['GK', 'LB', 'LCB', 'CB', 'RCB', 'RB', 'LCM', 'CM', 'RCM'
 
 const validatePositions = (positions) => {
     const positionsArray = positions.split(',').map(pos => pos.trim().toUpperCase()).filter(Boolean);
-    const uniquePositions = [...new Set(positionsArray)]; // Remove duplicates
+    const uniquePositions = [...new Set(positionsArray)];
     const invalidPositions = uniquePositions.filter(pos => !validPositions.includes(pos));
     return { positionsArray: uniquePositions, invalidPositions };
 };
