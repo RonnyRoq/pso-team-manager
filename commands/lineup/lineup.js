@@ -247,7 +247,7 @@ const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam,
         }, {upsert: true, returnDocument: 'after'})
       } else {
         savedLineup = {postedBy: callerId, id: lineupId, ...lineup}
-        await lineup.insertOne(saveLineup)
+        await lineup.insertOne(savedLineup)
       }
       console.log(savedLineup)
       let nextMatch, theMatchId, teamId
