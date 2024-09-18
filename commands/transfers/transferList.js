@@ -2,8 +2,22 @@ import { optionsToObject, updateResponse, waitingMsg, postMessage } from "../../
 import { serverRoles, serverChannels } from "../../config/psafServerConfig.js";
 import { getAllPlayers } from "../../functions/playersCache.js";
 
-const validPositions = ['GK', 'LB', 'LCB', 'CB', 'RCB', 'RB', 'LCM', 'CM', 'RCM', 'LW', 'RW', 'LST', 'ST', 'RST'];
+// Runs as a cron every day at 3am
+export const removeOldEntries = async (dbClient) => {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
+    await dbClient(async ({ lft, transferList }) => {
+        const lftResult = await lft.deleteMany({
+            listedAt: { $lt: sevenDaysAgo }
+        });
+        const transferResult = await transferList.deleteMany({
+            listedAt: { $lt: sevenDaysAgo }
+        });
+        console.log(`Removed ${lftResult.deletedCount} LFT entries and ${transferResult.deletedCount} transfer list entries.`);
+    });
+};
+
+const validPositions = ['GK', 'LB', 'LCB', 'CB', 'RCB', 'RB', 'LCM', 'CM', 'RCM', 'LW', 'RW', 'LST', 'ST', 'RST'];
 const validatePositions = (positions) => {
     const positionsArray = positions.split(',').map(pos => pos.trim().toUpperCase()).filter(Boolean);
     const uniquePositions = [...new Set(positionsArray)];
