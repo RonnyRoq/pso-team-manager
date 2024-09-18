@@ -2,15 +2,24 @@ import { optionsToObject, updateResponse, waitingMsg, postMessage } from "../../
 import { serverRoles, serverChannels } from "../../config/psafServerConfig.js";
 import { getAllPlayers } from "../../functions/playersCache.js";
 
-const validPositions = ['GK', 'LB', 'LCB', 'CB', 'RCB', 'RB', 'LCM', 'CM', 'RCM', 'LW', 'RW', 'LST', 'ST', 'RST'];
+// Runs as a cron every day at 3am
+export const removeOldEntries = async (dbClient) => {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
+    await dbClient(async ({ lft, transferList }) => {
+        const lftResult = await lft.deleteMany({ dateTimestamp: { $lt: sevenDaysAgo } });
+        const transferResult = await transferList.deleteMany({ dateTimestamp: { $lt: sevenDaysAgo } });
+        console.log(`Removed ${lftResult.deletedCount} LFT entries and ${transferResult.deletedCount} transfer list entries.`);
+    });
+};
+
+const validPositions = ['GK', 'LB', 'LCB', 'CB', 'RCB', 'RB', 'LCM', 'CM', 'RCM', 'LW', 'RW', 'LST', 'ST', 'RST'];
 const validatePositions = (positions) => {
     const positionsArray = positions.split(',').map(pos => pos.trim().toUpperCase()).filter(Boolean);
     const uniquePositions = [...new Set(positionsArray)];
     const invalidPositions = uniquePositions.filter(pos => !validPositions.includes(pos));
     return { positionsArray: uniquePositions, invalidPositions };
 };
-
 const transferList = async ({ options, interaction_id, application_id, token, dbClient, guild_id, member }) => {
     await waitingMsg({ interaction_id, token });
     const { player, hours, positions, buyout, extra_info } = optionsToObject(options);
@@ -39,6 +48,8 @@ const transferList = async ({ options, interaction_id, application_id, token, db
             return "You can only list players from your own team.";
         }
 
+        const dateTimestamp = new Date();
+
         await transferListCollection.updateOne(
             { playerId: player },
             {
@@ -48,7 +59,8 @@ const transferList = async ({ options, interaction_id, application_id, token, db
                     positions: positionsArray,
                     buyout,
                     extra_info: extra_info || "",
-                    listedAt: new Date()
+                    listedAt: new Date(),
+                    dateTimestamp: dateTimestamp
                 }
             },
             { upsert: true }
@@ -104,12 +116,15 @@ const lftAdd = async ({ options, interaction_id, application_id, token, dbClient
     const message = await dbClient(async ({ lft }) => {
         await lft.deleteOne({ playerId: callerId });
 
+        const dateTimestamp = new Date();
+
         await lft.insertOne({
             playerId: callerId,
             hours,
             positions: positionsArray,
             extra_info: extra_info || "",
-            listedAt: new Date()
+            listedAt: new Date(),
+            dateTimestamp: dateTimestamp
         });
 
         return "You have been listed as looking for team (LFT).";
