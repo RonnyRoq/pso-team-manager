@@ -4,7 +4,7 @@ import { getAllPlayers } from "../../functions/playersCache.js";
 
 // Runs as a cron every day at 3am
 export const removeOldEntries = async (dbClient) => {
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
     await dbClient(async ({ lft, transferList }) => {
         const lftResult = await lft.deleteMany({
@@ -30,6 +30,7 @@ const validatePositions = (positions) => {
     const invalidPositions = uniquePositions.filter(pos => !validPositions.includes(pos));
     return { positionsArray: uniquePositions, invalidPositions };
 };
+
 const transferList = async ({ options, interaction_id, application_id, token, dbClient, guild_id, member }) => {
     await waitingMsg({ interaction_id, token });
     const { player, hours, positions, buyout, extra_info } = optionsToObject(options);
@@ -58,7 +59,7 @@ const transferList = async ({ options, interaction_id, application_id, token, db
             return "You can only list players from your own team.";
         }
 
-        const dateTimestamp = new Date();
+        const dateTimestamp = Date.now();
 
         await transferListCollection.updateOne(
             { playerId: player },
@@ -126,7 +127,7 @@ const lftAdd = async ({ options, interaction_id, application_id, token, dbClient
     const message = await dbClient(async ({ lft }) => {
         await lft.deleteOne({ playerId: callerId });
 
-        const dateTimestamp = new Date();
+        const dateTimestamp = Date.now();
 
         await lft.insertOne({
             playerId: callerId,
