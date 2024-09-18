@@ -7,8 +7,18 @@ export const removeOldEntries = async (dbClient) => {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     await dbClient(async ({ lft, transferList }) => {
-        const lftResult = await lft.deleteMany({ dateTimestamp: { $lt: sevenDaysAgo } });
-        const transferResult = await transferList.deleteMany({ dateTimestamp: { $lt: sevenDaysAgo } });
+        const lftResult = await lft.deleteMany({
+            $or: [
+                { dateTimestamp: { $lt: sevenDaysAgo } },
+                { dateTimestamp: { $exists: false } }
+            ]
+        });
+        const transferResult = await transferList.deleteMany({
+            $or: [
+                { dateTimestamp: { $lt: sevenDaysAgo } },
+                { dateTimestamp: { $exists: false } }
+            ]
+        });
         console.log(`Removed ${lftResult.deletedCount} LFT entries and ${transferResult.deletedCount} transfer list entries.`);
     });
 };
