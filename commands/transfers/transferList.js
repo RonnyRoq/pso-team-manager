@@ -4,20 +4,14 @@ import { getAllPlayers } from "../../functions/playersCache.js";
 
 // Runs as a cron every day at 3am
 export const removeOldEntries = async (dbClient) => {
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     await dbClient(async ({ lft, transferList }) => {
         const lftResult = await lft.deleteMany({
-            $or: [
-                { dateTimestamp: { $lt: sevenDaysAgo } },
-                { dateTimestamp: { $exists: false } }
-            ]
+            listedAt: { $lt: sevenDaysAgo }
         });
         const transferResult = await transferList.deleteMany({
-            $or: [
-                { dateTimestamp: { $lt: sevenDaysAgo } },
-                { dateTimestamp: { $exists: false } }
-            ]
+            listedAt: { $lt: sevenDaysAgo }
         });
         console.log(`Removed ${lftResult.deletedCount} LFT entries and ${transferResult.deletedCount} transfer list entries.`);
     });
@@ -59,8 +53,6 @@ const transferList = async ({ options, interaction_id, application_id, token, db
             return "You can only list players from your own team.";
         }
 
-        const dateTimestamp = Date.now();
-
         await transferListCollection.updateOne(
             { playerId: player },
             {
@@ -70,8 +62,7 @@ const transferList = async ({ options, interaction_id, application_id, token, db
                     positions: positionsArray,
                     buyout,
                     extra_info: extra_info || "",
-                    listedAt: new Date(),
-                    dateTimestamp: dateTimestamp
+                    listedAt: new Date()
                 }
             },
             { upsert: true }
@@ -127,15 +118,12 @@ const lftAdd = async ({ options, interaction_id, application_id, token, dbClient
     const message = await dbClient(async ({ lft }) => {
         await lft.deleteOne({ playerId: callerId });
 
-        const dateTimestamp = Date.now();
-
         await lft.insertOne({
             playerId: callerId,
             hours,
             positions: positionsArray,
             extra_info: extra_info || "",
-            listedAt: new Date(),
-            dateTimestamp: dateTimestamp
+            listedAt: new Date()
         });
 
         return "You have been listed as looking for team (LFT).";
