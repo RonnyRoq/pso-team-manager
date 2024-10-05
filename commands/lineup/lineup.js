@@ -8,7 +8,7 @@ import { DiscordRequest } from '../../utils.js';
 import { getAllLeagues, getAllNationalities } from '../../functions/allCache.js';
 import { getFastCurrentSeason } from '../season.js';
 
-export const nonLineupAttributes = ['_id', 'team', 'matchId', 'vs']
+export const nonLineupAttributes = ['_id', 'team', 'matchId', 'vs', 'id', 'match']
 const steam = '<:steam:1201620242015719454>'
 
 const positionsOrder = {
@@ -235,7 +235,7 @@ const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam,
       const nextMatches = await matches.find({season, dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, finished: {$in: [false, null]}, $or: [{home: {$in: teamIds}}, {away: {$in: teamIds}}]}).sort({dateTimestamp:1}).toArray()
       let savedLineup
       const lineupId = Math.random().toString(36).slice(-6)
-      if(!lineup.id) {
+      if(lineup.id) {
         savedLineup = await lineups.findOneAndUpdate({postedBy: callerId, id: lineup.id}, {
           $setOnInsert: {
             postedBy: callerId,
@@ -245,9 +245,10 @@ const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam,
             ...lineup
           }
         }, {upsert: true, returnDocument: 'after'})
+        savedLineup.id = lineup.id || lineupId
       } else {
         savedLineup = {postedBy: callerId, id: lineupId, ...lineup}
-        await lineup.insertOne(savedLineup)
+        await lineups.insertOne(savedLineup)
       }
       console.log(savedLineup)
       let nextMatch, theMatchId, teamId

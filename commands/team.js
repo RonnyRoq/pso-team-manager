@@ -22,8 +22,7 @@ export const team = async ({interaction_id, application_id, token, guild_id, opt
     const team = await teams.findOne({active:true, $or:roles})
     if(!team)
     {
-      response = 'No team found'
-      return
+      return 'No team found'
     }
     response = displayTeam(team)
     const [allPlayers, allNations] = await Promise.all([getAllPlayers(guild_id), getAllNationalities()])

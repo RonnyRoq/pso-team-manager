@@ -197,5 +197,83 @@ export const countries = [
   },{
     name: "Iceland",
     flag: "🇮🇸"
+  }, {
+    name: "Afghanistan",
+    flag: "🇦🇫"
+  },{
+    name: "Azerbaijan",
+    flag: "🇦🇿"
+  },{
+    name: "Bangladesh",
+    flag: "🇧🇩"
+  },{
+    name: "Bahrain",
+    flag: "🇧🇭"
+  },{
+    name: "Brunei",
+    flag: "🇧🇳"
+  },{
+    name: "Bhutan",
+    flag: "🇧🇹"
+  },{
+    name: "China",
+    flag: "🇨🇳"
+  },{
+    name: "Hong Kong",
+    flag: "🇭🇰"
+  },{
+    name: "Indonesia",
+    flag: "🇮🇩"
+  },{
+    name: "India",
+    flag: "🇮🇳"
+  },{
+    name: "Iran",
+    flag: "🇮🇷"
+  },{
+    name: "Japan",
+    flag: "🇯🇵"
+  },{
+    name: "Kyrgyzstan",
+    flag: "🇰🇬"
+  },{
+    name: "Cambodia",
+    flag: "🇰🇭"
+  },{
+    name: "North Korea",
+    flag: "🇰🇵"
+  },{
+    name: "South Korea",
+    flag: "🇰🇷"
+  },{
+    name: "Kazakhstan",
+    flag: "🇰🇿"
+  },{
+    name: "Lebanon",
+    flag: "🇱🇧"
+  },{
+    name: "Philippines",
+    flag: "🇵🇭"
+  },{
+    name: "Singapore",
+    flag: "🇸🇬"
+  },{
+    name: "Thailand",
+    flag: "🇹🇭"
+  },{
+    name: "Taiwan",
+    flag: "🇹🇼"
+  },{
+    name: "Uzbekistan",
+    flag: "🇺🇿"
+  },{
+    name: "Vietnam",
+    flag: "🇻🇳"
+  },{
+    name: "New Zealand",
+    flag: "🇳🇿"
+  },{
+    name: "Venezuela",
+    flag: "🇻🇪"
   }
 ]

@@ -12,7 +12,7 @@ export const selectMatchLineup =  async ({member, application_id, callerId, inte
   const content = await dbClient(async({lineups, matches, players, teams, nationalSelections, nationalContracts})=>{
     let [lineup, match, nations, allPlayers] = await Promise.all([
       lineups.findOne({postedBy: callerId, id}),
-      matches.findOne({_id: ObjectId(matchId)}),
+      matches.findOne({_id: new ObjectId(matchId)}),
       getAllNationalities(),
       getAllPlayers(guild_id)
     ])
@@ -26,10 +26,10 @@ export const selectMatchLineup =  async ({member, application_id, callerId, inte
       const selections = await nationalSelections.find({shortName: {$in: [match.home, match.away]}}).toArray()
       team = await nationalContracts.findOne({season, playerId: callerId, selection: selections.map(team=>team.shortName)})
     } else {
-      const clubs = await teams.find({id: {$in: [match.home, match.away]}})
+      const clubs = await teams.find({id: {$in: [match.home, match.away]}}).toArray()
       team = clubs.find(club=> member.roles.includes(club.id))
     }
-    lineup = await lineups.findOneAndUpdate({_id: lineup._id}, {$set: {match: matchId, team}}, {returnDocument: 'after', upsert: true})
+    lineup = await lineups.findOneAndUpdate({_id: lineup._id}, {$set: {matchId, team}}, {returnDocument: 'after', upsert: true})
     const nextMatch = match
     const theMatchId = nextMatch?._id?.toString() || ''
     const allLeagues = await getAllLeagues()
@@ -50,6 +50,7 @@ export const selectMatchLineup =  async ({member, application_id, callerId, inte
       Object.entries(lineup)
         .filter(([name])=> !nonLineupAttributes.includes(name))
         .map(([name, value])=> {
+          console.log(name, value)
           const discPlayer = allPlayers.find(player=> player?.user?.id === value)
           return [name, {id: value, name: getPlayerNick(discPlayer), registered: discPlayer.roles.includes(getRegisteredRole(guild_id))}]
         })

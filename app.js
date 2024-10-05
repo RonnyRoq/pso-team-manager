@@ -18,7 +18,7 @@ import { allPlayers, autoCompleteNation, editPlayer, player, players } from './c
 import { team } from './commands/team.js';
 import { editMatch, endMatch, match, matchId, matches, pastMatches, publishMatch, resetMatch, unpublishMatch } from './commands/match.js';
 import { blacklistTeam, doubleContracts, emoji, expireThings, fixNames, initCountries, managerContracts, systemTeam } from './commands/system.js';
-import { addSelection, autoCompleteSelections, nationalTeam, postNationalTeams, registerElections, removeSelection, showElectionCandidates, showVotes, voteCoach } from './commands/nationalTeam.js';
+import { addSelection, autoCompleteSelections, postNationalTeams, registerElections, removeSelection, showElectionCandidates, showVotes, voteCoach } from './commands/nationalTeam.js';
 import { confirm, pendingConfirmations, register, releasePlayer } from './commands/confirm.js';
 import { approveDealAction, approveLoanAction, declineDealAction, declineLoanAction, finishLoanRequest, removeConfirmation, removeDeal, removeLoan, removeRelease } from './commands/confirmations/actions.js';
 import commandsRegister from './commandsRegister.js';
@@ -389,10 +389,6 @@ function start() {
 
           if(name === "pastmatches") {
             return pastMatches(commandOptions)
-          }
-
-          if(name === "nationalteam") {
-            return nationalTeam(commandOptions)
           }
           
           if(name === "postnationalteams") {

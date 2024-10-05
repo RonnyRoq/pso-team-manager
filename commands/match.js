@@ -621,18 +621,19 @@ export const unpublishMatch = async ({member, interaction_id, token, application
     const season = await getCurrentSeason(seasonsCollect)
     const matchDay = await matchDays.findOne({league, season, matchday})
     if(matchDay){
+      console.log(matchDay)
       if(matchDay.imageMessageId) {
-        await deleteMessage({channel_id: channel, messageId: matchday.messageId})
-        
+        await deleteMessage({channel_id: channel, messageId: matchDay.imageMessageId})
       }
       if(matchDay.endMessageId) {
-        await deleteMessage({channel_id: channel, messageId: matchday.endMessageId})
+        await deleteMessage({channel_id: channel, messageId: matchDay.endMessageId})
       }
     }
     const matchCursor = matches.find({league, matchday, season, messageId: {$ne: null}}, {sort: {dateTimestamp: 1}})
     let matchCount = 0
     for await (const match of matchCursor) {
       try{
+        console.log(match)
         await deleteMessage({channel_id:channel, messageId: match.messageId})
       } catch (e) {
         console.log('Failed to delete message')

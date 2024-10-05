@@ -257,14 +257,13 @@ export const emoji = async({interaction_id, token, guild_id, options}) => {
   })
 }
 
-export const initCountries = async ({interaction_id, token, dbClient}) => {
+export const initCountries = async ({application_id, token, dbClient}) => {
   return await dbClient(async ({nationalities})=> {
-    //console.log(countries)
     countries.forEach(async({name,flag})=> {
       await nationalities.updateOne({name}, {$set: {name, flag}}, {upsert: true})
     })
     const natCount = await nationalities.countDocuments({})
-    return silentResponse({interaction_id, token, content: `${natCount} nationalities updated`})
+    return updateResponse({application_id, token, content: `${natCount} nationalities updated`})
   })
 };
 
@@ -473,6 +472,7 @@ export const updateSteamNames = async ({dbClient}) => (
     }
     
     console.log(nameChanges)
+    //todo: handle name changes in multiple posts
     await DiscordRequest(`/channels/${serverChannels.nameChangesChannelId}/messages`, {
       method: 'POST',
       body: {
@@ -548,11 +548,6 @@ export const systemTeamCmd = {
   }]
 }
 
-export const initCountriesCmd = {
-  name: 'initcountries',
-  description: 'Save all the nationalities in DB',
-  type: 1
-}
 export const doubleContractsCmd = {
   name: 'doublecontracts',
   description: 'Show players having more than 1 active contract',
@@ -611,7 +606,8 @@ export const expireThingsCmd = {
 
 const subCommands = {
   'updateregister': updateRegister,
-  'validatesteamid' : validateSteamId
+  'validatesteamid' : validateSteamId,
+  'initcountries': initCountries,
 }
 
 const systemCmd = {
@@ -633,6 +629,10 @@ const systemCmd = {
     type: 1,
     name: 'validatesteamid',
     description: 'Validate the steam IDs of all players'
+  },{
+    type: 1,
+    name: 'initcountries',
+    description: 'Update the countries list in DB'
   }]
 }
 

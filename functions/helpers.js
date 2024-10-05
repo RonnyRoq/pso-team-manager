@@ -231,7 +231,7 @@ export const followUpResponse = async ({application_id, token, content, embeds, 
   })
 
 export const postMessage = async({channel_id, content='', components = [], attachments = [], embeds = []}) =>
-  DiscordRequest(`/channels/${channel_id}/messages`, 
+  DiscordRequest(`channels/${channel_id}/messages`, 
   {
     method: 'POST',
     body: {
@@ -251,7 +251,7 @@ export const updatePost = async({channel_id, messageId, content, components, att
     body.attachments = attachments
   if(embeds)
     body.embeds = embeds
-  return DiscordRequest(`/channels/${channel_id}/messages/${messageId}`, 
+  return DiscordRequest(`channels/${channel_id}/messages/${messageId}`, 
   {
     method: 'PATCH',
     body
@@ -259,14 +259,14 @@ export const updatePost = async({channel_id, messageId, content, components, att
 }
 
 export const getPost = async({channel_id, messageId}) => {
-  return DiscordRequest(`/channels/${channel_id}/messages/${messageId}`, 
+  return DiscordRequest(`channels/${channel_id}/messages/${messageId}`, 
     {
       method: 'GET',
     })
 }
 
 export const deleteMessage = async ({channel_id, messageId}) => 
-  DiscordRequest(`/channels/${channel_id}/messages/${messageId}`, {
+  DiscordRequest(`channels/${channel_id}/messages/${messageId}`, {
     method: 'DELETE',
   })
 //stolen from stackoverflow

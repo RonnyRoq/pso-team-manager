@@ -1,5 +1,6 @@
-import { serverChannels, serverRegions } from "../../config/psafServerConfig.js"
+import { serverChannels, serverRegions, serverRoles } from "../../config/psafServerConfig.js"
 import { getCurrentSeason, handleSubCommands, optionsToObject, removeSubCommands, updateResponse } from "../../functions/helpers.js"
+import { getAllPlayers } from "../../functions/playersCache.js"
 import { DiscordRequest } from "../../utils.js"
 import { getFastCurrentSeason } from "../season.js"
 
@@ -56,7 +57,6 @@ export const updateSelectionPost = async ({selection, dbClient}) => {
     const nationalPlayers = await nationalContracts.find({season, selection}).toArray()
     const content = getSelectionDetails(nationalTeam, nationality, nationalPlayers)
     const payload = {}
-    console.log(nationalTeam)
     if(nationalTeam.psafMsg) {
       try {
         await DiscordRequest(`/channels/${serverChannels.nationalTeamsPostsChannelId}/messages/${nationalTeam.psafLogo}`, {
@@ -95,48 +95,22 @@ export const updateSelectionPost = async ({selection, dbClient}) => {
       const message = await resp.json()
       payload.psafMsg = message.id
     }
-    if(nationalTeam.wcMsg) {
-      try{
-        await DiscordRequest(`/channels/${serverChannels.wcNationalTeamsPostsChannelId}/messages/${nationalTeam.wcLogo}`, {
-          method: 'PATCH',
-          body: {
-            content: nationalTeam.logo || '--'
-          }
-        })
-        await DiscordRequest(`/channels/${serverChannels.wcNationalTeamsPostsChannelId}/messages/${nationalTeam.wcMsg}`, {
-          method: 'PATCH',
-          body: {
-            content
-          }
-        })
-      }
-      catch(e) {
-        nationalTeam.wcMsg = null
-        nationalTeam.wcLogo = null
-        await nationalTeams.updateOne({shortname: nationalTeam.shortname}, {$set: {wcMsg: null, wcLogo: null}})
-      }
-    } else {
-      const wcResp = await DiscordRequest(`/channels/${serverChannels.wcNationalTeamsPostsChannelId}/messages`, {
-        method: 'POST',
-        body: {
-          content: nationalTeam.logo || '--'
-        }
-      })
-      const wcMessage = await wcResp.json()
-      payload.wcLogo = wcMessage.id
-      const resp = await DiscordRequest(`/channels/${serverChannels.wcNationalTeamsPostsChannelId}/messages`, {
-        method: 'POST',
-        body: {
-          content
-        }
-      })
-      const message = await resp.json()
-      payload.wcMsg = message.id
-    }
 
     if(Object.keys(payload).length>0) {
       await nationalTeams.updateOne({shortname:nationalTeam.shortname}, {$set: {...payload}})
     }
+
+    const allPlayers = await getAllPlayers(process.env.GUILD_ID)
+    const nationalPlayersId = nationalPlayers.map(dbPlayer => dbPlayer.playerId)
+    const discNationalPlayers = allPlayers.filter(player=> nationalPlayersId.includes(player.user.id))
+    await discNationalPlayers.forEach(async discPlayer => {
+      await DiscordRequest(`guilds/${process.env.GUILD_ID}/members/${discPlayer.user.id}`, {
+        method: 'PATCH',
+        body: {
+          roles: [...new Set([...discPlayer.roles, serverRoles.nationalTeamPlayerRole])]
+        }
+      })
+    })
   })
 }
 

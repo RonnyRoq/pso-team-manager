@@ -195,7 +195,7 @@ export const autoPublish = async ({dbClient}) => {
     const activeLeagues = await leagueConfig.find({active: true}).toArray()
     const todayMatchDays = await matchDays.find({startDateTimestamp:{$gte: msToTimestamp(startOfDay.getTime())}, endDateTimestamp: {$lte: msToTimestamp(endOfDay.getTime())}, league: {$in: activeLeagues.map(league=>league.value)}}, {startDateTimestamp: -1}).toArray()
     const leaguesToPost = todayMatchDays.map(matchday=> matchday.league)
-    const nextMatchDays = await matchDays.find({posted: {$in: [null, false]}, startDateTimestamp: {$gte: msToTimestamp(endOfDay.getTime())}, league: {$in: leaguesToPost}}, {startDateTimestamp: 1}).toArray()
+    const nextMatchDays = await matchDays.find({posted: {$in: [null, false]}, startDateTimestamp: {$gte: msToTimestamp(endOfDay.getTime())}, league: {$in: leaguesToPost}}, {startDateTimestamp: -1}).toArray()
     const nextMatchDayPerLeague = new Map()
     nextMatchDays.forEach(matchDay => {
       if(!nextMatchDayPerLeague.has(matchDay.league)) {

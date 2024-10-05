@@ -1,5 +1,5 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
-import { DiscordRequest } from "../utils.js"
+import { DiscordRequest, SteamRequest, SteamRequestTypes } from "../utils.js"
 import { msToTimestamp, getPlayerNick, sleep, waitingMsg, optionsToObject, updateResponse, quickResponse, addPlayerPrefix, isSteamIdIncorrect, getRegisteredRole } from "../functions/helpers.js"
 import { globalTransferBan, globalTransferBanMessage, serverChannels, serverRoles, transferBanStatus } from "../config/psafServerConfig.js"
 import commandsRegister from "../commandsRegister.js"
@@ -90,12 +90,16 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
     const nat3 = dbPlayer?.nat3
     let steamId = dbPlayer?.steam || ""
     if(!steamId || !(steamId.includes("steamcommunity.com/profiles/") || steamId.includes("steamcommunity.com/id/"))) {
-      console.log(`Existing steam ID not found ( ${steamId} ), using the one entered with the command`)
+      console.log(`New user ( ${steamId} - ${steam} ), using the steam profile entered with the command`)
       steamId = steam
     } else {
       console.log("Keeping the steam ID already registered")
     }
     const uniqueId = dbPlayer?.uniqueId || uniqueid
+    const gamesSummaryResp = await SteamRequest(SteamRequestTypes.GetGameSummary, {steamid: steamId, appIds_filter: [1583320]})
+    const gamesSummary = await gamesSummaryResp.json()
+    const psoSummary = gamesSummary?.response?.games?.[0]
+
 
     const {flag: flag1 = ''} = allCountries.find(({name})=> name === nat1) || {}
     const {flag: flag2 = ''} = allCountries.find(({name})=> name === nat2) || {}
@@ -168,10 +172,11 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
     })
     
     const content = `Registered:\r${userDetails}`
+    const adminContent = content+`\r${JSON.stringify(psoSummary, null, 2)}`
     await DiscordRequest(`/channels/${serverChannels.registrationsChannelId}/messages`, {
       method: 'POST',
       body: {
-        content,
+        content: adminContent,
       }
     })
     await DiscordRequest(`/channels/${serverChannels.wcRegistrationChannelId}/messages`, {

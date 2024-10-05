@@ -321,7 +321,7 @@ export const formatLeagueTable = async ({league, dbClient, short = false, season
   } else {
     const sortedGroups = await internalLeagueTable({dbClient, league, season})
     const content = sortedGroups.map(([group, sortedTeams]) => {
-      const response = `${group !== NONE ? `## GROUP ${group}\r`: `${group}`}` +
+      const response = `${group !== NONE ? `## GROUP ${group}\r`: ''}` +
       (
         short ? `> Pos | Name | Pts (Games) | FF \r` +
         sortedTeams.map((team,index)=> `> **${index+1} ${team.emoji} ${team.name.substring(0, 19)}** | ${team.points}Pts (${team.played}) | ${team.ffs} `).join('\r')

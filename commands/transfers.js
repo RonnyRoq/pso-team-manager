@@ -89,13 +89,7 @@ export const transferAction = async ({interaction_id, token, application_id, mes
       body: {content}
     })
   }
-  return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-    method: 'PATCH',
-    body: {
-      content,
-      flags: InteractionResponseFlags.EPHEMERAL
-    }
-  })
+  return updateResponse({application_id, token, content})
 }
 
 export const transfer = async ({options, guild_id, application_id, interaction_id, token, dbClient, callerId}) => {

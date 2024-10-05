@@ -108,6 +108,7 @@ export const notifyMatchStart = async ({dbClient}) => {
           }
           catch(e) {
             console.log(e)
+            
           }
           recipients.push(matchRef)
           await sleep(500)

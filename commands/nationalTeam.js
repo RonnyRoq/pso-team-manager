@@ -56,12 +56,6 @@ export const updateNationalTeam = async ({guild_id, nation, players, nationaliti
   }
 }
 
-export const nationalTeam = async ({options, interaction_id, guild_id, application_id, token, dbClient}) => {
-  const {country} = Object.fromEntries(options.map(({name, value})=> [name, value]))
-  await waitingMsg({interaction_id, token})
-  const {response} = await getNationalTeamPost({country, guild_id, dbClient})
-  return updateResponse({application_id, token, content: response})
-}
 
 export const allNationalTeams =  async ({interaction_id, guild_id, application_id, token, dbClient}) => {
   await waitingMsg({interaction_id, token})
@@ -511,19 +505,6 @@ export const registerElectionsCmd = {
     description: 'Please tell us why you\'d be a good national coach',
     required: true,
   }]
-}
-
-export const nationalTeamCmd = {
-  name: 'nationalteam',
-  description: 'List a national team players list',
-  type: 1,
-  options: [{
-    type: 3,
-    name: 'country',
-    description: 'Country',
-    autocomplete: true,
-    required: true,
-  }],
 }
 
 export const showVotesCmd = {

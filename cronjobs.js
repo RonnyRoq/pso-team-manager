@@ -3,12 +3,13 @@ import { getMatchesOfDay, getMatchesSummary, remindMissedMatches } from "./comma
 import { innerUpdateTeam } from "./commands/postTeam.js"
 import { notifyMatchStart } from "./commands/matches/notifyMatchStart.js"
 import { DiscordRequest } from "./utils.js"
-import { serverChannels } from "./config/psafServerConfig.js"
+import { serverChannels, serverRoles } from "./config/psafServerConfig.js"
 import { updateLeagueTable } from "./commands/league/leagueTable.js"
 import { autoPublish } from "./commands/matches/matchday.js"
 import { detectSteamAlts, internalUpdateRegister, internalValidateSteamId, updateSteamNames } from "./commands/system.js"
 import { updateSelectionPost } from "./commands/nationalTeams/nationalTeamManagement.js"
 import { updateCacheCurrentSeason } from "./commands/season.js"
+import { postMessage } from "./functions/helpers.js"
 
 let currentTeamIndex = 0
 let currentSelectionIndex = 0
@@ -19,29 +20,47 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
       getMatchesOfDay({date:'today', dbClient, isSchedule: true})
     },
   ],[
-    '*/5 7-22 * * *',
+    '*/5 * * * *',
     async function() {
-      if(allActiveTeams.length > 0) {
-        await innerUpdateTeam({guild_id: process.env.GUILD_ID, team: allActiveTeams[currentTeamIndex]?.id, dbClient})
-        console.log(`${allActiveTeams[currentTeamIndex].name} updated.`)
-        currentTeamIndex++
-        if(currentTeamIndex>= allActiveTeams.length) {
-          currentTeamIndex = 0
+      const team = allActiveTeams[currentTeamIndex]
+      try{
+        if(allActiveTeams.length > 0) {
+          if(team.id !== serverRoles.unknownTeam) {
+            await innerUpdateTeam({guild_id: process.env.GUILD_ID, team: team?.id, dbClient})
+            console.log(`${team.name} updated.`)
+          }
+          currentTeamIndex++
+          if(currentTeamIndex>= allActiveTeams.length) {
+            currentTeamIndex = 0
+          }
         }
+      } catch (e) {
+        console.error(e)
+        console.log(currentTeamIndex, team)
+        await postMessage({channel_id: serverChannels.botTestingChannelId, content: `Failed to auto update ${team?.id} <@&${team?.id}> (${team.name}):`})
+        await postMessage({channel_id: serverChannels.botTestingChannelId, content: JSON.stringify(e, null, 2)})
       }
     },
   ],[
     '*/9 7-22 * * *',
     async function() {
       console.log('Updating National Selections')
-      if(allNationalSelections.length > 0) {
-        console.log(allNationalSelections[currentSelectionIndex])
-        await updateSelectionPost({selection: allNationalSelections[currentSelectionIndex]?.shortname, dbClient})
-        console.log(`${allNationalSelections[currentSelectionIndex].name} updated.`)
-        currentSelectionIndex++
-        if(currentSelectionIndex>= allNationalSelections.length) {
-          currentSelectionIndex = 0
+      const selection = allNationalSelections[currentSelectionIndex]
+      try{
+        if(allNationalSelections.length > 0) {
+          console.log(currentSelectionIndex, selection.shortname)
+          await updateSelectionPost({selection: selection?.shortname, dbClient})
+          console.log(`${selection.name} updated.`)
+          currentSelectionIndex++
+          if(currentSelectionIndex>= allNationalSelections.length) {
+            currentSelectionIndex = 0
+          }
         }
+      } catch (e) {
+        console.error(e)
+        console.log(currentSelectionIndex, selection)
+        await postMessage({channel_id: serverChannels.botTestingChannelId, content: `Failed to auto update national selection ${selection?.shortname} <@&${selection?.shortname}> (${selection.name}):`})
+        await postMessage({channel_id: serverChannels.botTestingChannelId, content: JSON.stringify(e, null, 2)})
       }
     },
   ],[

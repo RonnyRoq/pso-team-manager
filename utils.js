@@ -21,7 +21,8 @@ export function VerifyDiscordRequest(clientKey) {
 
 export const SteamRequestTypes = {
   VanityUrl: 'http://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/',
-  GetPlayerSummaries: 'http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/'
+  GetPlayerSummaries: 'http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/',
+  GetGameSummary: 'http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/'
 }
 
 export const SteamRequest = (request, params) => {
@@ -117,25 +118,52 @@ export async function DiscordRequest(endpoint, options={}) {
     'Content-Type': 'application/json; charset=UTF-8',
     'User-Agent': 'PSAF Team Manager',
   }
-  let res = await fetch(url, {
-    headers,
-    ...payload
-  });
-  // throw API errors
-  if (!res.ok) {
-    const data = await res.json();
-    console.log(endpoint);
-    console.log(JSON.stringify(options))
-    console.log(JSON.stringify(data))
-    if(data.retry_after) {
-      await sleep(data.retry_after*1000)
-      res = await DiscordRequest(endpoint, options)
-    } else {
-      throw new Error(JSON.stringify(data));
+  let res
+  try{
+    res = await fetch(url, {
+      headers,
+      ...payload
+    });
+    // throw API errors
+    if (!res.ok) {
+      console.log(res.url)
+      console.log(res.status, res.statusText)
+      const data = await res.json();
+      console.log(endpoint);
+      console.log(JSON.stringify(options))
+      console.log(JSON.stringify(data))
+      if(data.retry_after) {
+        await sleep(data.retry_after*1000)
+        res = await DiscordRequest(endpoint, options)
+      } else {
+        const e = JSON.stringify({endpoint, options, data}, null, 2)
+        await logSystemError(e)
+        throw new Error(e);
+      }
     }
+  } catch(e) {
+    console.error(e)
+    
+    await logSystemError(e)
+    throw new Error(e)
   }
   // return original response
   return res;
+}
+
+export async function logSystemError(content) {
+  console.log("logSystemError")
+  const url = 'https://discord.com/api/v10/'
+  const headers = {
+    Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
+    'Content-Type': 'application/json; charset=UTF-8',
+    'User-Agent': 'PSAF Team Manager',
+  }
+  return fetch(url+"webhooks/1287703911637192705/lOCdbCD4H9qXLubpWfkSh9PFErUVbvf3S1rHknJXRrTtyhZ5vNxePm-XFeX353VWeBQJ", {
+    headers,
+    method: 'POST',
+    body: JSON.stringify({content})
+  }, true)
 }
 
 export async function InstallGlobalCommands(appId, commands) {
