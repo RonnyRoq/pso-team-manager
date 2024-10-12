@@ -1,12 +1,45 @@
-import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { DiscordRequest, SteamRequest, SteamRequestTypes } from "../utils.js"
 import { msToTimestamp, getPlayerNick, sleep, waitingMsg, optionsToObject, updateResponse, quickResponse, addPlayerPrefix, isSteamIdIncorrect, getRegisteredRole } from "../functions/helpers.js"
 import { globalTransferBan, globalTransferBanMessage, serverChannels, serverRoles, transferBanStatus } from "../config/psafServerConfig.js"
 import commandsRegister from "../commandsRegister.js"
 import { seasonPhases } from "./season.js"
 import { getAllNationalities } from "../functions/allCache.js"
+import { validateSnowflake } from "../functions/snowflakeConvert.js"
 
 const twoWeeksMs = 1209600033
+
+const communityStateToText = (state) => {
+  switch(state) {
+    case 1:
+      return "Private"
+    case 2:
+      return "Friends only"
+    case 3:
+      return "Friends of Friends"
+    case 4:
+      return "Users Only"
+    case 5:
+      return "Public"
+  }
+}
+
+const summaryToText = (psoSummary) => {
+  let lines = []
+  if(psoSummary.message)
+    lines.push(`${psoSummary.isPrivate ? 'PRIVATE ACCOUNT' : `<@&${serverRoles.presidentRole}>`} ${psoSummary.message}`)
+  if(psoSummary.playtime_forever)
+    lines.push(`Total PSO hours: ${psoSummary.playtime_forever/60}h`)
+  if(psoSummary.playtime_2weeks)
+    lines.push(`Played PSO over the last 2 weeks: ${psoSummary.playtime_2weeks/60}h`)
+  if(psoSummary.communityState !== undefined)
+    lines.push(`Steam visibility: ${psoSummary.communityState}`)
+  if(psoSummary.discordCreated) 
+    lines.push(`Discord Account creation date: ${psoSummary.discordCreated}`)
+  if(psoSummary.discordJoined)
+    lines.push(`Joined PSAF at: ${psoSummary.discordJoined}`)
+
+  return lines.join('\r')
+}
 
 const getConfirmTransferComponents = ({isValidated, isActive}={}) => ({
   components: [{
@@ -59,15 +92,7 @@ const getDealComponents = ({isActive}={}) => ({
 })
 
 export const register = async ({member, callerId, interaction_id, guild_id, application_id, token, options, dbClient}) => {
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        flags: InteractionResponseFlags.EPHEMERAL
-      }
-    }
-  })
+  await waitingMsg({interaction_id, token})
   const {nationality, extranat, steamprofileurl, uniqueid} = optionsToObject(options)
   const steam = steamprofileurl
   const isPSAF = guild_id === process.env.GUILD_ID
@@ -96,9 +121,45 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
       console.log("Keeping the steam ID already registered")
     }
     const uniqueId = dbPlayer?.uniqueId || uniqueid
-    const gamesSummaryResp = await SteamRequest(SteamRequestTypes.GetGameSummary, {steamid: steamId, appIds_filter: [1583320]})
-    const gamesSummary = await gamesSummaryResp.json()
-    const psoSummary = gamesSummary?.response?.games?.[0]
+    let psoSummary ={}
+    try {
+      let steamid
+      if(steamId.includes("steamcommunity.com/id/")) {
+        const [,vanityurl] = steamId.match(/steamcommunity.com\/id\/(\w+)\/?/)
+        const vanityResp = await SteamRequest(SteamRequestTypes.VanityUrl, {vanityurl})
+        const vanityProfile = await vanityResp.json()
+        console.log(vanityProfile)
+        if(vanityProfile?.response?.steamid) {
+          steamid = vanityProfile.response.steamid
+        }
+      } else {
+        const profileMatch = steamId.match(/.*\/(\d+)\/?/)
+        if(profileMatch !== null) {
+          steamid = profileMatch[1]
+        }
+      }
+      const playerSummaryResp = await SteamRequest(SteamRequestTypes.GetPlayerSummaries, {steamids: [steamid]})
+      const playerSummary = await playerSummaryResp.json()
+      const player = playerSummary?.response?.players?.[0]
+      if(!player) {
+        psoSummary = {
+          message: "Steam account not found."
+        }
+      } else {
+        const actualsteamId = player.steamid
+        steamId = player.profileurl
+        const communityState = communityStateToText(player.communityvisibilitystate)
+        const gamesSummaryResp = await SteamRequest(SteamRequestTypes.GetGameSummary, {steamid: actualsteamId, "appIds_filter[0]": 1583320})
+        const gamesSummary = await gamesSummaryResp.json()
+        psoSummary = gamesSummary?.response?.games?.[0] || {message: "Does not own PSO"}
+        psoSummary.discordCreated = validateSnowflake(callerId)
+        psoSummary.discordJoined = new Date(member.joined_at)
+        psoSummary.communityState = communityState
+        psoSummary.isPrivate = player.communityvisibilitystate == 1
+      }
+    } catch(e) {
+      console.log(e)
+    }
 
 
     const {flag: flag1 = ''} = allCountries.find(({name})=> name === nat1) || {}
@@ -172,7 +233,7 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
     })
     
     const content = `Registered:\r${userDetails}`
-    const adminContent = content+`\r${JSON.stringify(psoSummary, null, 2)}`
+    const adminContent = content+'\r'+summaryToText(psoSummary)
     await DiscordRequest(`/channels/${serverChannels.registrationsChannelId}/messages`, {
       method: 'POST',
       body: {
@@ -189,13 +250,7 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
   })
 
 
-  return await DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-    method: 'PATCH',
-    body: {
-      content,
-      flags: InteractionResponseFlags.EPHEMERAL
-    }
-  })
+  return updateResponse({application_id, token, content})
 }
 
 export const confirm = async ({member, callerId, interaction_id, application_id, guild_id, channel_id, token, options, dbClient}) => {

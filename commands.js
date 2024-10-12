@@ -3,10 +3,10 @@ import { InstallGlobalCommands, InstallGuildCommands } from './utils.js';
 import { nowCmd } from './commands/now.js';
 import { timestampCmd } from './commands/timestamp.js';
 import { helpCmd } from './commands/help.js';
-import { myTeamCmd, teamCmd } from './commands/team.js';
+import { teamCmd } from './commands/team.js';
 import { editMatchCmd, endMatchCmd, matchCmd, matchIdCmd, matchesCmd, moveTheMatchCmd, pastMatchesCmd, publishMatchCmd, resetMatchCmd, unPublishMatchCmd } from './commands/match.js';
 import { blacklistTeamCmd, emojiCmd, expireThingsCmd, fixNamesCmd, managerContractsCmd, systemTeamCmd } from './commands/system.js';
-import { editPlayerCmd, myPlayerCmd, playerCmd, playersCmd } from './commands/player.js';
+import { editPlayerCmd, playerCmd, playersCmd } from './commands/player.js';
 import { allNationalTeamsCmd, postNationalTeamsCmd, registerElectionsCmd, showElectionCandidatesCmd, showVotesCmd, voteCoachCmd } from './commands/nationalTeam.js';
 import { confirmCmd, registerCmd, releaseCmd, updateConfirmCmd } from './commands/confirm.js';
 import { dealCmd, loanCmd } from './commands/confirmations/deal.js';
@@ -122,9 +122,9 @@ export const emojisCmd = {
 const ALL_COMMANDS = [nowCmd, timestampCmd, helpCmd];
 
 const GUILD_COMMANDS = [
-  teamCmd, matchCmd, editMatchCmd, moveTheMatchCmd, endMatchCmd, publishMatchCmd, unPublishMatchCmd, myTeamCmd,
+  teamCmd, matchCmd, editMatchCmd, moveTheMatchCmd, endMatchCmd, publishMatchCmd, unPublishMatchCmd,
   matchIdCmd, matchesCmd, resetMatchCmd,
-  playerCmd, editPlayerCmd, playersCmd, myPlayerCmd,
+  playerCmd, editPlayerCmd, playersCmd,
   confirmCmd, updateConfirmCmd, renewCmd, dealCmd, listDealsCmd, loanCmd, releaseCmd, registerCmd,
   allNationalTeamsCmd, postNationalTeamsCmd,
   transferCmd, teamTransferCmd, FREEPLAYER, FINE, BONUS, addUniqueIdCmd,

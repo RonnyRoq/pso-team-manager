@@ -473,12 +473,7 @@ export const updateSteamNames = async ({dbClient}) => (
     
     console.log(nameChanges)
     //todo: handle name changes in multiple posts
-    await DiscordRequest(`/channels/${serverChannels.nameChangesChannelId}/messages`, {
-      method: 'POST',
-      body: {
-        content: nameChanges.join('\r').substring(0, 1999),
-      }
-    })
+    await postMessage({channel_id: serverChannels.nameChangesChannelId, content:nameChanges.join('\r').substring(0, 1999)})
   })
 )
 

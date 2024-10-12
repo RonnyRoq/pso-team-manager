@@ -230,17 +230,45 @@ export const followUpResponse = async ({application_id, token, content, embeds, 
     }
   })
 
-export const postMessage = async({channel_id, content='', components = [], attachments = [], embeds = []}) =>
-  DiscordRequest(`channels/${channel_id}/messages`, 
+export const postMessage = async({channel_id, content='', components = [], attachments = [], embeds = []}) => {
+  const messages = []
+  let remainingContent = content
+  while(remainingContent.length >= 2000) {
+    let lastReturn = content.lastIndexOf('\r', 2000)
+    let currentContent
+    if(lastReturn === -1){
+      lastReturn = Math.min(1999, remainingContent.length)
+    }
+    currentContent = remainingContent.substring(0, lastReturn)
+    remainingContent = remainingContent.substring(lastReturn)
+    messages.push(currentContent)
+  }
+  console.log(messages.length)
+  let i = 0
+  for await (const message of messages) {
+    await DiscordRequest(`channels/${channel_id}/messages`, 
+    {
+      method: 'POST',
+      body: {
+        content: message,
+      }
+    })
+    i++
+    if(i>3){
+      break
+    }
+  }
+  return DiscordRequest(`channels/${channel_id}/messages`, 
   {
     method: 'POST',
     body: {
-      content,
+      content: remainingContent,
       components,
       attachments,
       embeds
     }
   })
+}
 export const updatePost = async({channel_id, messageId, content, components, attachments, embeds}) => {
   const body = {}
   if(content)
