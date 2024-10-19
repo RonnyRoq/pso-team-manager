@@ -25,9 +25,11 @@ export const team = async ({interaction_id, application_id, token, guild_id, opt
       return 'No team found'
     }
     response = displayTeam(team)
-    const [allPlayers, allNations] = await Promise.all([getAllPlayers(guild_id), getAllNationalities()])
+    const [allPlayers, allNations, teamContracts] = await Promise.all([getAllPlayers(guild_id), getAllNationalities(),
+      contracts.find({team:team.id, endedAt: null}).toArray()
+    ])
     const displayCountries = Object.fromEntries(allNations.map(({name, flag})=> ([name, flag])))
-    const content = await getPlayersList(allPlayers, team.id, displayCountries, players, contracts )
+    const content = await getPlayersList(allPlayers, team.id, displayCountries, players, teamContracts )
     const finished = allmatches ? {} : {finished: null}
     const leagueCondition = league ? {league} : {}
     const season = await getCurrentSeason(seasonsCollect)

@@ -1234,7 +1234,7 @@ export const moveTheMatchCmd = {
   ]
 }
 
-export const endMatchCmd = {
+/*export const endMatchCmd = {
   name: 'endmatch',
   description: 'Finish a match',
   type: 1,
@@ -1263,7 +1263,7 @@ export const endMatchCmd = {
       description: "Was the match a FF?"
     }
   ]
-}
+}*/
 
 export const resetMatchCmd = {
   name: 'resetmatch',

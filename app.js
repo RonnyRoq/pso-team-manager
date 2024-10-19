@@ -276,7 +276,7 @@ function start() {
       }
 
       if (type === InteractionType.APPLICATION_COMMAND) {
-        const { name, options, resolved } = data;
+        const { name, options, resolved, target_id } = data;
         //const optionsObj = optionsToObject(options || [])
         console.log(`command ${name}`)
         console.log(options)
@@ -286,7 +286,7 @@ function start() {
         }
 
         const commandOptions = {
-          name, options, member, interaction_id, application_id, channel_id, token, guild_id, callerId, res, resolved, dbClient
+          name, options, member, interaction_id, application_id, channel_id, token, guild_id, callerId, res, resolved, dbClient, target_id,
         }
         //console.log(commandOptions)
 
@@ -328,10 +328,6 @@ function start() {
           }
           
           if (name === "player") {
-            return player(commandOptions)
-          }
-
-          if (name==="myplayer") {
             return player(commandOptions)
           }
 

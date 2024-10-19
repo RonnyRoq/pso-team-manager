@@ -26,7 +26,7 @@ const communityStateToText = (state) => {
 const summaryToText = (psoSummary) => {
   let lines = []
   if(psoSummary.message)
-    lines.push(`${psoSummary.isPrivate ? 'PRIVATE ACCOUNT' : `<@&${serverRoles.presidentRole}>`} ${psoSummary.message}`)
+    lines.push(`${psoSummary.isPrivate ? 'PRIVATE ACCOUNT' : ``} ${psoSummary.message}`)
   if(psoSummary.playtime_forever)
     lines.push(`Total PSO hours: ${psoSummary.playtime_forever/60}h`)
   if(psoSummary.playtime_2weeks)
@@ -151,7 +151,7 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
         const communityState = communityStateToText(player.communityvisibilitystate)
         const gamesSummaryResp = await SteamRequest(SteamRequestTypes.GetGameSummary, {steamid: actualsteamId, "appIds_filter[0]": 1583320})
         const gamesSummary = await gamesSummaryResp.json()
-        psoSummary = gamesSummary?.response?.games?.[0] || {message: "Does not own PSO"}
+        psoSummary = gamesSummary?.response?.games?.[0] || {message: "Can't find PSO on account"}
         psoSummary.discordCreated = validateSnowflake(callerId)
         psoSummary.discordJoined = new Date(member.joined_at)
         psoSummary.communityState = communityState
@@ -273,9 +273,9 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
     const currentTeam = allTeams.find(({id}) => member.roles.includes(id))
     const teamToJoin = allTeams.find(({id})=> id === team)
     const deal = pendingDeal || pendingLoan
-    /*if(seasons < 2) {
+    if(seasons < 2) {
       return 'Season ending soon, you can only confirm for 2 seasons (end of this season and the one after).'
-    }*/
+    }
     if(currentTeam) {
       if(currentTeam.transferBan) { 
         return `Your team <@&${currentTeam.id}> is banned from doing exit transfers, you cannot leave it.`
@@ -583,7 +583,7 @@ export const confirmCmd = {
     description: 'How many seasons',
     required: true,
     min_value: 1,
-    max_value: 10
+    max_value: 3
   }]
 }
 

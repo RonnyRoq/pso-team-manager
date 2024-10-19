@@ -17,25 +17,28 @@ const nationalTeamPlayerRole = '1103327647955685536'
 const staffRoles = ['1081886764366573658', '1072210995927339139', '1072201212356726836']
 
 export const player = async ({options, interaction_id, callerId, guild_id, application_id, member, token, dbClient}) => {
-  const [{value}] = options || [{}]
-  const playerId = value || callerId
+  const {player} = optionsToObject(options)
+  const playerId = player || callerId
+  await waitingMsg({interaction_id, token})
   
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        content: 'Searching...',
-        flags: 1 << 6
-      }
-    }
-  })
+  const content = await innerPlayer({playerId, guild_id, member, dbClient})
+  return updateResponse({application_id, token, content})
+}
+
+export const playerUserCmd = async ({target_id, interaction_id, callerId, guild_id, application_id, member, token, dbClient}) => {
+  const playerId = target_id || callerId
+  await waitingMsg({interaction_id, token})
   
-  const playerResp = await DiscordRequest(`/guilds/${guild_id}/members/${playerId}`, { method: 'GET' })
-  const discPlayer = await playerResp.json()
+  const content = await innerPlayer({playerId, guild_id, member, dbClient})
+  return updateResponse({application_id, token, content})
+}
+
+const innerPlayer = async ({playerId, guild_id, member, dbClient}) => { 
+  const allPlayers = await getAllPlayers(guild_id)
+  const discPlayer = allPlayers.find(player=>player.user.id === playerId)
   const name = getPlayerNick(discPlayer)
-  let response = name
-  await dbClient(async ({players, teams, contracts})=> {
+  return dbClient(async ({players, teams, contracts})=> {
+    let response = name
     const dbPlayer = await players.findOne({id: playerId})
     const allTeams = await teams.find({active:true}).toArray()
     const allTeamIds = allTeams.map(({id})=> id)
@@ -44,6 +47,7 @@ export const player = async ({options, interaction_id, callerId, guild_id, appli
     response = `<@${playerId}> - ${team ? `<@&${team}>` : 'Free Agent'}\r`
     const allNationalities = await getAllNationalities()
     if(dbPlayer) {
+      const isStaff = isMemberStaff(member)
       if(dbPlayer.ingamename) {
         response+= `In game name: ${dbPlayer.ingamename}\r`
       }
@@ -53,7 +57,7 @@ export const player = async ({options, interaction_id, callerId, guild_id, appli
       if(country){
         response += `${country.flag} ${discPlayer.roles.includes(nationalTeamPlayerRole) ? 'International': ''}${country2? `, ${country2.flag}`: ''}${country3? `, ${country3.flag}`: ''}\r`
       }
-      if(isMemberStaff(member)) {
+      if(isStaff) {
         response += `Steam: ${dbPlayer.steam || 'Not saved'}\r`
         response += `Unique ID: ${dbPlayer.uniqueId || 'Not saved'}\r`
       }
@@ -65,17 +69,11 @@ export const player = async ({options, interaction_id, callerId, guild_id, appli
         const contractsList = playerContracts.sort((a, b)=> b.at - a.at).map(({team, at, isLoan, phase, endedAt, until})=> `<@&${team}> from: <t:${msToTimestamp(at)}:F> ${endedAt ? `to: <t:${msToTimestamp(endedAt)}:F>`: (discPlayer.roles.includes(serverRoles.clubManagerRole) ? ' - :crown: Manager' : (isLoan ? `LOAN until season ${until}, beginning of ${seasonPhases[phase].desc}`: `until end of season ${until-1}`))}`)
         response += contractsList.join('\r')
       }
-      if(dbPlayer.profilePicture) {
+      if(dbPlayer.profilePicture && isStaff) {
         response += `\rhttps://pso.shinmugen.net/${dbPlayer.profilePicture}`
       }
-    }
-  })
-
-  return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-    method: 'PATCH',
-    body: {
-      content: response,
-      flags: 1 << 6
+      response += `\rhttps://psafdb.com/players/${playerId}`
+      return response
     }
   })
 }
@@ -324,12 +322,6 @@ export const playerCmd = {
   }]
 }
 
-export const myPlayerCmd = {
-  name: 'myplayer',
-  description: 'Show player details',
-  type: 1
-}
-
 export const allPlayersCmd = {
   name: 'allplayers',
   description: 'Debug',
@@ -415,4 +407,11 @@ export const updatePlayerPictureCmd = {
   }]
 }
 
-export default [updatePlayerPictureCmd]
+const playerUser = {
+  name: "Player Details",
+  type: 2,
+  psaf: true,
+  func: playerUserCmd
+}
+
+export default [updatePlayerPictureCmd, playerUser]

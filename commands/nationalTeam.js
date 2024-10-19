@@ -239,7 +239,7 @@ export const registerElections = async ({options, dbClient, interaction_id, call
     }
     if(dbPlayer.nat1 !== nation) {
       if(dbPlayer.nat2 === nation) {
-        return `You're not applying for your "main" country described in /myplayer. Please open a ticket if you wish to swap nations.`
+        return `You're not applying for your "main" country described in /player. Please open a ticket if you wish to swap nations.`
       } else {
         return `You can only apply for your country.`
       }
