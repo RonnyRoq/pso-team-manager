@@ -1,10 +1,8 @@
 import 'dotenv/config';
-//import fs, { openAsBlob } from 'fs'
 import { readFile } from "node:fs/promises"
 import { lookup } from "mime-types"
 import fetch from 'node-fetch';
 import { verifyKey } from 'discord-interactions';
-import { sleep } from './functions/helpers.js';
 
 export function VerifyDiscordRequest(clientKey) {
   return function (req, res, buf) {
@@ -23,6 +21,10 @@ export const SteamRequestTypes = {
   VanityUrl: 'http://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/',
   GetPlayerSummaries: 'http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/',
   GetGameSummary: 'http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/'
+}
+
+export const SteamIds = {
+  psoGameId: 1583320
 }
 
 export const SteamRequest = (request, params) => {
@@ -208,4 +210,10 @@ export function isValidHttpUrl(string) {
   }
 
   return url.protocol === "http:" || url.protocol === "https:";
+}
+
+export const sleep = (ms) => {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }

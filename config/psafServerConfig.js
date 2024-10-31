@@ -407,6 +407,7 @@ export const serverRoles = {
   permanentlyBanned: '1272168536097165383',
   wcRegisteredRole: '1237110862645559337',
   wcNationalCoachRole: '1204035266050916372',
+  steamVerified: '1301211697410867271',
 }
 
 export const serverChannels = {

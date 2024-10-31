@@ -14,7 +14,7 @@ import mongoClient from './functions/mongoClient.js';
 import { now } from './commands/now.js';
 import { timestamp } from './commands/timestamp.js';
 import { help, helpAdmin } from './commands/help.js';
-import { allPlayers, autoCompleteNation, editPlayer, player, players } from './commands/player.js';
+import { allPlayers, autoCompleteNation, player, players } from './commands/player.js';
 import { team } from './commands/team.js';
 import { editMatch, endMatch, match, matchId, matches, pastMatches, publishMatch, resetMatch, unpublishMatch } from './commands/match.js';
 import { blacklistTeam, doubleContracts, emoji, expireThings, fixNames, initCountries, managerContracts, systemTeam } from './commands/system.js';
@@ -26,7 +26,6 @@ import { freePlayer, releaseAction, renew, setContract, teamTransfer, transfer, 
 import { postAllTeams, postTeam, updateTeamPost } from './commands/postTeam.js';
 import { sleep } from './functions/helpers.js';
 import { deal, loan } from './commands/confirmations/deal.js';
-import { listDeals } from './commands/confirmations/listDeals.js';
 import { showBlacklist } from './commands/blacklist.js';
 import { emergencyOneSeasonContract, expireContracts, showExpiringContracts, showNoContracts } from './commands/contracts.js';
 import { disbandTeam, disbandTeamConfirmed } from './commands/disbandTeam.js';
@@ -140,9 +139,9 @@ function start() {
    */
   app.post('/interactions', async function (req, res) {
     // Interaction type and data
-    const { type, member, id:interaction_id, application_id, channel_id, token, data, guild_id } = req.body;
+    const { type, member, id:interaction_id, application_id, channel_id, token, data, guild_id, user } = req.body;
 
-    const callerId = member?.user?.id
+    const callerId = member?.user?.id || user?.id
 
     try {
       if (type === InteractionType.PING) {
@@ -286,7 +285,7 @@ function start() {
         }
 
         const commandOptions = {
-          name, options, member, interaction_id, application_id, channel_id, token, guild_id, callerId, res, resolved, dbClient, target_id,
+          name, options, member, interaction_id, application_id, channel_id, token, guild_id, callerId, res, resolved, dbClient, target_id, user,
         }
         //console.log(commandOptions)
 
@@ -329,10 +328,6 @@ function start() {
           
           if (name === "player") {
             return player(commandOptions)
-          }
-
-          if (name === "editplayer") {
-            return editPlayer(commandOptions)
           }
 
           if (name === "allplayers") {
@@ -509,10 +504,6 @@ function start() {
 
           if(name === "releaseplayer") {
             return releasePlayer(commandOptions)
-          }
-
-          if(name === "listdeals") {
-            return listDeals(commandOptions)
           }
 
           if(name === "showmatchday") {

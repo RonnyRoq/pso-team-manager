@@ -412,3 +412,5 @@ export const imageLeagueTableCmd = {
     choices: leagueChoices
   }]
 }
+
+export default [leagueTableCmd]

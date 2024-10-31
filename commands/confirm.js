@@ -1,27 +1,12 @@
-import { DiscordRequest, SteamRequest, SteamRequestTypes } from "../utils.js"
-import { msToTimestamp, getPlayerNick, sleep, waitingMsg, optionsToObject, updateResponse, quickResponse, addPlayerPrefix, isSteamIdIncorrect, getRegisteredRole } from "../functions/helpers.js"
+import { DiscordRequest } from "../utils.js"
+import { msToTimestamp, getPlayerNick, sleep, waitingMsg, optionsToObject, updateResponse, quickResponse, addPlayerPrefix, getRegisteredRole } from "../functions/helpers.js"
 import { globalTransferBan, globalTransferBanMessage, serverChannels, serverRoles, transferBanStatus } from "../config/psafServerConfig.js"
 import commandsRegister from "../commandsRegister.js"
 import { seasonPhases } from "./season.js"
 import { getAllNationalities } from "../functions/allCache.js"
-import { validateSnowflake } from "../functions/snowflakeConvert.js"
+import { getPSOSteamDetails, isSteamIdIncorrect } from "../functions/steamUtils.js"
 
 const twoWeeksMs = 1209600033
-
-const communityStateToText = (state) => {
-  switch(state) {
-    case 1:
-      return "Private"
-    case 2:
-      return "Friends only"
-    case 3:
-      return "Friends of Friends"
-    case 4:
-      return "Users Only"
-    case 5:
-      return "Public"
-  }
-}
 
 const summaryToText = (psoSummary) => {
   let lines = []
@@ -113,54 +98,15 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
     const nat1 = dbPlayer?.nat1 || nationality
     const nat2 = dbPlayer?.nat1 ? dbPlayer.nat2 : (extranat !== nationality ? extranat : null)
     const nat3 = dbPlayer?.nat3
-    let steamId = dbPlayer?.steam || ""
-    if(!steamId || !(steamId.includes("steamcommunity.com/profiles/") || steamId.includes("steamcommunity.com/id/"))) {
-      console.log(`New user ( ${steamId} - ${steam} ), using the steam profile entered with the command`)
-      steamId = steam
+    let steamUrl = dbPlayer?.steam || ""
+    if(!steamUrl || !(steamUrl.includes("steamcommunity.com/profiles/") || steamUrl.includes("steamcommunity.com/id/"))) {
+      console.log(`New user ( ${steamUrl} - ${steam} ), using the steam profile entered with the command`)
+      steamUrl = steam
     } else {
       console.log("Keeping the steam ID already registered")
     }
     const uniqueId = dbPlayer?.uniqueId || uniqueid
-    let psoSummary ={}
-    try {
-      let steamid
-      if(steamId.includes("steamcommunity.com/id/")) {
-        const [,vanityurl] = steamId.match(/steamcommunity.com\/id\/(\w+)\/?/)
-        const vanityResp = await SteamRequest(SteamRequestTypes.VanityUrl, {vanityurl})
-        const vanityProfile = await vanityResp.json()
-        console.log(vanityProfile)
-        if(vanityProfile?.response?.steamid) {
-          steamid = vanityProfile.response.steamid
-        }
-      } else {
-        const profileMatch = steamId.match(/.*\/(\d+)\/?/)
-        if(profileMatch !== null) {
-          steamid = profileMatch[1]
-        }
-      }
-      const playerSummaryResp = await SteamRequest(SteamRequestTypes.GetPlayerSummaries, {steamids: [steamid]})
-      const playerSummary = await playerSummaryResp.json()
-      const player = playerSummary?.response?.players?.[0]
-      if(!player) {
-        psoSummary = {
-          message: "Steam account not found."
-        }
-      } else {
-        const actualsteamId = player.steamid
-        steamId = player.profileurl
-        const communityState = communityStateToText(player.communityvisibilitystate)
-        const gamesSummaryResp = await SteamRequest(SteamRequestTypes.GetGameSummary, {steamid: actualsteamId, "appIds_filter[0]": 1583320})
-        const gamesSummary = await gamesSummaryResp.json()
-        psoSummary = gamesSummary?.response?.games?.[0] || {message: "Can't find PSO on account"}
-        psoSummary.discordCreated = validateSnowflake(callerId)
-        psoSummary.discordJoined = new Date(member.joined_at)
-        psoSummary.communityState = communityState
-        psoSummary.isPrivate = player.communityvisibilitystate == 1
-      }
-    } catch(e) {
-      console.log(e)
-    }
-
+    let psoSummary = await getPSOSteamDetails({steamUrl, playerId: callerId, member})
 
     const {flag: flag1 = ''} = allCountries.find(({name})=> name === nat1) || {}
     const {flag: flag2 = ''} = allCountries.find(({name})=> name === nat2) || {}
@@ -182,11 +128,11 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
         return `You're already registered:\r${userDetails}`
       }
     }
-    if(!steamId) {
-      console.log('no steam', steamId)
-      return 'Please enter your Steam ID. If you can\'t, please open a ticket and get your PSO Unique ID ready.'
+    if(!steamUrl) {
+      console.log('no steam', steamUrl)
+      return 'Please enter your Steam Profile address. If you can\'t, please open a ticket and have your Steam URL and PSO Unique ID ready.'
     }
-    const steamCheckFailed = isSteamIdIncorrect(steamId)
+    const steamCheckFailed = isSteamIdIncorrect(steamUrl)
     if(steamCheckFailed){
       return steamCheckFailed
     }
@@ -218,15 +164,19 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
       nat1,
       nat2,
       nat3,
-      steam: steamId,
+      steam: steamUrl,
       uniqueId,
+      steamVerified: psoSummary.validated
     }
     await players.updateOne({id: callerId}, {$set: updatedPlayer}, {upsert: true})
     const payload = {
       nick,
       roles: [...new Set([...member.roles, getRegisteredRole(guild_id)])]
     }
-    userDetails = `${flag1}${flag2}${flag3}<@${callerId}>\rSteam: ${encodeURI(steamId || '')}\rUnique ID: ${uniqueId || ''}`
+    if(psoSummary.validated) {
+      payload.roles.push(serverRoles.steamVerified)
+    }
+    userDetails = `${flag1}${flag2}${flag3}<@${callerId}>\rSteam: ${encodeURI(steamUrl || '')}\rUnique ID: ${uniqueId || ''}`
     DiscordRequest(`guilds/${guild_id}/members/${callerId}`, {
       method: 'PATCH',
       body: payload
@@ -273,9 +223,9 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
     const currentTeam = allTeams.find(({id}) => member.roles.includes(id))
     const teamToJoin = allTeams.find(({id})=> id === team)
     const deal = pendingDeal || pendingLoan
-    if(seasons < 2) {
+    /*if(seasons < 2) {
       return 'Season ending soon, you can only confirm for 2 seasons (end of this season and the one after).'
-    }
+    }*/
     if(currentTeam) {
       if(currentTeam.transferBan) { 
         return `Your team <@&${currentTeam.id}> is banned from doing exit transfers, you cannot leave it.`
@@ -591,6 +541,8 @@ export const registerCmd = {
   name: 'register',
   description: 'Register with PSAF',
   type: 1,
+  psaf: true,
+  func: register,
   options: [{
     type: 3,
     name: 'nationality',
@@ -618,6 +570,8 @@ export const releaseCmd = {
   name: 'releaseplayer',
   description: 'Release a player from your team',
   type: 1,
+  psaf: true,
+  func: releasePlayer,
   options: [{
     type: 6,
     name: 'player',

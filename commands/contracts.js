@@ -1,5 +1,5 @@
-import { serverRoles } from "../config/psafServerConfig.js"
-import { getCurrentSeason, getPlayerNick, optionsToObject, quickResponse, removePlayerPrefix, sleep, updateResponse, waitingMsg } from "../functions/helpers.js"
+import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
+import { getCurrentSeason, getPlayerNick, optionsToObject, postMessage, quickResponse, removePlayerPrefix, sleep, updateDiscordPlayer, updateResponse, waitingMsg } from "../functions/helpers.js"
 import { getAllPlayers } from "../functions/playersCache.js"
 import { DiscordRequest } from "../utils.js"
 
@@ -151,6 +151,26 @@ export const expireContracts = async ({dbClient, interaction_id, token, guild_id
   await updateResponse({application_id, token, content: 'done'})
 }
 
+export const setCaptain = async ({interaction_id, token, guild_id, application_id, callerId, options, dbClient}) => {
+  const {player, iscaptain} = optionsToObject(options)
+  await waitingMsg({interaction_id, token})
+  const discPlayerResp = await DiscordRequest(`guilds/${guild_id}/members/${player}`)
+  const discPlayer = await discPlayerResp.json()
+  const body = {
+    roles: iscaptain ? [...new Set([...discPlayer.roles, serverRoles.clubManagerRole])] : [...new Set([...discPlayer.roles.filter(role=> role !== serverRoles.clubManagerRole)])]
+  }
+  const content = await dbClient(async({players, contracts})=> {
+    await Promise.all([
+      contracts.updateOne({endedAt:null, playerId: player}, {$set: {iscaptain}}),
+      players.updateOne({id: player}, {$set: {iscaptain}}),
+      updateDiscordPlayer(guild_id, player, body)
+    ])
+    return `<@${player}> has been ${iscaptain ? 'set as a' : 'removed as a'} captain. *(from <@${callerId}>)*`
+  })
+  await postMessage({channel_id: serverChannels.botActivityLogsChannelId, content})
+  return updateResponse({application_id, token, content})
+}
+
 export const showNoContractsCmd = {
   name: 'shownocontracts',
   description: 'Show players in a team without a contract',
@@ -178,3 +198,22 @@ export const emergencyOneSeasonContractCmd = {
   description: 'DEBUG, DO NOT TOUCH WITH SHINSH\'S PERMISSION',
   type: 1
 }
+
+const setCaptainCmd = {
+  name: 'setcaptain',
+  description: 'Set a player as a captain of a team',
+  type: 1,
+  psaf: true,
+  func: setCaptain,
+  options: [{
+    name: 'player',
+    description: 'Player to change role',
+    type: 6,
+  },{
+    name: 'iscaptain',
+    description: 'Set as captain or remove from captain?',
+    type: 5,
+  }]
+}
+
+export default [setCaptainCmd]

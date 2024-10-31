@@ -3,12 +3,13 @@ import {fileURLToPath} from 'url';
 import { InteractionResponseType } from "discord-interactions"
 import download from "image-downloader"
 import { DiscordRequest } from "../utils.js"
-import { getPlayerNick, msToTimestamp, optionsToObject, sleep, updateResponse, waitingMsg, isMemberStaff, postMessage } from "../functions/helpers.js"
+import { getPlayerNick, msToTimestamp, optionsToObject, sleep, updateResponse, waitingMsg, isMemberStaff, postMessage, displayTeamName, updateDiscordPlayer } from "../functions/helpers.js"
 import { getAllPlayers } from "../functions/playersCache.js"
 import { serverRoles } from "../config/psafServerConfig.js"
 import { seasonPhases } from "./season.js"
 import { getAllCountries } from "../functions/countriesCache.js"
 import { getAllNationalities } from '../functions/allCache.js';
+import { getPSOSteamDetails, getSteamIdFromSteamUrl } from '../functions/steamUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,9 +34,46 @@ export const playerUserCmd = async ({target_id, interaction_id, callerId, guild_
   return updateResponse({application_id, token, content})
 }
 
-const innerPlayer = async ({playerId, guild_id, member, dbClient}) => { 
+const showPlayer = (discPlayer={}, dbPlayer, allNationalities, isStaff, allTeams, team, inGuild, playerContracts) => {
+  const playerId = discPlayer.user?.id
+  let response = `<@${playerId}> - ${displayTeamName(inGuild, team, allTeams)}\r`
+  if(dbPlayer) {
+    if(dbPlayer.ingamename) {
+      response+= `In game name: ${dbPlayer.ingamename}\r`
+    }
+    const country = allNationalities.find(country => country.name === dbPlayer.nat1)
+    const country2 = allNationalities.find(country => country.name === dbPlayer.nat2)
+    const country3 = allNationalities.find(country => country.name === dbPlayer.nat3)
+    if(country){
+      response += `${country.flag} ${discPlayer.roles.includes(nationalTeamPlayerRole) ? 'International': ''}${country2? `, ${country2.flag}`: ''}${country3? `, ${country3.flag}`: ''}\r`
+    }
+    if(isStaff) {
+      response += `Steam: ${dbPlayer.steam || 'Not saved'}\r`
+      response += `Unique ID: ${dbPlayer.uniqueId || 'Not saved'}\r`
+    }
+    if(dbPlayer.desc) {
+      response += `Description: *${dbPlayer.desc}*\r`
+    }
+    if(playerContracts.length > 0){
+      response += 'Known contracts:\r'
+      const contractsList = playerContracts.sort((a, b)=> b.at - a.at).map(({team, at, isLoan, phase, endedAt, until})=> `${displayTeamName(inGuild, team, allTeams)} from: <t:${msToTimestamp(at)}:F> ${endedAt ? `to: <t:${msToTimestamp(endedAt)}:F>`: (discPlayer.roles.includes(serverRoles.clubManagerRole) ? ' - :crown: Manager' : (isLoan ? `LOAN until season ${until}, beginning of ${seasonPhases[phase].desc}`: `until end of season ${until-1}`))}`)
+      response += contractsList.join('\r')
+    }
+    if(dbPlayer.profilePicture && isStaff) {
+      response += `\rhttps://pso.shinmugen.net/${dbPlayer.profilePicture}`
+    }
+    response += `\rhttps://psafdb.com/players/${playerId}`
+  } else {
+    response += `\rNot found in DB`
+  }
+  return response
+}
+
+const innerPlayer = async ({playerId, guild_id, member, dbClient}) => {
+  const inGuild = !!guild_id
   const allPlayers = await getAllPlayers(guild_id)
   const discPlayer = allPlayers.find(player=>player.user.id === playerId)
+  if(!discPlayer) return `Cannot find <@${playerId}> in PSAF`
   const name = getPlayerNick(discPlayer)
   return dbClient(async ({players, teams, contracts})=> {
     let response = name
@@ -44,7 +82,7 @@ const innerPlayer = async ({playerId, guild_id, member, dbClient}) => {
     const allTeamIds = allTeams.map(({id})=> id)
     const playerContracts = await contracts.find({playerId}).toArray()
     const team = discPlayer.roles.find(role => allTeamIds.includes(role))
-    response = `<@${playerId}> - ${team ? `<@&${team}>` : 'Free Agent'}\r`
+    response = `<@${playerId}> - ${displayTeamName(inGuild, team, allTeams)}\r`
     const allNationalities = await getAllNationalities()
     if(dbPlayer) {
       const isStaff = isMemberStaff(member)
@@ -66,7 +104,7 @@ const innerPlayer = async ({playerId, guild_id, member, dbClient}) => {
       }
       if(playerContracts.length > 0){
         response += 'Known contracts:\r'
-        const contractsList = playerContracts.sort((a, b)=> b.at - a.at).map(({team, at, isLoan, phase, endedAt, until})=> `<@&${team}> from: <t:${msToTimestamp(at)}:F> ${endedAt ? `to: <t:${msToTimestamp(endedAt)}:F>`: (discPlayer.roles.includes(serverRoles.clubManagerRole) ? ' - :crown: Manager' : (isLoan ? `LOAN until season ${until}, beginning of ${seasonPhases[phase].desc}`: `until end of season ${until-1}`))}`)
+        const contractsList = playerContracts.sort((a, b)=> b.at - a.at).map(({team, at, isLoan, phase, endedAt, until})=> `${displayTeamName(inGuild, team, allTeams)} from: <t:${msToTimestamp(at)}:F> ${endedAt ? `to: <t:${msToTimestamp(endedAt)}:F>`: (discPlayer.roles.includes(serverRoles.clubManagerRole) ? ' - :crown: Manager' : (isLoan ? `LOAN until season ${until}, beginning of ${seasonPhases[phase].desc}`: `until end of season ${until-1}`))}`)
         response += contractsList.join('\r')
       }
       if(dbPlayer.profilePicture && isStaff) {
@@ -79,11 +117,15 @@ const innerPlayer = async ({playerId, guild_id, member, dbClient}) => {
 }
 
 export const editPlayer = async ({options=[], member, callerId, resolved, interaction_id, guild_id, application_id, token, dbClient}) => {
-  const {player = callerId, desc, steam, uniqueid, ingamename, picture} = optionsToObject(options)
+  await waitingMsg({interaction_id, token})
+  return editPlayerDetails({options, member, callerId, resolved, guild_id, application_id, token, dbClient})
+}
+
+export const editPlayerDetails = async ({options=[], member, callerId, resolved, guild_id, application_id, token, dbClient}) => {
+  const {player = callerId, desc, uniqueid, ingamename, picture} = optionsToObject(options)
   const nat1 = undefined
   const nat2 = undefined
   const nat3 = undefined
-  await waitingMsg({interaction_id, token})
   let profilePicture
   if(picture) {
     const image = resolved?.attachments?.[picture]?.proxy_url
@@ -124,7 +166,6 @@ export const editPlayer = async ({options=[], member, callerId, resolved, intera
       nat2: nat2 || dbPlayer.nat2,
       nat3: nat3 || dbPlayer.nat3,
       desc: desc || dbPlayer.desc,
-      steam: steam || dbPlayer.steam,
       uniqueId: uniqueid || dbPlayer.uniqueId,
       ingamename: ingamename || dbPlayer.ingamename,
       profilePicture: profilePicture || dbPlayer.profilePicture,
@@ -159,8 +200,11 @@ export const editPlayer = async ({options=[], member, callerId, resolved, intera
 }
 
 export const updatePlayerPicture = async ({options=[], callerId, resolved, interaction_id, guild_id, application_id, token, dbClient}) => {
-  const {player = callerId, picture} = optionsToObject(options)
   await waitingMsg({interaction_id, token})
+  return editPlayerPicture({options, callerId, resolved, interaction_id, guild_id, application_id, token, dbClient})
+}
+const editPlayerPicture = async ({options=[], callerId, resolved, guild_id, application_id, token, dbClient}) => {
+  const {player = callerId, picture} = optionsToObject(options)
   
   let profilePicture
   if(picture) {
@@ -206,6 +250,42 @@ export const updatePlayerPicture = async ({options=[], callerId, resolved, inter
     
     return updateResponse({application_id, token, content: response})
   })
+}
+
+const editSteamUrl = async ({options=[], callerId, guild_id, member, application_id, token, dbClient}) => {
+  const {player = callerId, steamurl} = optionsToObject(options)
+  const inGuild = !!guild_id
+  const playerResp = await DiscordRequest(`/guilds/${guild_id}/members/${player}`, { method: 'GET' })
+  const discPlayer = await playerResp.json()
+  const steamId = await getSteamIdFromSteamUrl(steamurl)
+  if(!steamId) {
+    return updateResponse({application_id, token, content: `Nothing edited, ${steamurl} is not a valid Steam URL`})
+  }
+  const psoSummary = await getPSOSteamDetails({steamUrl: steamurl, playerId:player, member: discPlayer})
+  if(!psoSummary.validated) {
+    return updateResponse({application_id, token, content: `PSO not found on ${steamurl}, not saving.`})
+  }
+  const content = await dbClient(async ({players, teams, contracts})=> {
+    const allTeams = await teams.find({active:true}).toArray()
+    const allTeamIds = allTeams.map(({id})=> id)
+    const dbPlayer = await players.findOne({id: player}) || {}
+    const pastSteams = dbPlayer.pastSteams || []
+    pastSteams.push({steamId: dbPlayer.steamId, steam: dbPlayer.steam, usedUntil: Date.now()})
+    await players.updateOne({id: player}, {$set:{
+      pastSteams, steamId: steamId, steam: steamurl
+    }}, {upsert: true})
+    const updatedPlayer = await players.findOne({id: player}) || {}
+    const team = discPlayer.roles.find(role => allTeamIds.includes(role))
+    const discResponse = await updateDiscordPlayer(guild_id, player, {
+      roles: [...new Set([...discPlayer.roles, serverRoles.steamVerified])]
+    })
+    const updatedDiscPlayer = await discResponse.json()
+    const playerContracts = await contracts.find({player}).toArray()
+    const allNationalities = await getAllNationalities()
+    const isStaff = isMemberStaff(member)
+    return showPlayer(updatedDiscPlayer, updatedPlayer, allNationalities, isStaff, allTeams, team, inGuild, playerContracts)
+  })
+  return updateResponse({application_id, token, content})
 }
 
 export const getPlayersList = async (totalPlayers, teamToList, displayCountries, players, contracts) => {
@@ -356,55 +436,92 @@ export const autoCompleteNation = async (currentOption, dbClient, res) => {
   })
 }
 
-export const editPlayerCmd = {
-  name: 'editplayer',
-  description: 'Edit player details',
-  type: 1,
+const updatePlayer = async ({interaction_id, token, callerId, options, ...rest}) => {
+  const subCommand = options[0]
+  await waitingMsg({interaction_id, token})
+  if(subCommands[subCommand?.name]) {
+    return subCommands[subCommand?.name]({...rest, callerId, token, options: subCommand.options})
+  }
+}
+
+const subCommands = {
+  'details': editPlayerDetails,
+  'picture': editPlayerPicture,
+  'steam': editSteamUrl,
+}
+
+
+const updatePlayerCmd = {
+  name: 'updateplayer',
+  description: 'Update a player',
+  psaf: true,
+  func: updatePlayer,
   options: [{
-    type: 6,
-    name: 'player',
-    description: 'Player',
-    required: true,
+    name: 'details',
+    description: 'Edit player details',
+    type: 1,
+    options: [{
+      type: 6,
+      name: 'player',
+      description: 'Player',
+      required: true,
+    },{
+      type: 3,
+      name: 'desc',
+      description: 'Player\'s description',
+    }, {
+      type: 3,
+      name: 'uniqueid',
+      description: 'PSO\'s unique ID'
+    }, {
+      type: 3,
+      name: 'ingamename',
+      description: 'In Game name'
+    }, {
+      type: 11,
+      name: 'picture',
+      description: 'Profile picture for cards'
+    }]
   },{
-    type: 3,
-    name: 'desc',
-    description: 'Player\'s description',
-  }, {
-    type: 3,
-    name: 'steam',
-    description: 'Steam Account'
-  }, {
-    type: 3,
-    name: 'uniqueid',
-    description: 'PSO\'s unique ID'
-  }, {
-    type: 3,
-    name: 'ingamename',
-    description: 'In Game name'
-  }, {
-    type: 11,
     name: 'picture',
-    description: 'Profile picture for cards'
+    description: 'Update a player\'s picture',
+    type: 1,
+    options: [{
+      type: 6,
+      name: 'player',
+      description: 'Player',
+      required: true,
+  }, {
+      type: 11,
+      name: 'picture',
+      description: 'Profile picture for cards',
+      required: true
+    }]
+  },{
+    name: 'steam',
+    description: 'Update a player\'s steam account',
+    type: 1,
+    options: [{
+      type: 6,
+      name: 'player',
+      description: 'Player',
+      required: true,
+    },{
+      name: 'steamurl',
+      description: 'Steam profile URL',
+      required: true,
+      type: 3,
+    }]
   }]
 }
 
-export const updatePlayerPictureCmd = {
-  name: 'playerpicture',
-  description: 'Update a player\'s picture',
+const playerBot = {
+  name: "myprofile",
+  description: "Show your PSAF Profile",
   type: 1,
-  psaf: true,
-  func: updatePlayerPicture,
-  options: [{
-    type: 6,
-    name: 'player',
-    description: 'Player',
-    required: true,
- }, {
-    type: 11,
-    name: 'picture',
-    description: 'Profile picture for cards',
-    required: true
-  }]
+  contexts: [1],
+  app: true,
+  func: player
 }
 
 const playerUser = {
@@ -414,4 +531,4 @@ const playerUser = {
   func: playerUserCmd
 }
 
-export default [updatePlayerPictureCmd, playerUser]
+export default [playerUser, playerBot, updatePlayerCmd]

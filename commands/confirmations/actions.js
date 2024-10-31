@@ -180,7 +180,7 @@ export const approveLoanAction = async ({member, application_id, interaction_id,
 
 export const finishLoanRequest = async ({member, channel_id, application_id, interaction_id, token, dbClient, custom_id, callerId}) => {
   await waitingMsg({interaction_id, token})
-  const [, player, phase] = custom_id.split('_')
+  const [, player, season, phase] = custom_id.split('_')
   await dbClient(async ({pendingLoans, teams, seasonsCollect})=> {
     const pendingLoansPlayer = await pendingLoans.find({playerId: player, approved: null}).toArray()
     const seasonObj = await seasonsCollect.findOne({endedAt: null})
@@ -191,7 +191,7 @@ export const finishLoanRequest = async ({member, channel_id, application_id, int
     if(seasonObj.phaseStartedAt + (twoWeeksMs/2) < Date.now()) {
       currentPhaseIndex = (currentPhaseIndex+1) % phasesCount
     }
-    const targetSeason = (phase <= currentPhaseIndex) ? seasonObj.season+1 : seasonObj.season
+    const targetSeason = season ? season : ((phase <= currentPhaseIndex) ? seasonObj.season+1 : seasonObj.season)
     await pendingLoans.updateOne({_id: pendingLoan._id}, {$set: {until: targetSeason, phase}})
     const loanRequest = {
       ...pendingLoan,

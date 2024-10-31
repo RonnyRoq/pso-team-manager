@@ -1,4 +1,3 @@
-import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { displayTeam, optionsToObject, postMessage, updateResponse, waitingMsg } from "../functions/helpers.js"
 import { getAllPlayers } from "../functions/playersCache.js"
 import { getPlayersList } from "./player.js"
@@ -27,15 +26,7 @@ export const postTeam = async ({guild_id, interaction_id, token, application_id,
 }
 
 export const postAllTeams = async ({guild_id, application_id, dbClient, interaction_id, token}) => {
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        flags: InteractionResponseFlags.EPHEMERAL
-      }
-    }
-  })
+  await waitingMsg({interaction_id, token})
   const allPlayers = await getAllPlayers(guild_id)
   await dbClient(async ({teams, players, contracts})=>{
     const [dbTeams, allNations, allContracts] = await Promise.all([
@@ -67,13 +58,7 @@ export const postAllTeams = async ({guild_id, application_id, dbClient, interact
       }
     }
   })
-  return await DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-    method: 'PATCH',
-    body: {
-      content: 'done',
-      flags: 1 << 6
-    }
-  })
+  return updateResponse({application_id, token, content: 'done'})
 }
 
 export const innerUpdateTeam = async ({guild_id, team, dbClient}) => {

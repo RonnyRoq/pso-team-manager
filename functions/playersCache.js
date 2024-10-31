@@ -4,7 +4,7 @@ import { sleep } from "./helpers.js";
 
 const playersCache = new NodeCache({ stdTTL: 60, checkperiod: 120, useClones: false })
 
-export const getAllPlayers = async (guild_id) => {
+export const getAllPlayers = async (guild_id = process.env.GUILD_ID) => {
   let allPlayers = playersCache.get(guild_id)
   if (allPlayers) {
     while (allPlayers.length === 0) {

@@ -1,8 +1,15 @@
 import { InteractionResponseFlags } from "discord-interactions"
 import { DiscordRequest } from "../../utils.js"
 import { msToTimestamp, quickResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { getAllPlayers } from "../../functions/playersCache.js"
 
 const clubManagerRole = '1072620773434462318'
+
+export const botChatListDeals = async({dbClient, interaction_id, token, application_id, user}) => {
+  const allPlayers = await getAllPlayers(process.env.GUILD_ID)
+  const member = allPlayers.find(discPlayer => discPlayer?.user?.id === user.id)
+  return listDeals({dbClient, interaction_id, token, application_id, member})
+}
 
 export const listDeals = async({dbClient, interaction_id, token, application_id, member}) => {
   if(!member.roles.includes(clubManagerRole)) {
@@ -77,5 +84,18 @@ export const listDeals = async({dbClient, interaction_id, token, application_id,
 export const listDealsCmd = {
   name: 'listdeals',
   description: 'List my deals',
-  type: 1
+  type: 1,
+  psaf: true,
+  func: listDeals
 }
+
+export const botChatListDealsCmd = {
+  name: 'mydeals',
+  description: 'List my deals',
+  type: 1,
+  contexts: [1],
+  app: true,
+  func: botChatListDeals
+}
+
+export default [listDealsCmd, botChatListDealsCmd]

@@ -2,9 +2,10 @@ import { InteractionResponseFlags, InteractionResponseType } from "discord-inter
 import { DiscordRequest, SteamRequest, SteamRequestTypes } from "../utils.js"
 import { countries } from '../config/countriesConfig.js'
 import { getAllPlayers } from "../functions/playersCache.js"
-import { addPlayerPrefix, batchesFromArray, getCurrentSeason, getPlayerNick, getRegisteredRole, isSteamIdIncorrect, optionsToObject, postMessage, quickResponse, removePlayerPrefix, silentResponse, updateResponse, waitingMsg } from "../functions/helpers.js"
+import { addPlayerPrefix, batchesFromArray, getCurrentSeason, getPlayerNick, getRegisteredRole, optionsToObject, postMessage, quickResponse, removePlayerPrefix, silentResponse, updateResponse, waitingMsg } from "../functions/helpers.js"
 import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
 import { allLeagues } from "../config/leagueData.js"
+import { isSteamIdIncorrect } from "../functions/steamUtils.js"
 
 export const managerContracts = async ({interaction_id, token, application_id, dbClient, guild_id}) => {
   await waitingMsg({interaction_id, token})
@@ -79,7 +80,7 @@ export const innerFixNames = async ({guild_id, dbClient}) => {
       players.find({$or: [{updateTime:null}, {updateTime: {$gte: expiryUpdate}}]}, {limit: 10}).toArray(),
       teams.find({}).toArray()
     ])
-    const playerContracts = await contracts.find({until: null, playerId: {$in: pagePlayers.map(player=>player.id)}}, {sort: {id: -1}})
+    /*const playerContracts =*/ await contracts.find({until: null, playerId: {$in: pagePlayers.map(player=>player.id)}}, {sort: {id: -1}})
     for await (const dbPlayer of pagePlayers) {
       const player = allPlayers.find(player=> player.user.id === dbPlayer.id)
       let nick = dbPlayer.nick
@@ -338,10 +339,13 @@ export const internalValidateSteamId = async ({dbClient}) => (
       const profiles = await profilesResp.json()
       const playersSteam = profiles.response.players
       const playerSteamIds = playersSteam.map(player=> player.steamid)
+      const unrecognisedPlayers = validSteamIdPlayers.filter(player => !playerSteamIds.includes(player.steamId))
+      invalidSteamIdPlayers.push(...unrecognisedPlayers)
       const batchToUpdate = validSteamIdPlayers.filter(player => playerSteamIds.includes(player.steamId)).map(player => {
         const steamProfile = playersSteam.find(steamPlayer => steamPlayer.steamid === player.steamId)
         return {
         ...player,
+        steam: steamProfile.profileurl,
         ingamename: steamProfile.personaname,
         loccountrycode: steamProfile.loccountrycode,
         steamCreated: steamProfile.timecreated,
@@ -473,7 +477,7 @@ export const updateSteamNames = async ({dbClient}) => (
     
     console.log(nameChanges)
     //todo: handle name changes in multiple posts
-    await postMessage({channel_id: serverChannels.nameChangesChannelId, content:nameChanges.join('\r').substring(0, 1999)})
+    await postMessage({channel_id: serverChannels.nameChangesChannelId, content:nameChanges.join('\r')})
   })
 )
 

@@ -63,7 +63,7 @@ export const team = async ({interaction_id, application_id, token, guild_id, opt
     "title": "Matches",
     "description": matchEmbed,
   }))
-  await updateResponse({application_id, token, content: response, embeds})
+  await updateResponse({application_id, token, content: response.substring(0,1999), embeds})
   let i = 3
   while (i<embeds.length) {
     const currentEmbed = embeds.slice(i, i+3)

@@ -39,16 +39,20 @@ export const updateMatchMessage = async ({match, channel, post, content}) => {
 
 export const formatMatch = async (league, homeTeam, awayTeam, match) => {
   let response = `<${league.emoji}> **| ${league.name} ${match.matchday}** - ${match.dateTimestamp ? `<t:${match.dateTimestamp}:F>` : 'No date'}`
-  if(league.isInternational) {
-    const homeFlag = await getFlags(homeTeam)
-    const awayFlag = await getFlags(awayTeam)
-    response += `\r> ${homeFlag} **${homeTeam.name} :vs: ${awayTeam.name}** ${awayFlag}`
+  let extra = `\rID: ${match?._id}`
+  if(homeTeam && awayTeam) {
+    if(league.isInternational) {
+      const homeFlag = await getFlags(homeTeam)
+      const awayFlag = await getFlags(awayTeam)
+      response += `\r> ${homeFlag} **${homeTeam.name} :vs: ${awayTeam.name}** ${awayFlag}`
+    } else {
+      response += `\r> ${homeTeam.flag} ${homeTeam.disqualified || !homeTeam.active ?':no_entry_sign: ':''}${homeTeam.emoji} <@&${homeTeam.id}> :vs: <@&${awayTeam.id}> ${awayTeam.emoji}${awayTeam.disqualified || !awayTeam.active ?':no_entry_sign: ':''} ${awayTeam.flag}`
+    }
+    response += `\r> ${match.homeScore} : ${match.awayScore}${match.isFF ? ' **ff**': ''}`
   } else {
-    response += `\r> ${homeTeam.flag} ${homeTeam.disqualified || !homeTeam.active ?':no_entry_sign: ':''}${homeTeam.emoji} <@&${homeTeam.id}> :vs: <@&${awayTeam.id}> ${awayTeam.emoji}${awayTeam.disqualified || !awayTeam.active ?':no_entry_sign: ':''} ${awayTeam.flag}`
+    extra += `\rERROR: please report this in a ticket with the time of the request and the match ID.`
   }
-  response += `\r> ${match.homeScore} : ${match.awayScore}${match.isFF ? ' **ff**': ''}`
-
-  let extra = `\rID: ${match._id}`
+  
   if(match.refs) {
     const refsArray = match.refs.split(',')
     extra += '\r'+refsArray.map(ref=> `<@${ref}>`).join(', ')

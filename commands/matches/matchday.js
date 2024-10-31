@@ -104,12 +104,12 @@ export const showMatchDay = async ({interaction_id, token, application_id, dbCli
   await updateResponse({application_id, token, content: response.substring(0, 1999)})
 }
 
-export const showMatchDayInternal = async({dbClient, league, matchday})=> {
+export const showMatchDayInternal = async({dbClient, league, matchday, season})=> {
   return dbClient(async ({teams, matches, matchDays, playerStats, lineups, leagueConfig})=> {
-    const season = getFastCurrentSeason()
+    const seasonRequested = Number(season) || getFastCurrentSeason()
     const [matchDay, matchDayMatches, leagueObj] = await Promise.all([
-      matchDays.findOne({league, matchday, season}),
-      matches.find({league, matchday, season}).toArray(),
+      matchDays.findOne({league, matchday, season:seasonRequested}),
+      matches.find({league, matchday, season: seasonRequested}).toArray(),
       leagueConfig.findOne({value: league})
     ])
     const matchIds = matchDayMatches.map(match=> match._id)

@@ -13,6 +13,8 @@ import playerPicture from "./commands/player/playerPicture.js"
 import season from "./commands/season.js"
 import editTeams from "./commands/editTeams.js"
 import transferList from "./commands/transfers/transferList.js"
+import listDeals from "./commands/confirmations/listDeals.js"
+import contracts from "./commands/contracts.js"
 
 export default function() {
   return [
@@ -31,5 +33,7 @@ export default function() {
     ...season,
     ...editTeams,
     ...transferList,
+    ...listDeals,
+    ...contracts,
   ]
 }

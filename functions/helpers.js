@@ -125,7 +125,7 @@ export const isAdminRole = (role) => [serverRoles.presidentRole, serverRoles.eng
 export const isTopAdminRole = (role) => [serverRoles.presidentRole, serverRoles.engineerRole].includes(role)
 
 export const isMemberStaff = async (guildMember) => {
-  return (guildMember.roles.find(role => isStaffRole(role)))
+  return ((guildMember?.roles || []).find(role => isStaffRole(role)))
 }
 const supportedServers = [process.env.GUILD_ID, process.env.WC_GUILD_ID]
 
@@ -156,12 +156,6 @@ export const getNationalCaptainRole = (guild_id) => {
   throw new Error('Server unsupported')
 }
 
-export const isSteamIdIncorrect = (steamId="") => {
-  if(steamId === null || !steamId.includes("steamcommunity.com/profiles/") && !steamId.includes("steamcommunity.com/id/") ) {
-    return 'Invalid Steam ID. Please enter the URL shown when you are in your Steam profile page.'
-  }
-}
-
 export const getNationalSelectionChannel = (guild_id) => {
   if(guild_id === process.env.GUILD_ID) {
     return serverChannels.nationalSelectionsChannelId
@@ -180,7 +174,7 @@ export const sleep = (ms) => {
 
 export const getCurrentSeason = async (seasons) => (await seasons.findOne({endedAt: null}))?.season
 
-export const optionsToObject = (options) => Object.fromEntries(options.map(({name, value})=> [name, value]))
+export const optionsToObject = (options=[]) => Object.fromEntries(options.map(({name, value})=> [name, value]))
 
 export const waitingMsg = async ({interaction_id, token}) => 
   await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
@@ -208,16 +202,21 @@ export const quickResponse = async ({interaction_id, token, content, isEphemeral
 export const silentResponse = async ({interaction_id, token, content}) =>
   quickResponse({interaction_id, token, content, isEphemeral: true})
 
-export const updateResponse = async ({application_id, token, content, embeds, components}) => 
-  DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-    method: 'PATCH',
-    body: {
-      content,
-      embeds,
-      components,
-      flags: InteractionResponseFlags.EPHEMERAL
-    }
-  })
+export const updateResponse = async ({application_id, token, content, embeds, components}) => {
+  try{
+    return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
+      method: 'PATCH',
+      body: {
+        content: content.substring(0,1999),
+        embeds,
+        components,
+        flags: InteractionResponseFlags.EPHEMERAL
+      }
+    })
+  } catch(e) {
+    console.error(e)
+  }
+}
 
 export const followUpResponse = async ({application_id, token, content, embeds, components}) => 
   DiscordRequest(`/webhooks/${application_id}/${token}`, {
@@ -320,3 +319,13 @@ export const batchesFromArray = (source, size = 50) => (
     (_, i) => source.slice(i * size, i * size + size)
   )
 )
+
+export const displayTeamName = (inGuild, teamId, allTeams=[]) => (
+  teamId ? (inGuild ? `<@&${teamId}>` : allTeams.find(currentTeam=>currentTeam.id === teamId)?.name) : "Free agent"
+)
+
+export const getDiscordPlayer = (guild_id, playerId) => DiscordRequest(`guilds/${guild_id}/members/${playerId}`)
+export const updateDiscordPlayer = (guild_id, playerId, body) => DiscordRequest(`guilds/${guild_id}/members/${playerId}`, {
+  method: 'PATCH',
+  body,
+})

@@ -1,4 +1,3 @@
-import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { DiscordRequest } from "../../utils.js"
 import { optionsToObject, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { globalTransferBan, globalTransferBanMessage, serverChannels, serverRoles, transferBanStatus } from "../../config/psafServerConfig.js"
@@ -93,16 +92,15 @@ export const deal = async ({dbClient, options, guild_id, interaction_id, token, 
     
     return 'Request posted'
   })
-  return await DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-    method: 'PATCH',
-    body: {
-      content: response,
-      flags: InteractionResponseFlags.EPHEMERAL
-    }
-  })
+  return updateResponse({application_id, token, content:response})
 }
 
-const activePhase = (phase, phasesCount) => ((phase) % phasesCount)
+const activePhase = (phase, season, phasesCount) => {
+  return {
+    phase: ((phase) % phasesCount),
+    season: season + Math.floor((phase) / phasesCount)
+  }
+}
 
 export const loan = async ({interaction_id, guild_id, application_id, token, member, options, dbClient}) => {
   await waitingMsg({interaction_id, token})
@@ -130,39 +128,30 @@ export const loan = async ({interaction_id, guild_id, application_id, token, mem
     }, {upsert: true})
     const seasonObj = await seasonsCollect.findOne({endedAt: null})
     const currentSeasonPhase = seasonPhases.findIndex(({name})=> seasonObj.phase === name)
-    let currentPhaseIndex = currentSeasonPhase
+    let targetPhaseIndex = currentSeasonPhase
+    let targetSeason = seasonObj.season
     const phasesCount = seasonPhases.length
     if(seasonObj.phaseStartedAt + (twoWeeksMs) < Date.now()) {
       console.log('increasing')
-      currentPhaseIndex = (currentPhaseIndex+1) % phasesCount
+      targetSeason += Math.floor((targetPhaseIndex+1) / phasesCount)
+      targetPhaseIndex = (targetPhaseIndex+1) % phasesCount
     }
-    const options = [activePhase(currentPhaseIndex, phasesCount), activePhase(currentPhaseIndex+1, phasesCount)]
+    console.log('targetPhaseIndex', targetPhaseIndex)
+    console.log('phasesCount', phasesCount)
+    console.log(activePhase(targetPhaseIndex, targetSeason, phasesCount))
+    const options = [activePhase(targetPhaseIndex+1, targetSeason, phasesCount), activePhase(targetPhaseIndex+2, targetSeason, phasesCount)]
 
     const content = `When would <@${player}>'s loan end?`
     const components = [{
       type: 1,
-      components: options.map(option => {
-        let season = seasonObj.season
-        if(option <= currentSeasonPhase) {
-          season = seasonObj.season+1
-        }
-        return {
-          type: 2,
-          label: `Season ${season}, ${seasonPhases[option].desc}`,
-          style: 2,
-          custom_id: `loan_${player}_${option}`
-        }
-      })
+      components: options.map(option => ({
+        type: 2,
+        label: `Season ${option.season}, ${seasonPhases[option.phase].desc}`,
+        style: 2,
+        custom_id: `loan_${player}_${option.season}_${option.phase}`
+      }))
     }]
-    await DiscordRequest(`/webhooks/${application_id}/${token}`, {
-      method: 'POST',
-      body: {
-        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: InteractionResponseFlags.EPHEMERAL,
-        content,
-        components
-      }
-    })
+    await updateResponse({application_id, token, content, components})
   })
   if(message) {
     return updateResponse({application_id, token, content: message})

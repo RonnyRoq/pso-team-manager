@@ -1,5 +1,4 @@
 import express from 'express'
-import bodyParser from 'body-parser'
 //import pinoHttp from 'pino-http'
 import { getAllTeams, getTeam, getTeamAndPlayers, getTeams } from './commands/teams/getTeam.js'
 import { getPlayer, getPlayerStats, getPlayers } from './commands/player/api.js'
@@ -104,11 +103,12 @@ export const getApi = (localdev=false, dbClient={}) =>{
   })
 
   api.get('/matchday', async (req, res)=> {
-    const {matchday, league} = req.query || {}
+    console.log('/matchday', req.query)
+    const {matchday, league, season} = req.query || {}
     if(!matchday || !league) {
       return res.status(400).send({ error: { code: 400, message: "Please document a matchday and league" } });
     } else {
-      const response = await showMatchDayInternal({dbClient, league, matchday})
+      const response = await showMatchDayInternal({dbClient, league, matchday, season})
       return res.json(response)
     }
   })
