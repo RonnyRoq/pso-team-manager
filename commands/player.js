@@ -5,7 +5,7 @@ import download from "image-downloader"
 import { DiscordRequest } from "../utils.js"
 import { getPlayerNick, msToTimestamp, optionsToObject, sleep, updateResponse, waitingMsg, isMemberStaff, postMessage, displayTeamName, updateDiscordPlayer } from "../functions/helpers.js"
 import { getAllPlayers } from "../functions/playersCache.js"
-import { serverRoles } from "../config/psafServerConfig.js"
+import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
 import { seasonPhases } from "./season.js"
 import { getAllCountries } from "../functions/countriesCache.js"
 import { getAllNationalities } from '../functions/allCache.js';
@@ -283,7 +283,10 @@ const editSteamUrl = async ({options=[], callerId, guild_id, member, application
     const playerContracts = await contracts.find({player}).toArray()
     const allNationalities = await getAllNationalities()
     const isStaff = isMemberStaff(member)
-    return showPlayer(updatedDiscPlayer, updatedPlayer, allNationalities, isStaff, allTeams, team, inGuild, playerContracts)
+    await postMessage({channel_id: serverChannels.registrationsChannelId, content: `Updated Player <@${player}> - Previously id: ${dbPlayer.steamId} url: ${dbPlayer.steam}\r*(By <@${callerId}>)*`})
+    const playerData = showPlayer(updatedDiscPlayer, updatedPlayer, allNationalities, isStaff, allTeams, team, inGuild, playerContracts)
+    await postMessage({channel_id:serverChannels.registrationsChannelId, content:playerData})
+    return playerData
   })
   return updateResponse({application_id, token, content})
 }

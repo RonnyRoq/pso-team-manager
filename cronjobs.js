@@ -6,7 +6,7 @@ import { DiscordRequest } from "./utils.js"
 import { serverChannels, serverRoles } from "./config/psafServerConfig.js"
 import { updateLeagueTable } from "./commands/league/leagueTable.js"
 import { autoPublish } from "./commands/matches/matchday.js"
-import { detectSteamAlts, internalUpdateRegister, internalValidateSteamId, updateSteamNames } from "./commands/system.js"
+import { checkForPSO, detectSteamAlts, internalUpdateRegister, internalValidateSteamId, updateSteamNames } from "./commands/system.js"
 import { updateSelectionPost } from "./commands/nationalTeams/nationalTeamManagement.js"
 import { updateCacheCurrentSeason } from "./commands/season.js"
 import { postMessage } from "./functions/helpers.js"
@@ -136,6 +136,11 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
       await dbClient(async ({seasonsCollect}) => {
         await updateCacheCurrentSeason(seasonsCollect)
       })
+    }
+  ],[
+    '*/10 * * * *',
+    async function() {
+      await checkForPSO({dbClient})
     }
   ]]
   cronJobs.forEach(([time, func])=> {

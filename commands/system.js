@@ -2,10 +2,10 @@ import { InteractionResponseFlags, InteractionResponseType } from "discord-inter
 import { DiscordRequest, SteamRequest, SteamRequestTypes } from "../utils.js"
 import { countries } from '../config/countriesConfig.js'
 import { getAllPlayers } from "../functions/playersCache.js"
-import { addPlayerPrefix, batchesFromArray, getCurrentSeason, getPlayerNick, getRegisteredRole, optionsToObject, postMessage, quickResponse, removePlayerPrefix, silentResponse, updateResponse, waitingMsg } from "../functions/helpers.js"
+import { addPlayerPrefix, batchesFromArray, getCurrentSeason, getPlayerNick, getRegisteredRole, optionsToObject, postMessage, quickResponse, removePlayerPrefix, silentResponse, updateDiscordPlayer, updateResponse, waitingMsg } from "../functions/helpers.js"
 import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
 import { allLeagues } from "../config/leagueData.js"
-import { isSteamIdIncorrect } from "../functions/steamUtils.js"
+import { getPSOSteamDetails, isSteamIdIncorrect } from "../functions/steamUtils.js"
 
 export const managerContracts = async ({interaction_id, token, application_id, dbClient, guild_id}) => {
   await waitingMsg({interaction_id, token})
@@ -204,6 +204,38 @@ export const doubleContracts = async ({interaction_id, token, application_id, db
     }
   })
 }*/
+
+const PSOBATCHSIZE = 15
+
+export const checkForPSO = async ({dbClient}) => {
+  const allPlayers = await getAllPlayers(process.env.GUILD_ID)
+  const batchToProcess = []
+  const playersList = allPlayers.filter(player=>(!player.roles.includes(serverRoles.steamVerified)) && player.roles.includes(serverRoles.registeredRole)).sort(()=> Math.random()-0.5)
+  let i = 0
+  while (batchToProcess.length < PSOBATCHSIZE && i<allPlayers.length) {
+    const player = playersList[i]
+    if((!player.roles.includes(serverRoles.steamVerified)) && player.roles.includes(serverRoles.registeredRole)) {
+      batchToProcess.push(player)
+    }
+    i++
+  }
+  console.log(batchToProcess)
+  await dbClient(async ({players})=> {
+    const playerIds = batchToProcess.map(player=> player.user.id)
+    const dbPlayers = await players.find({id: {$in: playerIds}}).toArray()
+    for await(const discPlayer of batchToProcess) {
+      const dbPlayer = dbPlayers.find(dbPlayer=> dbPlayer.id === discPlayer.user.id)
+      const psoSummary = await getPSOSteamDetails({steamUrl: dbPlayer.steam, playerId: dbPlayer.id, member: discPlayer})
+      if(psoSummary.validated) {
+        const body = {
+          roles: [...new Set([...discPlayer.roles, serverRoles.steamVerified])]
+        };
+        await postMessage({channel_id: serverChannels.registrationsChannelId, content: `Validated Player <@${dbPlayer.id}> - id: ${dbPlayer.steamId} url: ${dbPlayer.steam} PSO hours: ${(psoSummary.playtime_forever || 0)/60}`})
+        await updateDiscordPlayer(process.env.GUILD_ID, discPlayer.user.id, body)
+      }
+    }
+  })
+}
 
 export const blacklistTeam = async ({interaction_id, application_id, token, guild_id, member, options, dbClient}) => {
   await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
@@ -520,15 +552,6 @@ export const internalUpdateRegister = async ({dryrun, guild_id, dbClient}) => {
   return content
 }
 
-const imgUploadTest = async ({interaction_id, token, channel_id, options, resolved}) => {
-  console.log(options)
-  const {img} = optionsToObject(options)
-  console.log(img)
-  const image = resolved?.attachments?.[img]?.url
-  await postMessage({channel_id, content: `Posting image \r${image}`, attachments: [{id:img}]})
-  return quickResponse({interaction_id, token, content:'done', isEphemeral: true})
-}
-
 export const updateRegister = async ({application_id, token, guild_id, dbClient, options}) => {
   const {dryrun} = optionsToObject(options)
   const content = await internalUpdateRegister({dryrun, guild_id, dbClient})
@@ -635,16 +658,4 @@ const systemCmd = {
   }]
 }
 
-const imgUploadTestCmd = {
-  name: 'uploadtest',
-  description: 'Test',
-  psaf: true,
-  func: imgUploadTest,
-  options: [{
-    type: 11,
-    name: 'img',
-    description: 'Image to upload',
-  }]
-}
-
-export default [systemCmd, imgUploadTestCmd, updateLeaguesCmd]
+export default [systemCmd, updateLeaguesCmd]

@@ -279,10 +279,6 @@ function start() {
         //const optionsObj = optionsToObject(options || [])
         console.log(`command ${name}`)
         console.log(options)
-        if(name === "uploadtest") {
-          console.log(req)
-          console.log(JSON.stringify(req.body))
-        }
 
         const commandOptions = {
           name, options, member, interaction_id, application_id, channel_id, token, guild_id, callerId, res, resolved, dbClient, target_id, user,

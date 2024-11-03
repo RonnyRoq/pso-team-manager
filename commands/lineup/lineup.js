@@ -228,7 +228,7 @@ const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam,
         nationalTeams.find({active: true}).toArray(),
         nationalContracts.findOne({season, playerId: callerId}),
         getPlayerTeam(member, teams),
-        teams.find({active: true}).toArray()
+        teams.find({}).toArray()
       ])
       const memberSelection = await nationalSelections.find(selection=> selection?.shortName=== selfNationalContract?.selection)
       const teamIds = [memberTeam?.id, memberSelection?.shortname].filter(item=> item)
