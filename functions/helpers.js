@@ -18,11 +18,11 @@ export const timestampToMs = (timestamp) => {
 export const optionToTimezoneStr = (option = 0) => {
   switch (option) {
     case 1:
-      return "CEST";
+      return "CET";
     case 2:
       return "EEST";
     default:
-      return "BST";
+      return "GMT";
   }
 }
 
@@ -124,6 +124,10 @@ export const isStaffRole = (role) => [serverRoles.presidentRole, serverRoles.eng
 export const isAdminRole = (role) => [serverRoles.presidentRole, serverRoles.engineerRole, serverRoles.adminRole].includes(role)
 export const isTopAdminRole = (role) => [serverRoles.presidentRole, serverRoles.engineerRole].includes(role)
 
+
+export const isMemberAdmin = async (guildMember) => {
+  return ((guildMember?.roles || []).find(role => isAdminRole(role)))
+}
 export const isMemberStaff = async (guildMember) => {
   return ((guildMember?.roles || []).find(role => isStaffRole(role)))
 }
@@ -296,6 +300,22 @@ export const deleteMessage = async ({channel_id, messageId}) =>
   DiscordRequest(`channels/${channel_id}/messages/${messageId}`, {
     method: 'DELETE',
   })
+
+export const sendDM = async ({playerId, content}) => {
+  const userChannelResp = await DiscordRequest('/users/@me/channels', {
+    method: 'POST',
+    body:{
+      recipient_id: playerId
+    }
+  })
+  const userChannel = await userChannelResp.json()
+  await DiscordRequest(`/channels/${userChannel.id}/messages`, {
+    method: 'POST',
+    body: {
+      content
+    }
+  })
+}
 //stolen from stackoverflow
 export const isNumeric = (str) => {
   if (typeof str != "string") return false // we only process strings!  

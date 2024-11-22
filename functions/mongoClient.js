@@ -32,6 +32,7 @@ const mongoClient = (client) => {
         pendingPictures: psoDb.collection("PendingPictures"),
         transferList: psoDb.collection("TransferList"),
         lft: psoDb.collection("Lft"),
+        mongoCache: psoDb.collection("MongoCache"),
       }
       return await callback(collections)
     }

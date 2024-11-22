@@ -83,7 +83,7 @@ export const team = async ({interaction_id, application_id, token, guild_id, opt
     method: 'POST',
     body: {
       type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      content,
+      content:content.substring(0, 1999),
       flags: InteractionResponseFlags.EPHEMERAL,
     }
   })
@@ -93,6 +93,8 @@ export const teamCmd = {
   name: 'team',
   description: 'List team details',
   type: 1,
+  psaf: true,
+  func: team,
   options: [{
     type: 8,
     name: 'team',
@@ -109,8 +111,4 @@ export const teamCmd = {
   }]
 }
 
-export const myTeamCmd = {
-  type: 1,
-  name: 'myteam',
-  description: 'Show my team\'s details',
-}
+export default [teamCmd]

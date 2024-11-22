@@ -105,29 +105,27 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
     } else {
       console.log("Keeping the steam ID already registered")
     }
-    const uniqueId = dbPlayer?.uniqueId || uniqueid
-    let psoSummary = await getPSOSteamDetails({steamUrl, playerId: callerId, member})
-
     const {flag: flag1 = ''} = allCountries.find(({name})=> name === nat1) || {}
     const {flag: flag2 = ''} = allCountries.find(({name})=> name === nat2) || {}
     const {flag: flag3 = ''} = allCountries.find(({name})=> name === nat3) || {}
-    let userDetails = `${flag1}${flag2}${flag3}<@${callerId}>\rSteam: ${dbPlayer?.steam}\rUnique ID: ${dbPlayer?.uniqueId}`
-    if(isPSAF) {
-      if(member.roles.includes(serverRoles.registeredRole) && dbPlayer) {
-        return `You're already registered:\r${userDetails}`
-      }
-      if(member.roles.includes(serverRoles.matchBlacklistRole) || member.roles.includes(serverRoles.permanentlyBanned)) {
-        return 'Can\'t register while blacklisted.'
-      }
-      if(!member.roles.includes(serverRoles.verifiedRole)){
-        return 'Please verify before confirming.'
-      }
+    const uniqueId = dbPlayer?.uniqueId || uniqueid
+    let userDetails = [`${flag1}${flag2}${flag3}<@${callerId}>`,
+      `Steam: ${dbPlayer?.steam}`,
+      `Unique ID: ${dbPlayer?.uniqueId}`
+      ].join('\r')
+
+    if(member.roles.includes(serverRoles.registeredRole) && dbPlayer) {
+      return `You're already registered:\r${userDetails}\rPSO Steam validated: ${dbPlayer?.steamVerified ? 'yes': dbPlayer?.steamValidation}`
     }
-    if(isWC) {
-      if(member.roles.includes(serverRoles.registeredRole) && dbPlayer) {
-        return `You're already registered:\r${userDetails}`
-      }
+    if(member.roles.includes(serverRoles.matchBlacklistRole) || member.roles.includes(serverRoles.permanentlyBanned)) {
+      return 'Can\'t register while blacklisted.'
     }
+    if(!member.roles.includes(serverRoles.verifiedRole)){
+      return 'Please verify before confirming.'
+    }
+
+    let psoSummary = await getPSOSteamDetails({steamUrl, playerId: callerId, member})
+
     if(!steamUrl) {
       console.log('no steam', steamUrl)
       return 'Please enter your Steam Profile address. If you can\'t, please open a ticket and have your Steam URL and PSO Unique ID ready.'
@@ -166,17 +164,24 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
       nat3,
       steam: steamUrl,
       uniqueId,
-      steamVerified: psoSummary.validated
+      steamVerified: psoSummary.validated,
+      steamValidation: psoSummary.message
     }
     await players.updateOne({id: callerId}, {$set: updatedPlayer}, {upsert: true})
     const payload = {
       nick,
-      roles: [...new Set([...member.roles, getRegisteredRole(guild_id)])]
+      roles: [...member.roles, getRegisteredRole(guild_id)]
     }
     if(psoSummary.validated) {
       payload.roles.push(serverRoles.steamVerified)
     }
-    userDetails = `${flag1}${flag2}${flag3}<@${callerId}>\rSteam: ${encodeURI(steamUrl || '')}\rUnique ID: ${uniqueId || ''}`
+    payload.roles = [...new Set(payload.roles)]
+    userDetails = [
+      `${flag1}${flag2}${flag3}<@${callerId}>`,
+      `Steam: ${encodeURI(steamUrl || '')}`,
+      `Unique ID: ${uniqueId || ''}`,
+      `PSO Steam validated: ${psoSummary.validated ? 'yes': psoSummary.message}`
+    ].join('\r')
     DiscordRequest(`guilds/${guild_id}/members/${callerId}`, {
       method: 'PATCH',
       body: payload

@@ -153,15 +153,29 @@ export async function DiscordRequest(endpoint, options={}) {
   return res;
 }
 
+const errorHook = "webhooks/1287703911637192705/lOCdbCD4H9qXLubpWfkSh9PFErUVbvf3S1rHknJXRrTtyhZ5vNxePm-XFeX353VWeBQJ"
+const crashHook = "webhooks/1303796695179591781/nmLz2Gz10zSSESGpyDrsmMf8Miz1dz3zuv_T-3yRGjI4uAZwiwU2PEoy4ECKFYdOEv1_"
+
+export async function logSystemCrash(content) {
+  console.log("logSystemCrash")
+  console.log(content)
+  await sendSystemHook(content, crashHook)
+}
+
+
 export async function logSystemError(content) {
   console.log("logSystemError")
+  await sendSystemHook(content, errorHook)
+}
+
+async function sendSystemHook(content, hook) {
   const url = 'https://discord.com/api/v10/'
   const headers = {
-    Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
+    //Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
     'Content-Type': 'application/json; charset=UTF-8',
-    'User-Agent': 'PSAF Team Manager',
+    //'User-Agent': 'PSAF Team Manager',
   }
-  return fetch(url+"webhooks/1287703911637192705/lOCdbCD4H9qXLubpWfkSh9PFErUVbvf3S1rHknJXRrTtyhZ5vNxePm-XFeX353VWeBQJ", {
+  return fetch(url+hook, {
     headers,
     method: 'POST',
     body: JSON.stringify({content})

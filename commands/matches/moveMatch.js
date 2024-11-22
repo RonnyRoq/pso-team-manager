@@ -144,11 +144,27 @@ export const moveMatchModalResponse = async ({interaction_id, token, callerId, m
   if(!numberRegExp.test(dateTimestamp)) {
     return quickResponse({interaction_id, token, content: `${match_time} was interpreted as <t:${dateTimestamp}:F> which is not a valid option. Try again`, isEphemeral: true})
   }
-  await dbClient(async ({moveRequest, teams, matches})=> {
+  const content = await dbClient(async ({moveRequest, teams, matches, matchDays})=> {
     const requesterTeamObj = await teams.findOne({active:true, $or: member.roles.map(id=> ({id}))})
     const requesterTeam = requesterTeamObj.id
     const matchId = new ObjectId(id)
     const match = await matches.findOne(matchId)
+    if(!match) 
+      return `Can't find the requested match`
+    const matchDay = await matchDays.findOne({season: match.season, league: match.league, matchday: match.matchday})
+    if(matchDay) {
+      let beginningOfMatchday = new Date(Number(matchDay.startDateTimestamp+"000"))
+      beginningOfMatchday.setHours(0,0,0,0)
+      let endOfMatchday = new Date(beginningOfMatchday.getTime()+oneWeekMs-1000)
+      const beginningTimestamp = msToTimestamp(beginningOfMatchday.getTime())
+      const endingTimestamp = msToTimestamp(endOfMatchday.getTime())
+      if(beginningTimestamp > dateTimestamp) {
+        return `You requested to move this match at <t:${dateTimestamp}:F> but the match day starts on <t:${beginningTimestamp}:F>`
+      }
+      if(dateTimestamp > endingTimestamp) {
+        return `You requested to move this match at <t:${dateTimestamp}:F> however the deadline to play this match is <t:${endingTimestamp}:F>`
+      }
+    }
     const destinationTeam = match.home === requesterTeam ? match.away : match.home
     await moveRequest.updateOne({id, requesterTeam, destinationTeam}, {$set: {id, requester: callerId, requesterTeam, destinationTeam, dateTimestamp, expiryTime, timeOfTheRequest }}, {upsert: true})
     const resp = await DiscordRequest(`/channels/${serverChannels.moveMatchChannelId}/messages`, {
@@ -159,8 +175,9 @@ export const moveMatchModalResponse = async ({interaction_id, token, callerId, m
     })
     const message = await resp.json()
     await moveRequest.updateOne({id, requesterTeam, destinationTeam}, {$set: {message: message.id}})
+    return `Request posted`
   })
-  return quickResponse({interaction_id, token, content: `Request posted`, isEphemeral: true})
+  return quickResponse({interaction_id, token, content, isEphemeral: true})
 }
 
 export const listMatchMoves = async ({interaction_id, token, application_id, member, dbClient}) => {
@@ -225,8 +242,11 @@ export const approveMoveMatch = async ({interaction_id, token, application_id, c
   const matchToMoveId = new ObjectId(id)
   await waitingMsg({interaction_id, token})
   
-  const updatedMatch = await dbClient(async ({moveRequest, teams, nationalTeams, matches, leagueConfig})=> {
+  const content = await dbClient(async ({moveRequest, teams, nationalTeams, matches, leagueConfig})=> {
     const matchToMove = await moveRequest.findOne(matchToMoveId)
+    if(!matchToMove) {
+      return 'Cannot find the match to move'
+    }
     const updatedMatch = await editAMatchInternal({id: matchToMove.id, timestamp: matchToMove.dateTimestamp, teams, nationalTeams, matches, leagueConfig})
     const resp = await DiscordRequest(`/channels/${serverChannels.moveMatchChannelId}/messages/${matchToMove.message}`, {method: 'GET'})
     const moveRequestMessage = await resp.json()
@@ -243,10 +263,10 @@ export const approveMoveMatch = async ({interaction_id, token, application_id, c
       }
     })
     await moveRequest.deleteOne({_id: matchToMove._id})
-    return updatedMatch
+    return `Move confirmed:\r${updatedMatch}`
   })
-  
-  return await updateResponse({application_id, token, content: `Move confirmed:\r${updatedMatch}`})
+
+  return updateResponse({application_id, token, content})
 }
 
 export const declineMoveMatch = async ({interaction_id, token, application_id, callerId, custom_id, dbClient}) => {

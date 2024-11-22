@@ -357,11 +357,16 @@ export const updateLeagueTable = async ({league, dbClient, short = false}) => {
     return
   }
   console.log(`Updating ${league.name}`)
-  const content = await formatLeagueTable({league: league.value, dbClient, short})
+  let content = await formatLeagueTable({league: league.value, dbClient, short})
+  if(content.length>=2000) {
+    const lastReturn = content.lastIndexOf('\r', 1991)
+    content = content.substring(0, lastReturn)+'\r> ...'
+  }
+
   return DiscordRequest(`/channels/${league?.standingsChannel || serverChannels.standingsChannelId}/messages/${league.standingsMsg}`, {
     method: 'PATCH',
     body: {
-      content
+      content:content || '--'
     }
   })
 }

@@ -19,7 +19,9 @@ const communityStateToText = (state) => {
 export const getSteamIdFromSteamUrl = async (steamUrl) => {
   let steamid
   if(steamUrl.includes("steamcommunity.com/id/")) {
-    const [,vanityurl] = steamUrl.match(/steamcommunity.com\/id\/(\w+)\/?/)
+    const infoIndex = steamUrl.indexOf('edit/info')
+    const cleanedUrl = infoIndex === -1 ? steamUrl : steamUrl.substring(0, infoIndex)
+    const [,vanityurl] = cleanedUrl.match(/steamcommunity.com\/id\/(.+)\//)
     const vanityResp = await SteamRequest(SteamRequestTypes.VanityUrl, {vanityurl})
     const vanityProfile = await vanityResp.json()
     console.log(vanityProfile)
@@ -41,10 +43,15 @@ export const isSteamIdIncorrect = (steamId="") => {
   }
 }
 
-export const getPSOSteamDetails = async ({steamUrl, playerId, member}) => {
+export const getPSOSteamDetails = async ({steamUrl, steamId, playerId, member}) => {
   let psoSummary = {}
   try {
-    let steamid = await getSteamIdFromSteamUrl(steamUrl)
+    let steamid
+    if(steamId){
+      steamid = steamId
+    } else {
+      steamid = await getSteamIdFromSteamUrl(steamUrl)
+    }
     if(!steamid) {
       psoSummary = {
         message: "Steam Url incorrect."
@@ -59,17 +66,23 @@ export const getPSOSteamDetails = async ({steamUrl, playerId, member}) => {
         }
       } else {
         const actualsteamId = player.steamid
-        steamUrl = player.profileurl
         const communityState = communityStateToText(player.communityvisibilitystate)
         const gamesSummaryResp = await SteamRequest(SteamRequestTypes.GetGameSummary, {steamid: actualsteamId, "appIds_filter[0]": SteamIds.psoGameId})
         const gamesSummary = await gamesSummaryResp.json()
-        psoSummary = gamesSummary?.response?.games?.[0] || {message: "Can't find PSO on account"}
+        const games = gamesSummary?.response?.games || []
+        psoSummary = games?.[0] || {message: "Can't find PSO on account"}
         psoSummary.discordCreated = validateSnowflake(playerId)
+        psoSummary.steamUrl = player.profileurl
+        psoSummary.steamId = player.steamid
         psoSummary.discordJoined = new Date(member.joined_at)
         psoSummary.communityState = communityState
         psoSummary.isPrivate = player.communityvisibilitystate == 1
-        if((psoSummary.playtime_forever || 0)/60 > 10) {
-          psoSummary.validated = true
+        if(!psoSummary.message) {
+          if((psoSummary.playtime_forever || 0)/60 > 10) {
+            psoSummary.validated = true
+          } else {
+            psoSummary.message = "PSO hours are not visible."
+          }
         }
       }
     }

@@ -2,7 +2,7 @@ import { InteractionResponseFlags, InteractionResponseType } from "discord-inter
 import { DiscordRequest, SteamRequest, SteamRequestTypes } from "../utils.js"
 import { countries } from '../config/countriesConfig.js'
 import { getAllPlayers } from "../functions/playersCache.js"
-import { addPlayerPrefix, batchesFromArray, getCurrentSeason, getPlayerNick, getRegisteredRole, optionsToObject, postMessage, quickResponse, removePlayerPrefix, silentResponse, updateDiscordPlayer, updateResponse, waitingMsg } from "../functions/helpers.js"
+import { addPlayerPrefix, batchesFromArray, getCurrentSeason, getPlayerNick, getRegisteredRole, optionsToObject, postMessage, quickResponse, removePlayerPrefix, sendDM, silentResponse, updateDiscordPlayer, updateResponse, waitingMsg } from "../functions/helpers.js"
 import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
 import { allLeagues } from "../config/leagueData.js"
 import { getPSOSteamDetails, isSteamIdIncorrect } from "../functions/steamUtils.js"
@@ -207,34 +207,99 @@ export const doubleContracts = async ({interaction_id, token, application_id, db
 
 const PSOBATCHSIZE = 15
 
-export const checkForPSO = async ({dbClient}) => {
+export const checkForPSO = async ({dbClient, playerIdsToPSOCheck=[]}) => {
   const allPlayers = await getAllPlayers(process.env.GUILD_ID)
-  const batchToProcess = []
-  const playersList = allPlayers.filter(player=>(!player.roles.includes(serverRoles.steamVerified)) && player.roles.includes(serverRoles.registeredRole)).sort(()=> Math.random()-0.5)
-  let i = 0
-  while (batchToProcess.length < PSOBATCHSIZE && i<allPlayers.length) {
-    const player = playersList[i]
-    if((!player.roles.includes(serverRoles.steamVerified)) && player.roles.includes(serverRoles.registeredRole)) {
-      batchToProcess.push(player)
-    }
-    i++
-  }
-  console.log(batchToProcess)
-  await dbClient(async ({players})=> {
+  let unverifiedPlayers = []
+  const remainingIdsToCheck = await dbClient(async ({players, mongoCache})=> {
+    const playersCache = await mongoCache.findOne({name: 'unregisteredPlayers'})
+    const playersIds = playersCache ? playersCache.ids : playerIdsToPSOCheck
+    const playersList = playersIds?.length>0 ? (
+      allPlayers.filter(player=> (!player.roles.includes(serverRoles.steamVerified)) && player.roles.includes(serverRoles.registeredRole) && playersIds.includes(player.user.id))
+    ) : (
+      allPlayers.filter(player=>(!player.roles.includes(serverRoles.steamVerified)) && player.roles.includes(serverRoles.registeredRole)).sort(()=> Math.random()-0.5)
+    )
+    const batchToProcess = playersList.slice(0, PSOBATCHSIZE)
+    const remainingIdsToCheck = playersList.slice(PSOBATCHSIZE).map(player=>player.user.id)
     const playerIds = batchToProcess.map(player=> player.user.id)
     const dbPlayers = await players.find({id: {$in: playerIds}}).toArray()
     for await(const discPlayer of batchToProcess) {
       const dbPlayer = dbPlayers.find(dbPlayer=> dbPlayer.id === discPlayer.user.id)
-      const psoSummary = await getPSOSteamDetails({steamUrl: dbPlayer.steam, playerId: dbPlayer.id, member: discPlayer})
+      if(!dbPlayer) {
+        unverifiedPlayers.push({id: discPlayer.user.id})
+        break
+      }
+
+      const psoSummary = await getPSOSteamDetails({steamUrl: dbPlayer.steam, steamId: dbPlayer.steamId, playerId: dbPlayer.id, member: discPlayer})
       if(psoSummary.validated) {
         const body = {
           roles: [...new Set([...discPlayer.roles, serverRoles.steamVerified])]
         };
-        await postMessage({channel_id: serverChannels.registrationsChannelId, content: `Validated Player <@${dbPlayer.id}> - id: ${dbPlayer.steamId} url: ${dbPlayer.steam} PSO hours: ${(psoSummary.playtime_forever || 0)/60}`})
+        const setPayload = {steamVerified: true, hoursWhenChecked: (psoSummary.playtime_forever||0/60)}
+        if(psoSummary.steamUrl) {
+          setPayload.steam = psoSummary.steamUrl
+        }
+        await players.updateOne({id: dbPlayer.id}, {$set: setPayload})
+        await postMessage({channel_id: serverChannels.registrationsChannelId, content: `Validated Player <@${dbPlayer.id}> - id: ${dbPlayer.steamId} url: ${psoSummary.steamUrl || dbPlayer.steam} PSO hours: ${(psoSummary.playtime_forever || 0)/60}`})
         await updateDiscordPlayer(process.env.GUILD_ID, discPlayer.user.id, body)
+        await sendDM({playerId: dbPlayer.id, content: `You have been Steam verified.\rPSO Hours: ${(psoSummary.playtime_forever || 0)/60}}.\rYou can now access transfers, and play matches.`})
+      } else {
+        if(dbPlayer.steamVerified) { 
+          break
+        }
+        await players.updateOne({id: dbPlayer.id}, {$set: {steamValidation: psoSummary.message, hoursWhenChecked: psoSummary.playtime_forever}})
+        const body = {
+          roles: discPlayer.roles.filter(role=> ![serverRoles.registeredRole, serverRoles.steamVerified].includes(role))
+        }
+        await updateDiscordPlayer(process.env.GUILD_ID, discPlayer.user.id, body)
+        unverifiedPlayers.push({id: discPlayer.user.id, ...psoSummary})
       }
     }
+    await mongoCache.updateOne({name: 'unregisteredPlayers'}, {$set: {ids: remainingIdsToCheck}}, {upsert: true})
+    return remainingIdsToCheck
   })
+  await postMessage({channel_id:serverChannels.botTestingChannelId, content: `Tested ${PSOBATCHSIZE} players, following not passing validation:\r${unverifiedPlayers.map(player=> `<@${player.id}>: ${JSON.stringify(player)}`).join('\r')}\r${remainingIdsToCheck?.length} players to check in list`})
+  return remainingIdsToCheck
+}
+
+export const getUnregisteredPlayerIds = async() => {
+  const allPlayers = await getAllPlayers(process.env.GUILD_ID)
+  return allPlayers.filter(player=>(!player.roles.includes(serverRoles.steamVerified)) && player.roles.includes(serverRoles.registeredRole)).map(player=>player.user.id)
+}
+
+export const manualSteamVerification = async({interaction_id, token, options, callerId, application_id, guild_id, dbClient}) => {
+  if(!["234614153023717376", "269565950154506243"].includes(callerId)) {
+    return silentResponse({interaction_id, token, content: "Restricted"})
+  }
+  const {player} = optionsToObject(options)
+  await waitingMsg({interaction_id, token})
+  const allPlayers = await getAllPlayers(guild_id)
+  const discPlayer = allPlayers.find(discPlayer=> discPlayer.user.id === player)
+  const content = await dbClient(async({players})=> {
+    const dbPlayer = await players.findOne({id: player})
+    if(!dbPlayer) {
+      return `Can't find <@${player}>`
+    }
+    const psoSummary = await getPSOSteamDetails({steamUrl: dbPlayer.steam, steamId: dbPlayer.steamId, playerId: dbPlayer.id, member: discPlayer})
+    if(psoSummary.validated) {
+      const body = {
+        roles: [...new Set([...discPlayer.roles, serverRoles.steamVerified])]
+      };
+      const setPayload = {steamVerified: true}
+      if(psoSummary.steamUrl) {
+        setPayload.steam = psoSummary.steamUrl
+      }
+      await players.updateOne({id: dbPlayer.id}, {$set: setPayload})
+      await postMessage({channel_id: serverChannels.registrationsChannelId, content: `Validated Player <@${dbPlayer.id}> - id: ${dbPlayer.steamId} url: ${psoSummary.steamUrl || dbPlayer.steam} PSO hours: ${(psoSummary.playtime_forever || 0)/60}`})
+      await updateDiscordPlayer(process.env.GUILD_ID, discPlayer.user.id, body)
+      await sendDM({playerId: dbPlayer.id, content: `You have been Steam verified.\rPSO Hours: ${(psoSummary.playtime_forever || 0)/60}}.\rYou can now access transfers, and play matches.`})
+    } else {
+      return JSON.stringify({id: discPlayer.user.id, ...psoSummary})
+    }
+
+    return 'validated'
+  })
+  console.log(content)
+  return updateResponse({application_id, token, content})
 }
 
 export const blacklistTeam = async ({interaction_id, application_id, token, guild_id, member, options, dbClient}) => {
@@ -658,4 +723,17 @@ const systemCmd = {
   }]
 }
 
-export default [systemCmd, updateLeaguesCmd]
+const manualSteamVerificationCmd = {
+  name: 'steamverif',
+  description: 'System',
+  psaf: true,
+  func: manualSteamVerification,
+  options: [{
+    type: 6,
+    name: 'player',
+    description: 'Player',
+    required: true
+  }]
+}
+
+export default [systemCmd, updateLeaguesCmd, manualSteamVerificationCmd]

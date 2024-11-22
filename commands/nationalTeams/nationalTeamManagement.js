@@ -6,15 +6,18 @@ import { getFastCurrentSeason } from "../season.js"
 
 
 const createSelection = async ({application_id, token, options, dbClient}) => {
-  const {name, shortname, region, eligiblenationality, logo} = optionsToObject(options)
+  const {name, shortname, region, eligiblenationality, logo, eligiblenationality2, eligiblenationality3, eligiblenationality4, eligiblenationality5} = optionsToObject(options)
+  const eligibleNationalities = [...new Set([eligiblenationality, eligiblenationality2, eligiblenationality3, eligiblenationality4, eligiblenationality5])].filter(nation=>!!nation)
   const content = await dbClient(async({nationalTeams, nationalities}) => {
-    const nationality = await nationalities.findOne({name: eligiblenationality})
-    if(!nationality) {
+    const nationalitiesEntered = await nationalities.find({name: {$in: eligibleNationalities}}).toArray()
+    console.log(eligibleNationalities)
+    console.log(nationalitiesEntered)
+    if(nationalitiesEntered.length === 0) {
       return `Can't find ${eligiblenationality} as a nationality.`
     }
-    await nationalTeams.updateOne({shortname}, {$set: {name, shortname, region, eligiblenationality, logo, active: true}}, {upsert: true})
+    await nationalTeams.updateOne({shortname}, {$set: {name, shortname, region, eligibleNationalities, logo, active: true}}, {upsert: true})
     
-    return getSelectionDetails({name, shortname, region, eligiblenationality, logo}, nationality, [], true)
+    return getSelectionDetails({name, shortname, region, eligibleNationalities, logo}, nationalitiesEntered, [], true)
   })
   return updateResponse({application_id, token, content})
 }
@@ -29,22 +32,27 @@ const disableSelection = async ({application_id, token, options, dbClient}) => {
 }
 
 const editSelection = async ({application_id, token, options, dbClient})=> {
-  const {selection, name, shortname, region, eligiblenationality, logo} = optionsToObject(options)
+  const {selection, name, shortname, region, eligiblenationality, logo, eligiblenationality2, eligiblenationality3, eligiblenationality4, eligiblenationality5} = optionsToObject(options)
+  let eligibleNationalities = [...new Set([eligiblenationality, eligiblenationality2, eligiblenationality3, eligiblenationality4, eligiblenationality5])]
   const content = await dbClient(async({nationalTeams, nationalities, nationalContracts, seasonsCollect}) => {
     const season = await getCurrentSeason(seasonsCollect)
     const nationalTeam = await nationalTeams.findOne({shortname: selection})
-    const nationality = await nationalities.findOne({name: eligiblenationality || nationalTeam.eligiblenationality})
+    const allConcernedNationalities = [... new Set([...eligibleNationalities, ...(nationalTeam.eligibleNationalities || [])])]
+    const nationalitiesEntered = await nationalities.find({name: {$in: allConcernedNationalities}}).toArray()
+    if(!(eligibleNationalities?.[0])) {
+      eligibleNationalities = nationalTeam.eligibleNationalities || []
+    }
     const payload = {
       name: name || nationalTeam.name,
       shortname: shortname || nationalTeam.shortname,
       region: region || nationalTeam.region,
-      eligiblenationality: eligiblenationality || nationalTeam.eligiblenationality,
+      eligibleNationalities: eligibleNationalities,
       logo: logo || nationalTeam.logo,
     }
     await nationalTeams.updateOne({shortname: selection}, {$set: payload})
     const nationalPlayers = await nationalContracts.find({season, selection: nationalTeam.shortname}).toArray()
     
-    return getSelectionDetails(payload, nationality, nationalPlayers, true)
+    return getSelectionDetails(payload, nationalitiesEntered, nationalPlayers, true)
   })
   return updateResponse({application_id, token, content})
 }
@@ -53,9 +61,9 @@ export const updateSelectionPost = async ({selection, dbClient}) => {
   return dbClient(async ({nationalTeams, nationalities, nationalContracts})=> {
     const season = getFastCurrentSeason()
     const nationalTeam = await nationalTeams.findOne({shortname: selection})
-    const nationality = await nationalities.findOne({name: nationalTeam.eligiblenationality})
+    const selectedNationalities = await nationalities.find({name: {$in: nationalTeam.eligibleNationalities}}).toArray()
     const nationalPlayers = await nationalContracts.find({season, selection}).toArray()
-    const content = getSelectionDetails(nationalTeam, nationality, nationalPlayers)
+    const content = getSelectionDetails(nationalTeam, selectedNationalities, nationalPlayers)
     const payload = {}
     if(nationalTeam.psafMsg) {
       try {
@@ -114,20 +122,24 @@ export const updateSelectionPost = async ({selection, dbClient}) => {
   })
 }
 
-export const getSelectionDetails = (nationalTeam, nationality, players, showLogo) => `## ${nationality.flag} ${nationalTeam.shortname} - ${nationalTeam.name}\r
+export const getSelectionDetails = (nationalTeam, nationalities, players, showLogo) => {
+  const nationalitiesForFlags = nationalities.filter(nationality=> nationalTeam.eligibleNationalities.includes(nationality.name))
+  const flags = nationalitiesForFlags.map(nationality => nationality.flag)
+  return `## ${flags.join(', ')} ${nationalTeam.shortname} - ${nationalTeam.name}\r
 Region: ${nationalTeam.region}\r
 Players: (${players.length})\r
 ${players.map(player => `> <@${player.playerId}>`).join('\r')}\r
 ${showLogo && nationalTeam.logo ? nationalTeam.logo : ''}`
+}
 
 const showSelection = async ({application_id, token, options, dbClient}) => {
   const {selection} = optionsToObject(options)
   const content = await dbClient(async({nationalTeams, nationalities, nationalContracts, seasonsCollect}) => {
     const season = await getCurrentSeason(seasonsCollect)
     const nationalTeam = await nationalTeams.findOne({shortname: selection})
-    const eligibleNationality = await nationalities.findOne({name: nationalTeam.eligiblenationality})
+    const eligibleNationalities = await nationalities.find({name: {$in: nationalTeam.eligibleNationalities}}).toArray()
     const nationalPlayers = await nationalContracts.find({season, selection: nationalTeam.shortname}).toArray()
-    return getSelectionDetails(nationalTeam, eligibleNationality, nationalPlayers, true)
+    return getSelectionDetails(nationalTeam, eligibleNationalities, nationalPlayers, true)
   })
   return updateResponse({application_id, token, content})
 }
@@ -165,6 +177,26 @@ const createSelectionCmd = {
     description: 'Which region this team plays in',
     choices: serverRegions.map((region)=> ({name: region.name, value:region.name})),
     required: true
+  },{
+    type: 3,
+    name: 'eligiblenationality2',
+    description: 'Which nationality can play for this selection',
+    autocomplete: true,
+  },{
+    type: 3,
+    name: 'eligiblenationality3',
+    description: 'Which nationality can play for this selection',
+    autocomplete: true,
+  },{
+    type: 3,
+    name: 'eligiblenationality4',
+    description: 'Which nationality can play for this selection',
+    autocomplete: true,
+  },{
+    type: 3,
+    name: 'eligiblenationality5',
+    description: 'Which nationality can play for this selection',
+    autocomplete: true,
   },{
     type: 3,
     name: 'logo',

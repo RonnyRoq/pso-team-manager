@@ -1,12 +1,12 @@
-import { InteractionResponseType, InteractionResponseFlags } from "discord-interactions"
+import { InteractionResponseType } from "discord-interactions"
 import { DiscordRequest } from "../utils.js"
 import { getAllPlayers } from "../functions/playersCache.js"
-import { getCurrentSeason, getNationalCaptainRole, getPlayerNick, getRegisteredRole, handleSubCommands, optionsToObject, quickResponse, removeInternational, silentResponse, sleep, updateResponse, waitingMsg } from "../functions/helpers.js"
+import { getCurrentSeason, getNationalCaptainRole, getPlayerNick, getRegisteredRole, handleSubCommands, isMemberAdmin, optionsToObject, quickResponse, removeInternational, silentResponse, sleep, updateResponse, waitingMsg } from "../functions/helpers.js"
 import { getAllSelections } from "../functions/countriesCache.js"
 import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
 
 const nationalTeamPlayerRole = '1103327647955685536'
-
+/*
 const getNationalTeamPostInsideDb = async (allPlayers, players, nation) => {
   const countryPlayers = await players.find({nat1: nation.name}, {projection: {id:1}}).toArray()
   const countryPlayerIds = countryPlayers.map(({id})=> id)
@@ -25,15 +25,8 @@ const getNationalTeamPostInsideDb = async (allPlayers, players, nation) => {
   response += teamPlayers.map(player => `> ${player.roles.includes(serverRoles.nationalTeamCaptainRole) ? ':crown: ':''}${player.roles.includes(serverRoles.matchBlacklistRole) || player.roles.includes(serverRoles.permanentlyBanned) ? ':no_entry_sign:':''}<@${player.user.id}>`).join('\r')
   return {response, length:teamPlayers.length}
 }
-
-const getNationalTeamPost = async ({country, guild_id, dbClient}) => {
-  const allPlayers = await getAllPlayers(guild_id)
-  return await dbClient(async ({players, nationalities})=>{
-    const nation = await nationalities.findOne({name: country})
-    return await getNationalTeamPostInsideDb(allPlayers, players, nation)
-  })
-}
-
+*/
+/*
 export const updateNationalTeam = async ({guild_id, nation, players, nationalities})=> {
   const allPlayers = await getAllPlayers(guild_id)
   const {response, length} = await getNationalTeamPostInsideDb(allPlayers, players, nation)
@@ -55,8 +48,8 @@ export const updateNationalTeam = async ({guild_id, nation, players, nationaliti
     await nationalities.updateOne({name: nation.name}, {$set: {messageId: message.id}})
   }
 }
-
-
+*/
+/*
 export const allNationalTeams =  async ({interaction_id, guild_id, application_id, token, dbClient}) => {
   await waitingMsg({interaction_id, token})
   const allPlayers = await getAllPlayers(guild_id)
@@ -78,82 +71,10 @@ export const allNationalTeams =  async ({interaction_id, guild_id, application_i
 
   return updateResponse({application_id, token})
 }
-
-export const postNationalTeams = async({application_id, interaction_id, guild_id, token, dbClient, options}) => {
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        flags: InteractionResponseFlags.EPHEMERAL
-      }
-    }
-  })
-  const updateFunction = (team) => {
-    DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-      method: 'PATCH',
-      body: {
-        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        content: `Updated ${team}`,
-      }
-    })
-  }
-  const {country} = Object.fromEntries(options.map(({name, value})=> [name, value]))
-
-  await updateNationalTeams({guild_id, dbClient, updateFunction, country})
-
-  return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-    method: 'PATCH',
-    body: {
-      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      content: 'Done',
-    }
-  })
-}
-
-export const updateNationalTeams = async({guild_id, dbClient, updateFunction, country}) => {
-  const allPlayers = await getAllPlayers(guild_id)
-  await dbClient(async ({players, nationalities})=>{
-    const allNations = nationalities.find({})
-    for await(const nation of allNations) {
-      if(nation.name !== country)
-        continue
-      const {response, length} = await getNationalTeamPostInsideDb(allPlayers, players, nation)
-      if(length>0) {
-        if(nation.messageId) {
-          await DiscordRequest(`/channels/1091749687356297307/messages/${nation.messageId}`, {
-            method: 'PATCH',
-            body: {
-              content: response
-            }
-          })
-        } else {
-          const postResponse = await DiscordRequest('/channels/1091749687356297307/messages', {
-            method: 'POST',
-            body: {
-              content: response
-            }
-          })
-          const message = await postResponse.json()
-          await nationalities.updateOne({name: nation.name}, {$set: {messageId: message.id}})
-        }
-        updateFunction(nation.name)
-        await sleep(1000)
-      }
-    }
-  })
-}
+*/
 
 export const addSelection = async ({options, dbClient, guild_id, application_id, token, interaction_id}) => {
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        flags: 1 << 6
-      }
-    }
-  })
+  await waitingMsg({interaction_id, token})
   const {player, selection} = optionsToObject(options)
   const discordPlayerResp = await DiscordRequest(`/guilds/${guild_id}/members/${player}`, {method: 'GET'})
   const discordPlayer = await discordPlayerResp.json()
@@ -187,13 +108,7 @@ export const addSelection = async ({options, dbClient, guild_id, application_id,
     return 'Did not add player - did you check if he\'s eligible?'
   })
 
-  return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-    method: 'PATCH',
-    body: {
-      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      content: response,
-    }
-  })
+  return updateResponse({application_id, token, content: response})
 }
 
 export const removeSelection = async ({options, dbClient, guild_id, application_id, token, interaction_id}) => {
@@ -224,54 +139,61 @@ export const removeSelection = async ({options, dbClient, guild_id, application_
 
 export const registerElections = async ({options, dbClient, interaction_id, callerId, token, application_id}) => {
   await waitingMsg({interaction_id, token})
-  const {nation, reason} = optionsToObject(options)
-  const content = await dbClient(async ({players, nationalities, candidates})=> {
-    const [existingCandidate, dbPlayer] = await Promise.all([
+  const {selection, reason} = optionsToObject(options)
+  const content = await dbClient(async ({players, nationalTeams, nationalities, candidates})=> {
+    const [existingCandidate, dbPlayer, selectedNationalTeam] = await Promise.all([
       candidates.findOne({playerId: callerId}),
       players.findOne({id: callerId}),
+      nationalTeams.findOne({shortname: selection, active: true}),
       nationalities.find({}).toArray()
     ])
     if(existingCandidate) {
-      return `You already applied for ${existingCandidate.nation}`
+      return `You already applied for ${existingCandidate.selection}`
+    }
+    if(!selectedNationalTeam){
+      return `Cannot find the national selection you applied for: Is it an active one ?`
     }
     if(!dbPlayer || !dbPlayer.nat1) {
       return `You are not registered with us. If you think it's an error, please open a ticket. Only registered players can apply.`
     }
-    if(dbPlayer.nat1 !== nation) {
-      if(dbPlayer.nat2 === nation) {
+    
+    if(!selectedNationalTeam.eligibleNationalities.includes(dbPlayer.nat1)) {
+      if(selectedNationalTeam.eligibleNationalities.includes(dbPlayer.nat2)) {
         return `You're not applying for your "main" country described in /player. Please open a ticket if you wish to swap nations.`
       } else {
-        return `You can only apply for your country.`
+        return `You can only apply for your selection.`
       }
     }
-    await candidates.insertOne({playerId: callerId, nation, reason})
-    return `Application saved for ${nation}.`
+    await candidates.insertOne({playerId: callerId, selection, reason})
+    return `Application saved for ${selectedNationalTeam.name}.`
   })
   await updateResponse({application_id, token, content})
 }
 
 export const showElectionCandidates = async ({interaction_id, token, application_id, dbClient}) => {
-  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-    method: 'POST',
-    body: {
-      type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        content: 'All candidates for elections:'
-      }
-    }
-  })
-  const [allCandidates, allNations] = await dbClient (async ({nationalities, candidates})=> 
-    Promise.all([candidates.find({}).toArray(), nationalities.find({}).toArray()])
+  await quickResponse({interaction_id, token, content: 'All candidates for elections:'})
+  const [allCandidates, allNations, allSelections] = await dbClient (async ({nationalities, nationalTeams, candidates})=> 
+    Promise.all([candidates.find({}).toArray(), nationalities.find({}).toArray(), nationalTeams.find({}).toArray()])
   )
   for await(const candidate of allCandidates) {
-    const candidateNation = allNations.find(({name})=> name === candidate.nation)
-    const content = `${candidateNation.flag} ${candidateNation.name} <@${candidate.playerId}> : ${candidate.reason}`
-    await DiscordRequest(`/webhooks/${application_id}/${token}`, {
-      method: 'POST',
-      body: {
-        content,
-      }
-    })
+    try{
+      const candidateSelection = allSelections.find(({shortname})=> shortname === candidate.selection)
+      const candidateNations = allNations.filter(({name})=> candidateSelection.eligibleNationalities.includes(name))
+      const content = `${candidateNations.map(nation=> nation.flag).join('')} ${candidateSelection.name} <@${candidate.playerId}> : ${candidate.reason}`
+      await DiscordRequest(`/webhooks/${application_id}/${token}`, {
+        method: 'POST',
+        body: {
+          content,
+        }
+      })
+    } catch(e) {
+      await DiscordRequest(`/webhooks/${application_id}/${token}`, {
+        method: 'POST',
+        body: {
+          content: `${candidate.selection} <@${candidate.playerId}> : ${candidate.reason} -- ERROR`,
+        }
+      })
+    }
   }
 }
 
@@ -308,13 +230,7 @@ export const voteCoach = async ({interaction_id, callerId, guild_id, token, appl
       }]
     }
   })
-  return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
-    method: 'PATCH',
-    body: {
-      ...response,
-      flags: 1 << 6
-    }
-  })
+  return updateResponse({application_id, token, ...response})
 }
 
 export const showVotes = async ({interaction_id, token, application_id, options, dbClient}) => {
@@ -343,9 +259,13 @@ export const cleanVotes = async({interaction_id, token, dbClient, callerId}) => 
   return silentResponse({interaction_id, token, content})
 }
 
-export const autoCompleteSelections = async (currentOption, dbClient, res) => {
+export const autoCompleteSelections = async (currentOption, dbClient, res, member) => {
   const toSearch = (currentOption.value || "").toLowerCase()
-  const autoCompleteSelections = await getAllSelections(dbClient)
+  let autoCompleteSelections = await getAllSelections(dbClient)
+  if(true) {
+  //if(!isMemberAdmin(member)) {
+    autoCompleteSelections = autoCompleteSelections.filter(selection=>selection.active === true)
+  }
   const searchSelections = autoCompleteSelections.map(({name, shortname})=> ({name, shortname, display: `${shortname} - ${name}`, search: name.toLowerCase()}))
   const countryChoices = searchSelections
     .filter(({search}) => toSearch.length === 0 || search.includes(toSearch))
@@ -486,17 +406,21 @@ export const voteCoachCmd = {
 export const showElectionCandidatesCmd = {
   name: 'showelectioncandidates',
   description: 'List all the election candidates and their reasons',
-  type: 1
+  type: 1,
+  psaf: true,
+  func: showElectionCandidates
 }
 
 export const registerElectionsCmd = {
   name: 'registerelections',
   description: 'Register to become a national coach',
   type: 1,
+  psaf: true,
+  func: registerElections,
   options: [{
     type: 3,
-    name: 'nation',
-    description: 'Nation',
+    name: 'selection',
+    description: 'National Selection',
     autocomplete: true,
     required: true,
   },{
@@ -526,24 +450,6 @@ export const cleanVotesCmd = {
   func: cleanVotes,
   type: 1,
   psaf: true,
-}
-
-export const allNationalTeamsCmd = {
-  name: 'allnationalteams',
-  description: 'List all national teams',
-  type: 1,
-}
-
-export const postNationalTeamsCmd = {
-  name: 'postnationalteams',
-  description: 'Post all national teams',
-  type: 1,
-  options: [{
-    type: 3,
-    name: 'country',
-    description: 'Country to update',
-    autocomplete: true,
-  }]
 }
 
 export const addSelectionCmd = {
@@ -620,4 +526,4 @@ export const selectionCmd = {
   }]
 }
 
-export default [cleanVotesCmd, selectionCmd, addSelectionCmd, removeSelectionCmd]
+export default [cleanVotesCmd, selectionCmd, addSelectionCmd, removeSelectionCmd, registerElectionsCmd, showElectionCandidatesCmd]

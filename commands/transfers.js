@@ -228,26 +228,30 @@ export const releaseAction = async ({interaction_id, token, application_id, guil
     if(release) {
       console.log(release)
       const {playerId, team} = release
-      const [dbTeam, playerResp] = await Promise.all([
+      const [dbTeam] = await Promise.all([
         teams.findOne({id: team}),
-        DiscordRequest(`/guilds/${guild_id}/members/${playerId}`, {}),
         contracts.updateMany({playerId, endedAt: null}, {$set: {endedAt: Date.now()}})
       ])
-      const discPlayer = await playerResp.json();
       if(!dbTeam) {
         return "No transfer happened"
       }
-  
-      const playerName = getPlayerNick(discPlayer)
-      let updatedPlayerName = removePlayerPrefix(dbTeam.shortName, playerName)
-      const payload= {
-        nick: updatedPlayerName,
-        roles: discPlayer.roles.filter(playerRole=> ![team, clubPlayerRole].includes(playerRole))
+      try{
+        const playerResp = await DiscordRequest(`/guilds/${guild_id}/members/${playerId}`, {})
+        const discPlayer = await playerResp.json();
+    
+        const playerName = getPlayerNick(discPlayer)
+        let updatedPlayerName = removePlayerPrefix(dbTeam.shortName, playerName)
+        const payload= {
+          nick: updatedPlayerName,
+          roles: discPlayer.roles.filter(playerRole=> ![team, clubPlayerRole].includes(playerRole))
+        }
+        await DiscordRequest(`guilds/${guild_id}/members/${playerId}`, {
+          method: 'PATCH',
+          body: payload
+        })
+      } catch(e) {
+        console.log('Error when getting player to release.')
       }
-      await DiscordRequest(`guilds/${guild_id}/members/${playerId}`, {
-        method: 'PATCH',
-        body: payload
-      })
       await innerRemoveRelease({reason: `Approved by <@${callerId}>`, ...release, pendingReleases})
       
       const content = `# <@&${team}> :arrow_right: Free agent\r> <@${playerId}>\r*(from <@${callerId}>)*`

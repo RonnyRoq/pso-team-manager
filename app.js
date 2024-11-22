@@ -9,16 +9,15 @@ import {
   InteractionResponseType,
   InteractionResponseFlags
 } from 'discord-interactions';
-import { VerifyDiscordRequest, DiscordRequest } from './utils.js';
+import { VerifyDiscordRequest, DiscordRequest, logSystemCrash } from './utils.js';
 import mongoClient from './functions/mongoClient.js';
 import { now } from './commands/now.js';
 import { timestamp } from './commands/timestamp.js';
 import { help, helpAdmin } from './commands/help.js';
 import { allPlayers, autoCompleteNation, player, players } from './commands/player.js';
-import { team } from './commands/team.js';
 import { editMatch, endMatch, match, matchId, matches, pastMatches, publishMatch, resetMatch, unpublishMatch } from './commands/match.js';
 import { blacklistTeam, doubleContracts, emoji, expireThings, fixNames, initCountries, managerContracts, systemTeam } from './commands/system.js';
-import { addSelection, autoCompleteSelections, postNationalTeams, registerElections, removeSelection, showElectionCandidates, showVotes, voteCoach } from './commands/nationalTeam.js';
+import { addSelection, autoCompleteSelections, removeSelection, showVotes, voteCoach } from './commands/nationalTeam.js';
 import { confirm, pendingConfirmations, register, releasePlayer } from './commands/confirm.js';
 import { approveDealAction, approveLoanAction, declineDealAction, declineLoanAction, finishLoanRequest, removeConfirmation, removeDeal, removeLoan, removeRelease } from './commands/confirmations/actions.js';
 import commandsRegister from './commandsRegister.js';
@@ -162,7 +161,7 @@ function start() {
           return autoCompleteSelections(optionChanged, dbClient, res)
         }
         if(optionChanged.name === "selection") {
-          return autoCompleteSelections(optionChanged, dbClient, res)
+          return autoCompleteSelections(optionChanged, dbClient, res, member)
         }
         if(optionChanged.name === "eligiblenationality") {
           return autoCompleteNation(optionChanged, dbClient, res)
@@ -172,6 +171,9 @@ function start() {
         }
         if(optionChanged.name === "league") {
           return autoCompleteLeague(optionChanged, dbClient, res)
+        }
+        if(optionChanged) {
+          return autoCompleteNation(optionChanged, dbClient, res)  
         }
         return autoCompleteNation(data, dbClient, res)
       }
@@ -300,15 +302,6 @@ function start() {
           if(name === "register") {
             return register(commandOptions)
           }
-
-          if (name === "registerelections") {
-            return registerElections(commandOptions)
-          }
-
-          if(name === 'showelectioncandidates') {
-            return showElectionCandidates(commandOptions)
-          }
-
           if (name === "votecoach") {
             return voteCoach(commandOptions)
           }
@@ -328,10 +321,6 @@ function start() {
 
           if (name === "allplayers") {
             return allPlayers(commandOptions)
-          }
-
-          if (name === "team") {
-            return team(commandOptions)
           }
 
           if (name === "match") {
@@ -376,10 +365,6 @@ function start() {
 
           if(name === "pastmatches") {
             return pastMatches(commandOptions)
-          }
-          
-          if(name === "postnationalteams") {
-            return postNationalTeams(commandOptions)
           }
 
           if(name === "addselection") {
@@ -478,10 +463,6 @@ function start() {
             return 
           }
 
-          if(name === "myteam") {
-            return team(commandOptions)
-          }
-
           if (name === "transfer") {
             return transfer(commandOptions)
           }
@@ -578,14 +559,6 @@ function start() {
                 }
               }
             })
-          }
-
-          if (name === "registerelections") {
-            return registerElections(commandOptions)
-          }
-
-          if (name === "showelectioncandidates") {
-            return showElectionCandidates(commandOptions)
           }
 
           if (name === "showcoach") {
@@ -853,6 +826,7 @@ function start() {
         await client.db("PSOTeams").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
         global.isConnected = true
+        logSystemCrash("Started PSAF Bot")
       }
       catch(e){
         console.error(e)
@@ -874,5 +848,10 @@ function start() {
     })
   }
 }
+
+process.on('uncaughtException', async function (err) {
+  await logSystemCrash(err)
+  process.exit(1)
+});
 
 start()

@@ -3,11 +3,10 @@ import { InstallGlobalCommands, InstallGuildCommands } from './utils.js';
 import { nowCmd } from './commands/now.js';
 import { timestampCmd } from './commands/timestamp.js';
 import { helpCmd } from './commands/help.js';
-import { teamCmd } from './commands/team.js';
 import { editMatchCmd, matchCmd, matchIdCmd, matchesCmd, moveTheMatchCmd, pastMatchesCmd, publishMatchCmd, resetMatchCmd, unPublishMatchCmd } from './commands/match.js';
 import { blacklistTeamCmd, emojiCmd, expireThingsCmd, fixNamesCmd, managerContractsCmd, systemTeamCmd } from './commands/system.js';
 import { playerCmd } from './commands/player.js';
-import { allNationalTeamsCmd, postNationalTeamsCmd, registerElectionsCmd, showElectionCandidatesCmd, showVotesCmd, voteCoachCmd } from './commands/nationalTeam.js';
+import { showVotesCmd, voteCoachCmd } from './commands/nationalTeam.js';
 import { confirmCmd, registerCmd, releaseCmd, updateConfirmCmd } from './commands/confirm.js';
 import { dealCmd, loanCmd } from './commands/confirmations/deal.js';
 import { renewCmd, setContractCmd, teamTransferCmd, transferCmd } from './commands/transfers.js';
@@ -121,13 +120,12 @@ export const emojisCmd = {
 const ALL_COMMANDS = [nowCmd, timestampCmd, helpCmd];
 
 const GUILD_COMMANDS = [
-  teamCmd, matchCmd, editMatchCmd, moveTheMatchCmd, publishMatchCmd, unPublishMatchCmd,
+  matchCmd, editMatchCmd, moveTheMatchCmd, publishMatchCmd, unPublishMatchCmd,
   matchIdCmd, matchesCmd, resetMatchCmd,
   playerCmd,
   confirmCmd, updateConfirmCmd, renewCmd, dealCmd, loanCmd, releaseCmd, registerCmd,
-  allNationalTeamsCmd, postNationalTeamsCmd,
   transferCmd, teamTransferCmd, FREEPLAYER, FINE, BONUS, addUniqueIdCmd,
-  emojiCmd, showBlacklistCmd, showNoContractsCmd, registerElectionsCmd, showElectionCandidatesCmd, voteCoachCmd, showVotesCmd,
+  emojiCmd, showBlacklistCmd, showNoContractsCmd, voteCoachCmd, showVotesCmd,
   disbandTeamCmd, expireContractsCmd, addSteamIdCmd, setRatingCmd, setNameCmd,
   leagueTeamsCmd, leagueTableCmd, imageLeagueTableCmd, postLeagueTableCmd, generateMatchdayCmd,
   getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd, testDMMatchCmd, pastMatchesCmd, moveMatchCmd, listMovesCmd,
@@ -138,7 +136,7 @@ const GUILD_COMMANDS = [
 const {globalCommands, psafCommands, wcCommands} = mapToCmd(commandsRegister())
 
 const WC_GUILD_COMMANDS = [
-  registerCmd, registerElectionsCmd, showElectionCandidatesCmd, voteCoachCmd,
+  registerCmd, voteCoachCmd,
 ]
 const allCommands = [...ALL_COMMANDS, ...globalCommands]
 console.log(Object.fromEntries(allCommands.map((cmd,index) => [index, cmd.name])))

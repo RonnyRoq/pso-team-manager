@@ -98,10 +98,12 @@ const innerPlayer = async ({playerId, guild_id, member, dbClient}) => {
       if(isStaff) {
         response += `Steam: ${dbPlayer.steam || 'Not saved'}\r`
         response += `Unique ID: ${dbPlayer.uniqueId || 'Not saved'}\r`
+        response += `Hours when bot validated: ${dbPlayer.hoursWhenChecked}\r`
       }
       if(dbPlayer.desc) {
         response += `Description: *${dbPlayer.desc}*\r`
       }
+      response += `PSO Steam validated: ${dbPlayer.steamVerified ? 'yes': dbPlayer.steamValidation}\r`
       if(playerContracts.length > 0){
         response += 'Known contracts:\r'
         const contractsList = playerContracts.sort((a, b)=> b.at - a.at).map(({team, at, isLoan, phase, endedAt, until})=> `${displayTeamName(inGuild, team, allTeams)} from: <t:${msToTimestamp(at)}:F> ${endedAt ? `to: <t:${msToTimestamp(endedAt)}:F>`: (discPlayer.roles.includes(serverRoles.clubManagerRole) ? ' - :crown: Manager' : (isLoan ? `LOAN until season ${until}, beginning of ${seasonPhases[phase].desc}`: `until end of season ${until-1}`))}`)
@@ -257,6 +259,7 @@ const editSteamUrl = async ({options=[], callerId, guild_id, member, application
   const inGuild = !!guild_id
   const playerResp = await DiscordRequest(`/guilds/${guild_id}/members/${player}`, { method: 'GET' })
   const discPlayer = await playerResp.json()
+  console.log(steamurl)
   const steamId = await getSteamIdFromSteamUrl(steamurl)
   if(!steamId) {
     return updateResponse({application_id, token, content: `Nothing edited, ${steamurl} is not a valid Steam URL`})
@@ -317,8 +320,8 @@ export const getPlayersList = async (totalPlayers, teamToList, displayCountries,
     })
   })
   let response = `<@&${teamToList}> players: ${displayPlayers.length}/30${displayPlayers.length>30? '\r## Too many players':''}\r`
-  response += `${displayPlayers.map(({ user, nat1, nat2, nat3, contract, steam, isManager, profilePicture, isBlackListed }) => 
-    `${isManager?':crown: ':''}${isBlackListed?':no_entry_sign: ':''}${nat1?displayCountries[nat1]:''}${nat2?displayCountries[nat2]:''}${nat3?displayCountries[nat3]:''} <@${user.id}>${steam? '<:steam:1201620242015719454>': ''}${profilePicture?'👕':''}${contract?.until && !isManager? (contract?.isLoan ? ` - LOAN Season ${contract?.until}, beginning of ${seasonPhases[contract?.phase]?.desc}`: ` - Season ${contract?.until-1}`) : ''}`
+  response += `${displayPlayers.map(({ user, nat1, nat2, nat3, contract, steamVerified, isManager, profilePicture, isBlackListed }) => 
+    `${isManager?':crown: ':''}${isBlackListed?':no_entry_sign: ':''}${nat1?displayCountries[nat1]:''}${nat2?displayCountries[nat2]:''}${nat3?displayCountries[nat3]:''} <@${user.id}>${steamVerified? '<:steam:1201620242015719454>': ''}${profilePicture?'👕':''}${contract?.until && !isManager? (contract?.isLoan ? ` - LOAN Season ${contract?.until}, beginning of ${seasonPhases[contract?.phase]?.desc}`: ` - Season ${contract?.until-1}`) : ''}`
   ).join('\r')}`
   return response
 }
@@ -430,7 +433,7 @@ export const autoCompleteNation = async (currentOption, dbClient, res) => {
   const countryChoices = autocompleteCountries
     .filter(({search}) => toSearch.length === 0 || search.includes(toSearch))
     .slice(0, 24)
-  console.log(countryChoices)
+  //  console.log(countryChoices)
   return res.send({
     type: InteractionResponseType.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT,
     data: {

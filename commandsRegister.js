@@ -15,6 +15,7 @@ import editTeams from "./commands/editTeams.js"
 import transferList from "./commands/transfers/transferList.js"
 import listDeals from "./commands/confirmations/listDeals.js"
 import contracts from "./commands/contracts.js"
+import team from "./commands/team.js"
 
 export default function() {
   return [
@@ -35,5 +36,6 @@ export default function() {
     ...transferList,
     ...listDeals,
     ...contracts,
+    ...team,
   ]
 }

@@ -6,13 +6,14 @@ import { DiscordRequest } from "./utils.js"
 import { serverChannels, serverRoles } from "./config/psafServerConfig.js"
 import { updateLeagueTable } from "./commands/league/leagueTable.js"
 import { autoPublish } from "./commands/matches/matchday.js"
-import { checkForPSO, detectSteamAlts, internalUpdateRegister, internalValidateSteamId, updateSteamNames } from "./commands/system.js"
+import { checkForPSO, detectSteamAlts, getUnregisteredPlayerIds, internalValidateSteamId, updateSteamNames } from "./commands/system.js"
 import { updateSelectionPost } from "./commands/nationalTeams/nationalTeamManagement.js"
 import { updateCacheCurrentSeason } from "./commands/season.js"
 import { postMessage } from "./functions/helpers.js"
 
 let currentTeamIndex = 0
 let currentSelectionIndex = 0
+let playerIdsToPSOCheck = []
 export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, allLeagues}) => {
   const cronJobs = [[
     '1 9 * * *',
@@ -94,7 +95,7 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
       await postMessage({channel_id: serverChannels.botTestingChannelId, content: 'Match result stats:'+refs.map(ref=> `<@${ref._id}>: ${ref.finishedCount}`).join('\r')})
     }*/
   ],[
-    '35 22 * * *',
+    '53 22 * * *',
     async function() {
       for await (const league of allLeagues) {
         await updateLeagueTable({dbClient, league})
@@ -115,7 +116,7 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
     async function() {
       await internalValidateSteamId({dbClient})
     },
-  ],[
+/*  ],[
     '31 12 * * *',
     async function() {
       await internalUpdateRegister({dryrun: false, guild_id: process.env.WC_GUILD_ID, dbClient})
@@ -124,7 +125,7 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
     '51 12 * * *',
     async function() {
       await internalUpdateRegister({dryrun: false, guild_id: process.env.GUILD_ID, dbClient})
-    },
+    },*/
   ],[
     '11 11,15,19 * * *',
     async function() {
@@ -140,7 +141,12 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
   ],[
     '*/10 * * * *',
     async function() {
-      await checkForPSO({dbClient})
+      playerIdsToPSOCheck = await checkForPSO({dbClient, playerIdsToPSOCheck})
+    }
+  ],[
+    '1 23 * * *',
+    async function() {
+      playerIdsToPSOCheck = await getUnregisteredPlayerIds()
     }
   ]]
   cronJobs.forEach(([time, func])=> {
