@@ -80,7 +80,7 @@ export const genericFormatMatch = (teams, match, allLeagues) => {
   const league = allLeagues.find(({value})=> value === match.league)
   const homeTeam = teams.find(({id})=> id === match.home)
   const awayTeam = teams.find(({id})=> id === match.away)
-  let response = `<${league.emoji}> **| ${league.name} ${match.matchday}** - <t:${match.dateTimestamp}:F>`
+  let response = `<${league.emoji}> **| ${league.name}${match.group? ` ${match.group}` : ' '} ${match.matchday}** - <t:${match.dateTimestamp}:F>`
     response += `\r> ${homeTeam.flag} ${homeTeam.emoji} <@&${homeTeam.id}> ${match.finished ? `**${match.homeScore} - ${match.awayScore}**`: ' :vs: '} <@&${awayTeam.id}> ${awayTeam.emoji} ${awayTeam.flag}`
   return response
 }
@@ -90,7 +90,7 @@ export const genericInterFormatMatch = (nations, nationalSelections, match, allL
   const awayTeam = nationalSelections.find(({shortname})=> shortname === match.away)
   const homeFlags = nations.filter(nation=>homeTeam.eligibleNationalities.includes(nation.name)).map(nation=>nation.flag).join('')
   const awayFlags = nations.filter(nation=>awayTeam.eligibleNationalities.includes(nation.name)).map(nation=>nation.flag).join('')
-  let response = `<${league.emoji}> **| ${league.name} ${match.matchday}** - <t:${match.dateTimestamp}:F>`
+  let response = `<${league.emoji}> **| ${league.name}${match.group? ` ${match.group}` : ' '} ${match.matchday}** - <t:${match.dateTimestamp}:F>`
     response += `\r> ${homeFlags} ${homeTeam.name} ${match.finished ? `**${match.homeScore} - ${match.awayScore}**`: ' :vs: '} ${awayTeam.name} ${awayFlags}`
   return response
 }
@@ -349,3 +349,5 @@ export const updateDiscordPlayer = (guild_id, playerId, body) => DiscordRequest(
   method: 'PATCH',
   body,
 })
+
+export const transferMarketStatus = (config) => config.findOne({name: 'transferMarket'})

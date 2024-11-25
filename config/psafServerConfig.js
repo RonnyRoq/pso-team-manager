@@ -449,6 +449,7 @@ export const serverRegions = [
 
 export const globalTransferBan = false
 export const globalTransferBanMessage = 'All transfers are blocked until further notice'
+export const globalTransferClosedMessage = "The transfer market is currently closed, read announcements for more info."
 
 export const postSeasonLeagues = ['1101999929171394653-a', '1101999929171394653-b', '1101999952483328140-a', '1101999952483328140-b', '1101999952483328140-c',
 '1101999952483328140-d', '1202650816197034025-a', '1202650816197034025-b']

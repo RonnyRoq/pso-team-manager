@@ -38,7 +38,7 @@ export const updateMatchMessage = async ({match, channel, post, content}) => {
 }
 
 export const formatMatch = async (league, homeTeam, awayTeam, match) => {
-  let response = `<${league.emoji}> **| ${league.name} ${match.matchday}** - ${match.dateTimestamp ? `<t:${match.dateTimestamp}:F>` : 'No date'}`
+  let response = `<${league.emoji}> **| ${league.name}${match.group? ` ${match.group}` : ' '} ${match.matchday}** - ${match.dateTimestamp ? `<t:${match.dateTimestamp}:F>` : 'No date'}`
   let extra = `\rID: ${match?._id}`
   if(homeTeam && awayTeam) {
     if(league.isInternational) {
@@ -135,7 +135,7 @@ export const formatDMMatch = (league, homeTeam, awayTeam, match, homeLineup, awa
   if(match.password) {
     const lobbyEmbed = {
       type: 'rich',
-      title: `<${league.emoji}> **| ${league.name} ${match.matchday}** - <t:${match.dateTimestamp}:F>`,
+      title: `<${league.emoji}> **| ${league.name}${match.group? ` ${match.group}` : ' '} ${match.matchday}** - <t:${match.dateTimestamp}:F>`,
       fields: []
     }
     lobbyEmbed.fields.push({name: 'Match Id', value: match._id.toString()})

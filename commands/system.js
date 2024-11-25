@@ -617,6 +617,18 @@ export const internalUpdateRegister = async ({dryrun, guild_id, dbClient}) => {
   return content
 }
 
+export const transferMarket = async ({application_id, token, interaction_id, callerId, dbClient, options}) => {
+  const {active} = optionsToObject(options)
+  await waitingMsg({interaction_id, token})
+  const isActive = active === "open"
+  const content = await dbClient(async ({config}) => {
+    await config.updateOne({name: 'transferMarket'}, {$set: {active: isActive}}, {upsert: true})
+    return `Transfer market is now ${isActive ? 'open' : 'closed'}`
+  })
+  await postMessage({channel_id: serverChannels.botActivityLogsChannelId, content: content+`\r*(from <@${callerId}>)*`})
+  await updateResponse({application_id, token, content})
+}
+
 export const updateRegister = async ({application_id, token, guild_id, dbClient, options}) => {
   const {dryrun} = optionsToObject(options)
   const content = await internalUpdateRegister({dryrun, guild_id, dbClient})
@@ -736,4 +748,18 @@ const manualSteamVerificationCmd = {
   }]
 }
 
-export default [systemCmd, updateLeaguesCmd, manualSteamVerificationCmd]
+const transferMarketCmd = {
+  name: 'transfermarket',
+  description: 'Transfer Market toggle on/off',
+  psaf: true,
+  func: transferMarket,
+  options: [{
+    type: 3,
+    name: 'active',
+    description: 'Open or closed',
+    choices: ["open", "closed"].map(value=> ({name: value, value})),
+    required: true,
+  }]
+}
+
+export default [systemCmd, updateLeaguesCmd, manualSteamVerificationCmd, transferMarketCmd]

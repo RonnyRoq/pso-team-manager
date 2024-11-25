@@ -1,24 +1,28 @@
 import { DiscordRequest } from "../../utils.js"
-import { optionsToObject, updateResponse, waitingMsg } from "../../functions/helpers.js"
-import { globalTransferBan, globalTransferBanMessage, serverChannels, serverRoles, transferBanStatus } from "../../config/psafServerConfig.js"
+import { optionsToObject, transferMarketStatus, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { globalTransferBan, globalTransferBanMessage, globalTransferClosedMessage, serverChannels, serverRoles, transferBanStatus } from "../../config/psafServerConfig.js"
 import { seasonPhases } from "../season.js"
 
 
 const twoWeeksMs = 1209600033
 
-const preDealChecks = async({guild_id, player, member, contracts, teams, confirmations}) => {
+const preDealChecks = async({guild_id, player, member, contracts, teams, confirmations, config}) => {
   if(!member.roles.includes(serverRoles.clubManagerRole)) {
     return {message: 'This command is restricted to Club Managers'}
   }
   if(globalTransferBan) {
     return {message: globalTransferBanMessage}
   }
-  const [discPlayerResp, destTeam, ongoingLoan, ongoingConfirmation] = await Promise.all([
+  const [marketStatus, discPlayerResp, destTeam, ongoingLoan, ongoingConfirmation] = await Promise.all([
+    transferMarketStatus(config),
     DiscordRequest(`/guilds/${guild_id}/members/${player}`, {}),
     teams.findOne({active: true, $or: member.roles.map(id=>({id}))}),
     contracts.findOne({isLoan: true, endedAt: null, playerId: player}),
     confirmations.findOne({playerId: player})
   ])
+  if(!marketStatus.active) {
+    return globalTransferClosedMessage
+  }
   if(destTeam.transferBan === transferBanStatus.transferBan) {
     return {message: `Your team <@&${destTeam.id}> is banned from doing transfers.`}
   }
@@ -48,8 +52,8 @@ export const deal = async ({dbClient, options, guild_id, interaction_id, token, 
   await waitingMsg({interaction_id, token})
   const {player, amount, desc} = optionsToObject(options)
   
-  const response = await dbClient(async ({teams, confirmations, contracts, pendingDeals})=> {
-    const {message, sourceTeam, destTeam} = await preDealChecks({guild_id, player, member, contracts, teams, confirmations})
+  const response = await dbClient(async ({teams, confirmations, contracts, pendingDeals, config})=> {
+    const {message, sourceTeam, destTeam} = await preDealChecks({guild_id, player, member, contracts, teams, confirmations, config})
     if(message) {
       //If the checks returned a message, we stop here and return it.
       return message
@@ -108,8 +112,8 @@ export const loan = async ({interaction_id, guild_id, application_id, token, mem
   if(!member.roles.includes(serverRoles.clubManagerRole)) {
     return updateResponse({application_id, token, content: 'This command is restricted to Club Managers'})
   }
-  const message = await dbClient(async ({pendingLoans, teams, seasonsCollect, contracts, confirmations}) => {
-    const {message, sourceTeam, destTeam} = await preDealChecks({guild_id, player, member, contracts, teams, confirmations})
+  const message = await dbClient(async ({pendingLoans, teams, seasonsCollect, contracts, confirmations, config}) => {
+    const {message, sourceTeam, destTeam} = await preDealChecks({guild_id, player, member, contracts, teams, confirmations, config})
     if(message) {
       //If the checks returned a message, we stop here and return it.
       return message

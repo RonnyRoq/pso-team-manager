@@ -33,6 +33,7 @@ const mongoClient = (client) => {
         transferList: psoDb.collection("TransferList"),
         lft: psoDb.collection("Lft"),
         mongoCache: psoDb.collection("MongoCache"),
+        config: psoDb.collection("Config"),
       }
       return await callback(collections)
     }

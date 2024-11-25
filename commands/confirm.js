@@ -1,6 +1,6 @@
 import { DiscordRequest } from "../utils.js"
-import { msToTimestamp, getPlayerNick, sleep, waitingMsg, optionsToObject, updateResponse, quickResponse, addPlayerPrefix, getRegisteredRole } from "../functions/helpers.js"
-import { globalTransferBan, globalTransferBanMessage, serverChannels, serverRoles, transferBanStatus } from "../config/psafServerConfig.js"
+import { msToTimestamp, getPlayerNick, sleep, waitingMsg, optionsToObject, updateResponse, quickResponse, addPlayerPrefix, getRegisteredRole, transferMarketStatus } from "../functions/helpers.js"
+import { globalTransferBan, globalTransferBanMessage, globalTransferClosedMessage, serverChannels, serverRoles, transferBanStatus } from "../config/psafServerConfig.js"
 import commandsRegister from "../commandsRegister.js"
 import { seasonPhases } from "./season.js"
 import { getAllNationalities } from "../functions/allCache.js"
@@ -80,8 +80,6 @@ export const register = async ({member, callerId, interaction_id, guild_id, appl
   await waitingMsg({interaction_id, token})
   const {nationality, extranat, steamprofileurl, uniqueid} = optionsToObject(options)
   const steam = steamprofileurl
-  const isPSAF = guild_id === process.env.GUILD_ID
-  const isWC = guild_id === process.env.WC_GUILD_ID
     
   const content = await dbClient(async ({players, contracts, teams})=> {
     const [dbPlayer, allCountries, activeContracts] = await Promise.all([
@@ -216,8 +214,9 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
     return updateResponse({application_id, token, content: globalTransferBanMessage})
   }
   
-  const response = await dbClient(async ({teams, players, confirmations, pendingDeals, pendingLoans})=> {
-    const [allTeams, dbPlayer, allCountries, previousConfirmation, pendingDeal, pendingLoan] = await Promise.all([
+  const response = await dbClient(async ({teams, players, confirmations, pendingDeals, pendingLoans, config})=> {
+    const [marketStatus, allTeams, dbPlayer, allCountries, previousConfirmation, pendingDeal, pendingLoan] = await Promise.all([
+      transferMarketStatus(config),
       teams.find({active: true}).toArray(),
       players.findOne({id: callerId}),
       getAllNationalities(),
@@ -225,6 +224,9 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
       pendingDeals.findOne({playerId: callerId, destTeam: team, approved: true}),
       pendingLoans.findOne({playerId: callerId, destTeam: team, approved: true})
     ])
+    if(!marketStatus.active) {
+      return globalTransferClosedMessage
+    }
     const currentTeam = allTeams.find(({id}) => member.roles.includes(id))
     const teamToJoin = allTeams.find(({id})=> id === team)
     const deal = pendingDeal || pendingLoan
