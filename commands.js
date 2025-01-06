@@ -6,7 +6,6 @@ import { helpCmd } from './commands/help.js';
 import { editMatchCmd, matchCmd, matchIdCmd, matchesCmd, moveTheMatchCmd, pastMatchesCmd, publishMatchCmd, resetMatchCmd, unPublishMatchCmd } from './commands/match.js';
 import { blacklistTeamCmd, emojiCmd, expireThingsCmd, fixNamesCmd, managerContractsCmd, systemTeamCmd } from './commands/system.js';
 import { playerCmd } from './commands/player.js';
-import { showVotesCmd, voteCoachCmd } from './commands/nationalTeam.js';
 import { confirmCmd, registerCmd, releaseCmd, updateConfirmCmd } from './commands/confirm.js';
 import { dealCmd, loanCmd } from './commands/confirmations/deal.js';
 import { renewCmd, setContractCmd, teamTransferCmd, transferCmd } from './commands/transfers.js';
@@ -125,7 +124,7 @@ const GUILD_COMMANDS = [
   playerCmd,
   confirmCmd, updateConfirmCmd, renewCmd, dealCmd, loanCmd, releaseCmd, registerCmd,
   transferCmd, teamTransferCmd, FREEPLAYER, FINE, BONUS, addUniqueIdCmd,
-  emojiCmd, showBlacklistCmd, showNoContractsCmd, voteCoachCmd, showVotesCmd,
+  emojiCmd, showBlacklistCmd, showNoContractsCmd,
   disbandTeamCmd, expireContractsCmd, addSteamIdCmd, setRatingCmd, setNameCmd,
   leagueTeamsCmd, leagueTableCmd, imageLeagueTableCmd, postLeagueTableCmd, generateMatchdayCmd,
   getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd, testDMMatchCmd, pastMatchesCmd, moveMatchCmd, listMovesCmd,
@@ -136,7 +135,7 @@ const GUILD_COMMANDS = [
 const {globalCommands, psafCommands, wcCommands} = mapToCmd(commandsRegister())
 
 const WC_GUILD_COMMANDS = [
-  registerCmd, voteCoachCmd,
+  registerCmd,
 ]
 const allCommands = [...ALL_COMMANDS, ...globalCommands]
 console.log(Object.fromEntries(allCommands.map((cmd,index) => [index, cmd.name])))

@@ -179,11 +179,11 @@ export const matchStatsPrompt = async ({interaction_id, token, custom_id, dbClie
   })
 }
 
-export const endMatchModalResponse = async ({interaction_id, token, custom_id, components, dbClient}) => {
+export const endMatchModalResponse = async ({interaction_id, token, custom_id, callerId, components, dbClient}) => {
   const [,,id] = custom_id.split('_')
   const entries = components.map(({components})=> components[0])
   const {home_score, away_score, ff=''} = Object.fromEntries(entries.map(entry=> [entry.custom_id, entry.value]))
-  const endMatchResponse = await internalEndMatch({id, homeScore:home_score, awayScore:away_score, ff:ff.toLowerCase() === 'ff', dbClient})
+  const endMatchResponse = await internalEndMatch({id, homeScore:home_score, awayScore:away_score, ff:ff.toLowerCase() === 'ff', dbClient, callerId})
   return await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
     method: 'POST',
     body: {

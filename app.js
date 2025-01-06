@@ -17,7 +17,7 @@ import { help, helpAdmin } from './commands/help.js';
 import { allPlayers, autoCompleteNation, player, players } from './commands/player.js';
 import { editMatch, endMatch, match, matchId, matches, pastMatches, publishMatch, resetMatch, unpublishMatch } from './commands/match.js';
 import { blacklistTeam, doubleContracts, emoji, expireThings, fixNames, initCountries, managerContracts, systemTeam } from './commands/system.js';
-import { addSelection, autoCompleteSelections, removeSelection, showVotes, voteCoach } from './commands/nationalTeam.js';
+import { addSelection, autoCompleteSelections, removeSelection } from './commands/nationalTeam.js';
 import { confirm, pendingConfirmations, register, releasePlayer } from './commands/confirm.js';
 import { approveDealAction, approveLoanAction, declineDealAction, declineLoanAction, finishLoanRequest, removeConfirmation, removeDeal, removeLoan, removeRelease } from './commands/confirmations/actions.js';
 import commandsRegister from './commandsRegister.js';
@@ -302,9 +302,6 @@ function start() {
           if(name === "register") {
             return register(commandOptions)
           }
-          if (name === "votecoach") {
-            return voteCoach(commandOptions)
-          }
           if(wcCommands.has(name)) {
             return wcCommands.get(name)(commandOptions)
           }
@@ -561,10 +558,6 @@ function start() {
             })
           }
 
-          if (name === "showcoach") {
-            return voteCoach(commandOptions)
-          }
-
           if (name === "showexpiringcontracts") {
             return showExpiringContracts(commandOptions)
           }
@@ -591,10 +584,6 @@ function start() {
 
           if (name === "loan") {
             return loan(commandOptions)
-          }
-
-          if(name === "votecoach") {
-            return voteCoach(commandOptions)
           }
 
           if(name === "managercontracts"){
@@ -698,10 +687,6 @@ function start() {
 
           if(name === 'testdmmatch') {
             return testDMMatch(commandOptions)
-          }
-
-          if(name === 'showvotes') {
-            return showVotes(commandOptions)
           }
 
           if(name === 'movematch') {
@@ -853,5 +838,13 @@ process.on('uncaughtException', async function (err) {
   await logSystemCrash(err)
   process.exit(1)
 });
+
+process.on('beforeExit', code => {
+  // Can make asynchronous calls
+  setTimeout(() => {
+    console.log(`Process will exit with code: ${code}`)
+    process.exit(code)
+  }, 100)
+})
 
 start()

@@ -34,6 +34,10 @@ const mongoClient = (client) => {
         lft: psoDb.collection("Lft"),
         mongoCache: psoDb.collection("MongoCache"),
         config: psoDb.collection("Config"),
+        playerMigrations: psoDb.collection("PlayerMigrations"),
+        searchPlayers: psoDb.collection("searchPlayers"),
+        searchTeams: psoDb.collection("searchTeams"),
+        searchNationalSelections: psoDb.collection("searchNationalSelections"),
       }
       return await callback(collections)
     }

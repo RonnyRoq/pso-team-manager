@@ -13,9 +13,9 @@ const __dirname = path.dirname(__filename);
 
 export const getWeb = (localdev=false, uri='') =>{
   const web = express() // the site app
+  web.use(express.static('web'))
   web.set('view engine', 'html');
   web.set('views', __dirname + '/web');
-  web.use(express.static('web'))
   web.engine('html', renderFile)
   
   if(!localdev){

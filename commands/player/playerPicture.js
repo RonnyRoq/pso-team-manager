@@ -1,13 +1,13 @@
 import path from 'path';
 import download from "image-downloader"
 import {fileURLToPath} from 'url'
-import { getPost, optionsToObject, postMessage, quickResponse, silentResponse, updatePost, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { followUpResponse, getPost, optionsToObject, postMessage, silentResponse, updatePost, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { serverChannels } from "../../config/psafServerConfig.js"
 import { getAllNationalities } from '../../functions/allCache.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-export const postPlayerPicture = async({options=[], callerId, resolved, interaction_id, token, dbClient}) => {
+export const postPlayerPicture = async({options=[], callerId, resolved, interaction_id, application_id, guild_id, token, dbClient}) => {
   const {picture} = optionsToObject(options)
   const player = callerId
   if(!picture) {
@@ -24,10 +24,11 @@ export const postPlayerPicture = async({options=[], callerId, resolved, interact
           if(!dbPlayer){
             return silentResponse({interaction_id, token, content: `Can't find <@${callerId}> in database. Have you registered?`})
           }
-          await quickResponse({interaction_id, token, content: `<@${callerId}> submitted:\r`+image})
+          const postResp = await postMessage({channel_id: serverChannels.picsChannelId, content: `<@${callerId}> submitted:\r`+image})
+          const postMsg = await postResp.json()
           const confirmationResp = await postMessage({
             channel_id: serverChannels.confirmationPictures,
-            content: `<@${callerId}> submitted this picture:\r${image}${dbPlayer.profilePicture ? `\rPrevious pic: https://pso.shinmugen.net/${dbPlayer.profilePicture}`: ''}`,
+            content: `<@${callerId}> submitted this picture: https://discord.com/channels/${guild_id}/${postMsg.channel_id}/${postMsg.id} \r${image}${dbPlayer.profilePicture ? `\rPrevious pic: https://pso.shinmugen.net/${dbPlayer.profilePicture}`: ''}`,
             components:[{
               type: 1,
               components: [{
@@ -43,8 +44,11 @@ export const postPlayerPicture = async({options=[], callerId, resolved, interact
               }]
             }]
           })
+          const statusResp = await postMessage({channel_id: serverChannels.picsChannelId, content: 'Pending validation...'})
+          const statusMsg = await statusResp.json()
           const confirmationMsg = await confirmationResp.json()
-          await pendingPictures.updateOne({playerId: callerId}, {$set: {playerId: callerId, pictureUrl: image, postedAt: Date.now(), confirmationId: confirmationMsg.id}}, {upsert: true})
+          await pendingPictures.updateOne({playerId: callerId}, {$set: {playerId: callerId, pictureUrl: image, postedAt: Date.now(), confirmationId: confirmationMsg.id, statusId: statusMsg.id}}, {upsert: true})
+          return silentResponse({interaction_id, token, content: `Posted. Please wait for validation.`})
         })
       }
     }
@@ -96,6 +100,9 @@ export const confirmPicture = async ({interaction_id, application_id, callerId, 
     const postResp = await getPost({channel_id: serverChannels.confirmationPictures, messageId: message.id})
     const post = await postResp.json()
     await updatePost({channel_id: serverChannels.confirmationPictures, messageId: message.id, content: post.content + `\rValidated by <@${callerId}>`, components: []})
+    if(pendingPic.statusId) {
+      await updatePost({channel_id: serverChannels.picsChannelId, messageId: pendingPic.statusId, content: "Approved, will be on site in a few hours"})
+    }
     return response
   })
   return updateResponse({application_id, token, content})
@@ -110,6 +117,9 @@ export const cancelPicture = async ({interaction_id, token, callerId, message, d
     const postResp = await getPost({channel_id: serverChannels.confirmationPictures, messageId: message.id})
     const post = await postResp.json()
     await updatePost({channel_id: serverChannels.confirmationPictures, messageId: message.id, content: post.content + `\rCancelled by <@${callerId}>`, components: []})
+    if(pendingPic.statusId) {
+      await updatePost({channel_id: serverChannels.picsChannelId, messageId: pendingPic.statusId, content: "Declined by admin"})
+    }
     return 'Cancelled'
   })
   return silentResponse({interaction_id, token, content})

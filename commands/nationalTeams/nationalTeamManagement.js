@@ -4,7 +4,6 @@ import { getAllPlayers } from "../../functions/playersCache.js"
 import { DiscordRequest } from "../../utils.js"
 import { getFastCurrentSeason } from "../season.js"
 
-
 const createSelection = async ({application_id, token, options, dbClient}) => {
   const {name, shortname, region, eligiblenationality, logo, eligiblenationality2, eligiblenationality3, eligiblenationality4, eligiblenationality5} = optionsToObject(options)
   const eligibleNationalities = [...new Set([eligiblenationality, eligiblenationality2, eligiblenationality3, eligiblenationality4, eligiblenationality5])].filter(nation=>!!nation)
@@ -58,8 +57,8 @@ const editSelection = async ({application_id, token, options, dbClient})=> {
 }
 
 export const updateSelectionPost = async ({selection, dbClient}) => {
+  const season = getFastCurrentSeason()
   return dbClient(async ({nationalTeams, nationalities, nationalContracts})=> {
-    const season = getFastCurrentSeason()
     const nationalTeam = await nationalTeams.findOne({shortname: selection})
     const selectedNationalities = await nationalities.find({name: {$in: nationalTeam.eligibleNationalities}}).toArray()
     const nationalPlayers = await nationalContracts.find({season, selection}).toArray()
@@ -111,14 +110,14 @@ export const updateSelectionPost = async ({selection, dbClient}) => {
     const allPlayers = await getAllPlayers(process.env.GUILD_ID)
     const nationalPlayersId = nationalPlayers.map(dbPlayer => dbPlayer.playerId)
     const discNationalPlayers = allPlayers.filter(player=> nationalPlayersId.includes(player.user.id))
-    await discNationalPlayers.forEach(async discPlayer => {
+    for await (const discPlayer of discNationalPlayers) {
       await DiscordRequest(`guilds/${process.env.GUILD_ID}/members/${discPlayer.user.id}`, {
         method: 'PATCH',
         body: {
           roles: [...new Set([...discPlayer.roles, serverRoles.nationalTeamPlayerRole])]
         }
       })
-    })
+    }
   })
 }
 
@@ -131,6 +130,15 @@ Players: (${players.length})\r
 ${players.map(player => `> <@${player.playerId}>`).join('\r')}\r
 ${showLogo && nationalTeam.logo ? nationalTeam.logo : ''}`
 }
+
+export const getSelection = async ({dbClient, shortname, name}) => 
+  dbClient(async({nationalTeams, nationalities, nationalContracts, seasonsCollect}) => {
+    const season = await getCurrentSeason(seasonsCollect)
+    const nationalTeam = await nationalTeams.findOne({$or: [{shortname}, {name}]})
+    const eligibleNationalities = await nationalities.find({name: {$in: nationalTeam.eligibleNationalities}}).toArray()
+    const nationalPlayers = await nationalContracts.find({season, selection: nationalTeam.shortname}).toArray()
+    return {nationalTeam, eligibleNationalities, nationalPlayers}
+  })
 
 const showSelection = async ({application_id, token, options, dbClient}) => {
   const {selection} = optionsToObject(options)

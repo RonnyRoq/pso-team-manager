@@ -1,6 +1,6 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { serverChannels, serverRoles } from "../../config/psafServerConfig.js"
-import { msToTimestamp, quickResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { msToTimestamp, postMessage, quickResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { editAMatchInternal, formatMatch, getMatchTeams, getMatchTeamsSync } from "../match.js"
 import { DiscordRequest } from "../../utils.js"
 import { ObjectId } from "mongodb"
@@ -256,12 +256,14 @@ export const approveMoveMatch = async ({interaction_id, token, application_id, c
         content: moveRequestMessage.content+`\rAccepted by <@${callerId}>. New date is <t:${matchToMove.dateTimestamp}:F>`
       }
     })
+    const moveContent = `Match moved, requested by <@${matchToMove.requester}> accepted by <@${callerId}>.\r${updatedMatch}`
     await DiscordRequest(`/channels/${serverChannels.scheduleChannelId}/messages`, {
       method: 'POST',
       body: {
-        content: `Match moved, requested by <@${matchToMove.requester}> accepted by <@${callerId}>.\r${updatedMatch}`
+        content: moveContent
       }
     })
+    await postMessage({channel_id:serverChannels.streamersChannelId, content: moveContent})
     await moveRequest.deleteOne({_id: matchToMove._id})
     return `Move confirmed:\r${updatedMatch}`
   })

@@ -1032,6 +1032,278 @@ const wcLineupCmd = {
     }]
   }]
 }
+const startingEleven = {
+  name: 'startingeleven',
+  description: 'Lineup for a 11v11 match',
+  type: 1,
+  psaf: true,
+  func: lineupClub,
+  options: [{
+    type: 1,
+    name: 'a',
+    description: '4-3-3 Lineup',
+    options: [{
+      type: 6,
+      name: 'gk',
+      description: 'GK',
+      required: true
+    },{
+      type: 6,
+      name: 'lb',
+      description: 'LB',
+      required: true
+    },{
+      type: 6,
+      name: 'lcb',
+      description: 'LCB',
+      required: true
+    },{
+      type: 6,
+      name: 'rcb',
+      description: 'RCB',
+      required: true
+    },{
+      type: 6,
+      name: 'rb',
+      description: 'RB',
+      required: true
+    },{
+      type: 6,
+      name: 'lcm',
+      description: 'LCM',
+      required: true
+    },{
+      type: 6,
+      name: 'cm',
+      description: 'CM',
+      required: true
+    },{
+      type: 6,
+      name: 'rcm',
+      description: 'RCM',
+      required: true
+    },{
+      type: 6,
+      name: 'lw',
+      description: 'LW',
+      required: true
+    },{
+      type: 6,
+      name: 'st',
+      description: 'ST',
+      required: true
+    },{
+      type: 6,
+      name: 'rw',
+      description: 'RW',
+      required: true
+    },{
+      type: 6,
+      name: 'sub1',
+      description: 'Sub1'
+    },{
+      type: 6,
+      name: 'sub2',
+      description: 'Sub2'
+    },{
+      type: 6,
+      name: 'sub3',
+      description: 'Sub3'
+    },{
+      type: 6,
+      name: 'sub4',
+      description: 'Sub4'
+    },{
+      type: 6,
+      name: 'sub5',
+      description: 'Sub5'
+    },{
+      type: 6,
+      name: 'sub6',
+      description: 'Sub6'
+    }, {
+      type: 3,
+      name: 'vs',
+      description: 'Against'
+    }]
+  },{
+    type: 1,
+    name: 'b',
+    description: 'A 5-2-3 lineup',
+    options: [{
+      type: 6,
+      name: 'gk',
+      description: 'GK',
+      required: true
+    },{
+      type: 6,
+      name: 'lb',
+      description: 'LB',
+      required: true
+    },{
+      type: 6,
+      name: 'lcb',
+      description: 'LCB',
+      required: true
+    },{
+      type: 6,
+      name: 'cb',
+      description: 'CB',
+      required: true
+    },{
+      type: 6,
+      name: 'rcb',
+      description: 'RCB',
+      required: true
+    },{
+      type: 6,
+      name: 'rb',
+      description: 'RB',
+      required: true
+    },{
+      type: 6,
+      name: 'lcm',
+      description: 'LCM',
+      required: true
+    },{
+      type: 6,
+      name: 'rcm',
+      description: 'RCM',
+      required: true
+    },{
+      type: 6,
+      name: 'lw',
+      description: 'LW',
+      required: true
+    },{
+      type: 6,
+      name: 'st',
+      description: 'ST',
+      required: true
+    },{
+      type: 6,
+      name: 'rw',
+      description: 'RW',
+      required: true
+    },{
+      type: 6,
+      name: 'sub1',
+      description: 'Sub1'
+    },{
+      type: 6,
+      name: 'sub2',
+      description: 'Sub2'
+    },{
+      type: 6,
+      name: 'sub3',
+      description: 'Sub3'
+    },{
+      type: 6,
+      name: 'sub4',
+      description: 'Sub4'
+    },{
+      type: 6,
+      name: 'sub5',
+      description: 'Sub5'
+    },{
+      type: 6,
+      name: 'sub6',
+      description: 'Sub6'
+    }, {
+      type: 3,
+      name: 'vs',
+      description: 'Against'
+    }]
+  },{
+    type: 1,
+    name: 'c',
+    description: 'a 3-4-3 lineup',
+    options: [{
+      type: 6,
+      name: 'gk',
+      description: 'GK',
+      required: true
+    },{
+      type: 6,
+      name: 'lb',
+      description: 'LB',
+      required: true
+    },{
+      type: 6,
+      name: 'cb',
+      description: 'CB',
+      required: true
+    },{
+      type: 6,
+      name: 'rb',
+      description: 'RB',
+      required: true
+    },{
+      type: 6,
+      name: 'lm',
+      description: 'LM',
+      required: true
+    },{
+      type: 6,
+      name: 'lcm',
+      description: 'LCM',
+      required: true
+    },{
+      type: 6,
+      name: 'rcm',
+      description: 'RCM',
+      required: true
+    },{
+      type: 6,
+      name: 'rm',
+      description: 'RM',
+      required: true
+    },{
+      type: 6,
+      name: 'lw',
+      description: 'LW',
+      required: true
+    },{
+      type: 6,
+      name: 'st',
+      description: 'ST',
+      required: true
+    },{
+      type: 6,
+      name: 'rw',
+      description: 'RW',
+      required: true
+    },{
+      type: 6,
+      name: 'sub1',
+      description: 'Sub1'
+    },{
+      type: 6,
+      name: 'sub2',
+      description: 'Sub2'
+    },{
+      type: 6,
+      name: 'sub3',
+      description: 'Sub3'
+    },{
+      type: 6,
+      name: 'sub4',
+      description: 'Sub4'
+    },{
+      type: 6,
+      name: 'sub5',
+      description: 'Sub5'
+    },{
+      type: 6,
+      name: 'sub6',
+      description: 'Sub6'
+    }, {
+      type: 3,
+      name: 'vs',
+      description: 'Against'
+    }]
+  }]
+}
 const startingSix = {
   name: 'startingsix',
   description: 'Lineup for a 6v6 match',
@@ -1226,4 +1498,4 @@ const startingEight = {
   options: wcLineupCmd.options
 }
 
-export default [wcLineupCmd, startingSix, startingEight, lineupCmd, boxLineupcmd, eightLineupCmd, internationalLineupCmd]
+export default [wcLineupCmd, startingSix, startingEight, startingEleven, lineupCmd, boxLineupcmd, eightLineupCmd, internationalLineupCmd]

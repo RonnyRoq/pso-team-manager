@@ -68,7 +68,7 @@ export const allLeagues = [
     "channel": "1162009301402001418",
     "defaultImage": null,
     "isInternational": true,
-    "active": false,
+    "active": true,
     "players": 6,
     "order": 4
   },
@@ -248,7 +248,8 @@ export const allLeagues = [
     "players": 8,
     "order": 16,
     "standingsChannel": "1231309257257783306",
-    "currentMatchDay": "Day 1"
+    "currentMatchDay": "Day 6",
+    "sorting": "goaldiff"
   },
   {
     "_id": "667a746e951c2249cdbc941e",
@@ -278,7 +279,8 @@ export const allLeagues = [
     "players": 8,
     "order": 18,
     "standingsChannel": "1231309257257783306",
-    "currentMatchDay": "Day 1"
+    "currentMatchDay": "Day 6",
+    "sorting": "goaldiff"
   },
   {
     "_id": "667a746e951c2249cdbc9420",
@@ -327,12 +329,12 @@ export const allLeagues = [
     "name": "Masters League",
     "value": "1101999952483328140-k",
     "emoji": ":___MastersLeague:1199341225472425984",
-    "pingRole": null,
+    "pingRole": "everyone",
     "standingsMsg": null,
     "channel": "1101999952483328140",
     "defaultImage": null,
     "isInternational": false,
-    "active": false,
+    "active": true,
     "players": 6,
     "order": 22,
     "continental": true,
@@ -497,7 +499,7 @@ export const allLeagues = [
     "channel": "1249776996636954734",
     "defaultImage": null,
     "isInternational": false,
-    "active": true,
+    "active": false,
     "players": 8,
     "order": 33,
     "currentMatchDay": "Day 2"
@@ -507,25 +509,26 @@ export const allLeagues = [
     "name": "Challengers League",
     "value": "1101999929171394653-k",
     "emoji": ":___ChallengersLeague:1199341222444158986",
-    "pingRole": null,
+    "pingRole": "everyone",
     "standingsMsg": null,
     "channel": "1101999929171394653",
     "defaultImage": null,
     "isInternational": false,
-    "active": false,
+    "active": true,
     "players": 6,
     "order": 34,
     "continental": true,
     "knockout": true,
-    "currentMatchDay": "Final"
+    "currentMatchDay": "Final",
+    "sorting": "head2head"
   },
   {
     "_id": "667a746e951c2249cdbc9430",
     "name": "Masters League - Groups",
     "value": "1101999952483328140-g",
     "emoji": ":___MastersLeague:1199341225472425984",
-    "pingRole": null,
-    "standingsMsg": "1257684608401674280",
+    "pingRole": "everyone",
+    "standingsMsg": "1313952037733404674",
     "channel": "1101999952483328140",
     "defaultImage": null,
     "isInternational": false,
@@ -534,15 +537,16 @@ export const allLeagues = [
     "order": 2,
     "currentMatchDay": "Day 3",
     "continental": true,
-    "standingsChannel": "1252400708343562241"
+    "standingsChannel": "1252400708343562241",
+    "sorting": "head2head"
   },
   {
     "_id": "667a746e951c2249cdbc9431",
     "name": "Challengers League - Groups",
     "value": "1101999929171394653-g",
     "emoji": ":___ChallengersLeague:1199341222444158986",
-    "pingRole": null,
-    "standingsMsg": "1257684695932731400",
+    "pingRole": "everyone",
+    "standingsMsg": "1313952353010974791",
     "channel": "1101999929171394653",
     "defaultImage": null,
     "isInternational": false,
@@ -551,7 +555,8 @@ export const allLeagues = [
     "order": 36,
     "currentMatchDay": "Day 3",
     "continental": true,
-    "standingsChannel": "1252400708343562241"
+    "standingsChannel": "1252400708343562241",
+    "sorting": "head2head"
   },
   {
     "_id": "667a746e951c2249cdbc9432",
@@ -613,7 +618,8 @@ export const allLeagues = [
     "active": true,
     "players": 6,
     "order": 0,
-    "currentMatchDay": "Day 1"
+    "currentMatchDay": "Day 7",
+    "sorting": "goaldiff"
   },
   {
     "_id": "66c63e8cc91bd7222a7063f7",
@@ -628,7 +634,8 @@ export const allLeagues = [
     "active": true,
     "players": 6,
     "order": 2,
-    "currentMatchDay": "Day 1"
+    "currentMatchDay": "Day 6",
+    "sorting": "goaldiff"
   },
   {
     "_id": "66c63ecac91bd7222a7063f8",
@@ -643,7 +650,8 @@ export const allLeagues = [
     "active": true,
     "players": 6,
     "order": 15,
-    "currentMatchDay": "Day 1"
+    "currentMatchDay": "Day 7",
+    "sorting": "goaldiff"
   },
   {
     "_id": "66c63ef9c91bd7222a7063f9",
@@ -658,9 +666,14 @@ export const allLeagues = [
     "active": true,
     "players": 6,
     "order": 31,
-    "currentMatchDay": "Day 1"
+    "currentMatchDay": "Day 6",
+    "sorting": "goaldiff"
   }
 ]export const leagueChoices = [
+  {
+    "name": "Nations League",
+    "value": "1162009301402001418"
+  },
   {
     "name": "International Friendly",
     "value": "1156513002552573953"
@@ -678,12 +691,16 @@ export const allLeagues = [
     "value": "1156513002552573953-c"
   },
   {
+    "name": "Masters League",
+    "value": "1101999952483328140-k"
+  },
+  {
     "name": "PG6",
     "value": "1209539443271270452"
   },
   {
-    "name": "PG8",
-    "value": "1209539443271270452-8"
+    "name": "Challengers League",
+    "value": "1101999929171394653-k"
   },
   {
     "name": "Masters League - Groups",

@@ -106,7 +106,7 @@ const innerPlayer = async ({playerId, guild_id, member, dbClient}) => {
       response += `PSO Steam validated: ${dbPlayer.steamVerified ? 'yes': dbPlayer.steamValidation}\r`
       if(playerContracts.length > 0){
         response += 'Known contracts:\r'
-        const contractsList = playerContracts.sort((a, b)=> b.at - a.at).map(({team, at, isLoan, phase, endedAt, until})=> `${displayTeamName(inGuild, team, allTeams)} from: <t:${msToTimestamp(at)}:F> ${endedAt ? `to: <t:${msToTimestamp(endedAt)}:F>`: (discPlayer.roles.includes(serverRoles.clubManagerRole) ? ' - :crown: Manager' : (isLoan ? `LOAN until season ${until}, beginning of ${seasonPhases[phase].desc}`: `until end of season ${until-1}`))}`)
+        const contractsList = playerContracts.sort((a, b)=> b.at - a.at).map(({team, at, isLoan, phase, endedAt, until})=> `${displayTeamName(inGuild, team, allTeams)} from: <t:${msToTimestamp(at)}:F> ${endedAt ? `to: <t:${msToTimestamp(endedAt)}:F>`: (discPlayer.roles.includes(serverRoles.clubManagerRole) ? ' - :crown: Manager' : (isLoan ? `LOAN until season ${until}, beginning of ${seasonPhases[phase]?.desc || phase}`: `until end of season ${until-1}`))}`)
         response += contractsList.join('\r')
       }
       if(dbPlayer.profilePicture && isStaff) {
@@ -294,6 +294,22 @@ const editSteamUrl = async ({options=[], callerId, guild_id, member, application
   return updateResponse({application_id, token, content})
 }
 
+export const migratePlayer = async ({application_id, token, guild_id, options, dbClient}) => {
+  const {newPlayer, oldPlayer, oldPlayerId} = options
+  const allPlayers = await getAllPlayers(guild_id)
+  let discPlayer = oldPlayer
+  if(!discPlayer) {
+    discPlayer = allPlayers.find(player => player.user.id === oldPlayerId)
+  }
+  if(!discPlayer) {
+    return updateResponse({application_id, token, content:`Can't find the player you're trying to migrate.`})
+  }
+  const content = await dbClient(({players})=> {
+    
+  })
+  return updateResponse({application_id, token, content:'done'})
+}
+
 export const getPlayersList = async (totalPlayers, teamToList, displayCountries, players, contracts) => {
   const teamPlayers = totalPlayers.filter((player) => player.roles.includes(teamToList)).sort((playerA, playerB) => {
     const aManager = playerA.roles.includes(serverRoles.clubManagerRole)
@@ -454,6 +470,7 @@ const subCommands = {
   'details': editPlayerDetails,
   'picture': editPlayerPicture,
   'steam': editSteamUrl,
+  'migrate': migratePlayer,
 }
 
 

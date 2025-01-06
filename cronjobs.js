@@ -10,6 +10,7 @@ import { checkForPSO, detectSteamAlts, getUnregisteredPlayerIds, internalValidat
 import { updateSelectionPost } from "./commands/nationalTeams/nationalTeamManagement.js"
 import { updateCacheCurrentSeason } from "./commands/season.js"
 import { postMessage } from "./functions/helpers.js"
+import { buildPlayerSearch } from "./commands/search/buildSearchIndexes.js"
 
 let currentTeamIndex = 0
 let currentSelectionIndex = 0
@@ -147,6 +148,13 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
     '1 23 * * *',
     async function() {
       playerIdsToPSOCheck = await getUnregisteredPlayerIds()
+    }
+  ],[
+    '0 */6 * * *',
+    async function() {
+      console.log('building search indexes')
+      await buildPlayerSearch({dbClient})
+      console.log('search indexes filled')
     }
   ]]
   cronJobs.forEach(([time, func])=> {

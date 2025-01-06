@@ -12,7 +12,7 @@ export const getLeaguesInfo = async ({dbClient, short}) => {
 }
 
 export const editLeague = async ({dbClient, token, application_id, options}) => {
-  const {name, channel, league, emoji='', logo, order} = optionsToObject(options)
+  const {name, channel, league, emoji='', logo, order, sorting} = optionsToObject(options)
   const content = await dbClient(async ({leagueConfig})=> {
     const currentLeague = await leagueConfig.findOne({value: league})
     const payload = {
@@ -20,7 +20,8 @@ export const editLeague = async ({dbClient, token, application_id, options}) => 
       defaultImage: logo || currentLeague.defaultImage,
       emoji: emoji.replace('<', '').replace('>', '') || currentLeague.emoji,
       channel: channel || currentLeague.channel,
-      order: order || currentLeague.order
+      order: order || currentLeague.order,
+      sorting: sorting || currentLeague.sorting,
     }
     await leagueConfig.updateOne({value: league}, { $set: payload})
     refreshAllLeagues(leagueConfig)
@@ -117,6 +118,11 @@ const leagueCmd = {
       name: 'emoji',
       description: 'League\'s emoji'
     },{
+      type: 3,
+      name: 'sorting',
+      description: 'How to handle tie breakers',
+      choices: ['goaldiff', 'head2head'].map(value=> ({name:value, value}))
+    },{
       type: 4,
       name: 'order',
       description: 'Which order in the list'
@@ -174,6 +180,11 @@ export const editLeagueCmd = {
     type: 3,
     name: 'emoji',
     description: 'League\'s emoji'
+  },{
+    type: 3,
+    name: 'sorting',
+    description: 'How to handle tie breakers',
+    choices: ['goaldiff', 'head2head'].map(value=> ({name:value, value}))
   },{
     type: 4,
     name: 'order',

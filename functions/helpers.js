@@ -232,6 +232,15 @@ export const followUpResponse = async ({application_id, token, content, embeds, 
       flags: InteractionResponseFlags.EPHEMERAL
     }
   })
+export const publicFollowUpResponse = async ({application_id, token, content, embeds, components}) => 
+  DiscordRequest(`/webhooks/${application_id}/${token}`, {
+    method: 'POST',
+    body: {
+      content,
+      embeds,
+      components,
+    }
+  })
 
 export const postMessage = async({channel_id, content='', components = [], attachments = [], embeds = []}) => {
   const messages = []

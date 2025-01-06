@@ -195,6 +195,27 @@ export const removeFromLeagueCmd = {
   }]
 }
 
+export const removeFromInterLeagueCmd = {
+  name: 'removefrominterleague',
+  description: 'Remove a selection from a league',
+  type: 1,
+  psaf: true,
+  func: removeFromLeague,
+  options: [{
+    type: 3,
+    name: 'league',
+    description: 'League',
+    required: true,
+    choices: leagueChoices
+  },{
+    type: 8,
+    name: 'selection',
+    description: 'Selection',
+    autocomplete: true,
+    required: true
+  }]
+}
+
 export const replaceTeamInLeagueCmd = {
   name: 'replaceteaminleague',
   description: 'Replace a FFed team by another one in a league',

@@ -8,14 +8,15 @@ import { getAllLeagues } from '../../functions/allCache.js';
 
 //Ensure this function doesnt crash if you ask for a league which doesnt have a table
 const internalLeagueTable = async ({dbClient, league, season}) => {
-  const [allTeams, leagueMatches, leagueTeams, allNationalTeams] = await dbClient(async ({matches, leagues, teams, nationalTeams, seasonsCollect}) => {
+  const [allTeams, leagueMatches, leagueTeams, allNationalTeams, leagueDetails] = await dbClient(async ({matches, leagues, teams, nationalTeams, seasonsCollect, leagueConfig}) => {
     const currentSeason = await getCurrentSeason(seasonsCollect)
     let seasonReq = season || currentSeason
     return Promise.all([
       teams.find({}).toArray(),
       matches.find({season: seasonReq, league, finished: true}).toArray(),
       leagues.find({leagueId:league}).toArray(),
-      nationalTeams.find({}).toArray()
+      nationalTeams.find({}).toArray(),
+      leagueConfig.findOne({value: league})
     ])
   })
   const leagueTeamsId = leagueTeams.map(leagueTeam=> leagueTeam.team)
@@ -89,14 +90,14 @@ const internalLeagueTable = async ({dbClient, league, season}) => {
       } else {
         const aWon = a.wonAgainst.includes(b.id)
         const bWon = b.wonAgainst.includes(a.id)
-        if(aWon !== bWon) {
-          return aWon ? -1 : 1
-        } else if(a.goalDifference !== b.goalDifference) {
-          return b.goalDifference - a.goalDifference
-        } else if(a.goals !== b.goals ){
-          return b.goals - a.goals
+        let h2h = aWon !== bWon ? (aWon ? -1 : 1) : 0
+        let gd = b.goalDifference - a.goalDifference
+        let goals = b.goals - a.goals
+        let played = a.played - b.played
+        if(leagueDetails.sorting === 'goaldiff') {
+          return gd ? gd : h2h ? h2h : goals ? goals : played
         } else {
-          return a.played - b.played
+          return h2h ? h2h : gd ? gd : goals ? goals : played
         }
       }
     })

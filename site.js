@@ -17,9 +17,9 @@ const __dirname = path.dirname(__filename);
 
 export const getSite = (localdev=false, uri='', dbClient={}) =>{
   const site = express() // the site app
+  site.use(express.static('site'))
   site.set('view engine', 'ejs');
   site.set('views', __dirname + '/site/pages');
-  site.use(express.static('site'))
   
   if(!localdev){
     var store = new MongoDBStore({
@@ -46,11 +46,11 @@ export const getSite = (localdev=false, uri='', dbClient={}) =>{
 
   if(!localdev) {
     site.use(async(req, res, next) => {
-      if(!hasSession(req)) {
+      /*if(!hasSession(req)) {
         authUser(req, res, next)
-      } else {
+      } else {*/
         next()
-      }
+      //}
     })
   }
   
@@ -73,7 +73,7 @@ export const getSite = (localdev=false, uri='', dbClient={}) =>{
     return res.render('teams', {teams, leagues, totalActiveMoney, totalSleepingMoney})
   })
 
-  site.post('/editmatch', async (req, res) => {
+  /*site.post('/editmatch', async (req, res) => {
     if(localdev)
       return editMatch(req, res)
 
@@ -103,7 +103,7 @@ export const getSite = (localdev=false, uri='', dbClient={}) =>{
     return res.render('editmatch', response)
   }
 
-  site.get('/editmatch', editMatch)
+  site.get('/editmatch', editMatch)*/
 
   site.get('/match', async (req, res) => {
     console.log('/match')

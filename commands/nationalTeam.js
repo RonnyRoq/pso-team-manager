@@ -1,9 +1,10 @@
 import { InteractionResponseType } from "discord-interactions"
 import { DiscordRequest } from "../utils.js"
 import { getAllPlayers } from "../functions/playersCache.js"
-import { getCurrentSeason, getNationalCaptainRole, getPlayerNick, getRegisteredRole, handleSubCommands, isMemberAdmin, optionsToObject, quickResponse, removeInternational, silentResponse, sleep, updateResponse, waitingMsg } from "../functions/helpers.js"
+import { getCurrentSeason, getNationalCaptainRole, getPlayerNick, getRegisteredRole, handleSubCommands, optionsToObject, quickResponse, removeInternational, silentResponse, sleep, updateResponse, waitingMsg } from "../functions/helpers.js"
 import { getAllSelections } from "../functions/countriesCache.js"
 import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
+import { getAllNationalities } from "../functions/allCache.js"
 
 const nationalTeamPlayerRole = '1103327647955685536'
 /*
@@ -76,17 +77,18 @@ export const allNationalTeams =  async ({interaction_id, guild_id, application_i
 export const addSelection = async ({options, dbClient, guild_id, application_id, token, interaction_id}) => {
   await waitingMsg({interaction_id, token})
   const {player, selection} = optionsToObject(options)
-  const discordPlayerResp = await DiscordRequest(`/guilds/${guild_id}/members/${player}`, {method: 'GET'})
-  const discordPlayer = await discordPlayerResp.json()
+  const allPlayers = await getAllPlayers(guild_id)
+  const discordPlayer = allPlayers.find(discPlayer => discPlayer.user.id === player)
+  console.log(selection)
   const response = await dbClient(async ({players, nationalities, nationalTeams, seasonsCollect, nationalContracts}) => {
     const [foundPlayer, nationalTeam, season] = await Promise.all([
       players.findOne({id: player}),
       nationalTeams.findOne({shortname:selection}),
       getCurrentSeason(seasonsCollect),
     ])
-    const nation = await nationalities.findOne({name: nationalTeam.eligiblenationality})    
-    if(foundPlayer && foundPlayer.nat1 === nation.name) {
-      //const nick = setInternational(getPlayerNick(discordPlayer))
+    const nations = await nationalities.find({name: {$in: nationalTeam.eligibleNationalities}}).toArray()
+    const nationNames = nations.map(nation=>nation.name)
+    if(foundPlayer && nationNames.includes(foundPlayer.nat1)) {
       const playerId = player
       try{
         await Promise.all([
@@ -96,13 +98,11 @@ export const addSelection = async ({options, dbClient, guild_id, application_id,
               roles: [...new Set([...discordPlayer.roles, nationalTeamPlayerRole])],
             }
           }),
-          //players.updateOne({id:player}, {$set: {nick}})
           nationalContracts.updateOne({playerId, selection, season}, {$set: {playerId, selection, season}}, {upsert: true})
         ])
       } catch (e) {
         console.error(e.message)
       }
-      //await updateNationalTeam({guild_id, nation, nationalities, players})
       return `<@${player}> added in the selection: ${nationalTeam.name}`
     }
     return 'Did not add player - did you check if he\'s eligible?'
@@ -116,10 +116,10 @@ export const removeSelection = async ({options, dbClient, guild_id, application_
   const {player} = optionsToObject(options)
   const discordPlayerResp = await DiscordRequest(`/guilds/${guild_id}/members/${player}`, {method: 'GET'})
   const discordPlayer = await discordPlayerResp.json()
-  const response = await dbClient(async ({players, nationalities, nationalContracts, seasonsCollect}) => {
+  const response = await dbClient(async ({players, nationalContracts, seasonsCollect}) => {
     const nick = removeInternational(getPlayerNick(discordPlayer))
     const season = await getCurrentSeason(seasonsCollect)
-    const  [, dbPlayer] = await Promise.all([
+    await Promise.all([
       DiscordRequest(`/guilds/${guild_id}/members/${player}`, {
         method: 'PATCH',
         body: {
@@ -129,7 +129,7 @@ export const removeSelection = async ({options, dbClient, guild_id, application_
       players.findOneAndUpdate({id: player}, {$set: {nick}}, {returnDocument: 'after', upsert: true}),
       nationalContracts.deleteOne({playerId: player, season})
     ])
-    const nation = await nationalities.findOne({name: dbPlayer.nat1})
+    //const nation = await nationalities.findOne({name: dbPlayer.nat1})
     //await updateNationalTeam({guild_id, nation, nationalities, players})
     return `<@${player}> removed from national teams`
   })
@@ -200,23 +200,25 @@ export const showElectionCandidates = async ({interaction_id, token, application
 export const voteCoach = async ({interaction_id, callerId, guild_id, token, application_id, dbClient}) => {
   await waitingMsg({interaction_id, token})
   const allPlayers = await getAllPlayers(guild_id)
-  const response = await dbClient(async({nationalities, players, candidates})=> {
+  const response = await dbClient(async({players, candidates, nationalTeams})=> {
     const dbPlayer = await players.findOne({id: callerId})
     if(!dbPlayer || !dbPlayer.nat1) {
       return `You are not registered with us. If you think it's an error, please open a ticket. Only registered players can apply.`
     }
-    const nationality = await nationalities.findOne({name: dbPlayer.nat1})
-    const candidatesToVote = await candidates.find({nation: dbPlayer.nat1}).toArray()
+    const allNationalities = await getAllNationalities()
+    const selection = await nationalTeams.findOne({eligibleNationalities: dbPlayer.nat1, active: true})
+    const candidatesToVote = await candidates.find({selection: selection.shortname}).toArray()
     const candidatesIds = candidatesToVote.map(candidate=>candidate.playerId)
     const candidatesPlayers = allPlayers.filter(player => candidatesIds.includes(player.user.id))
+    const selectionName = `${selection.eligibleNationalities.map(nationName=> allNationalities.find(nation=> nation.name === nationName)?.flag).join('')} ${selection.name}`
     if(candidatesToVote.length === 0) {
-      return {content: `No candidates applied for ${nationality.flag} ${dbPlayer.nat1}, you can't vote.`}
+      return {content: `No candidates applied for ${selectionName}, you can't vote.`}
     }
     if(candidatesToVote.length === 1) {
-      return {content: `Only one candidate applied for ${nationality.flag} ${dbPlayer.nat1}, <@${candidatesToVote[0].playerId}>. No need to vote.`}
+      return {content: `Only one candidate applied for ${selectionName}, <@${candidatesToVote[0].playerId}>. No need to vote.`}
     }
     return {
-      content: `Please vote for a candidate for ${nationality.flag} ${dbPlayer.nat1}`,
+      content: `Please vote for a candidate for ${selectionName}`,
       components: [{
         type: 1,
         components: candidatesPlayers.map((player) => {
@@ -234,12 +236,11 @@ export const voteCoach = async ({interaction_id, callerId, guild_id, token, appl
 }
 
 export const showVotes = async ({interaction_id, token, application_id, options, dbClient}) => {
-  const {nation} = optionsToObject(options)
-  console.log(nation)
+  const {selection} = optionsToObject(options)
   await waitingMsg({interaction_id, token})
   const content = await dbClient(async ({votes})=> {
     const votingOptions = await votes.aggregate([
-      { $match: { nation } },
+      { $match: { nation: selection } },
       { $group: { _id: "$coachVote", count: { $sum: 1 } } }
     ]).toArray()
     console.log(votingOptions)
@@ -302,16 +303,15 @@ const selectionAdd = async ({application_id, token, guild_id, options, callerId,
     }
     const callersSelection = await nationalTeams.findOne({shortname: callersSelectionContract.selection})
     const dbPlayer = await players.findOne({id: player})
-    //TODO Change to handle multiple nationalities
-    if(dbPlayer.nat1 !== callersSelection.eligiblenationality){
-      return `Can't select <@${player}>, as he is from ${dbPlayer.nat1}, not ${callersSelection.eligiblenationality}`
+    if(!callersSelection.eligibleNationalities.includes(dbPlayer.nat1)){
+      return `Can't select <@${player}>, as he is from ${dbPlayer.nat1}, not ${callersSelection.eligibleNationalities}`
     }
     await nationalContracts.updateOne({season, playerId:player}, {$set: {season, playerId:player, selection: callersSelection.shortname}}, {upsert: true})
-    const [nationalPlayers, nationality] = await Promise.all([
+    const [nationalPlayers, selectionNationalities] = await Promise.all([
       nationalContracts.find({season, selection:callersSelection.shortname}).toArray(),
-      nationalities.findOne({name: callersSelection.eligiblenationality})
+      nationalities.find({name: callersSelection.eligibleNationalities}).toArray()
     ])
-    const content = `⭐<@${player}> is selected for ${nationality.flag} ${callersSelection.name} (by <@${callerId}>)`
+    const content = `⭐<@${player}> is selected for ${selectionNationalities.map(nationality=>nationality.flag).join('')} ${callersSelection.name} (by <@${callerId}>)`
     await Promise.all([
       DiscordRequest(`/channels/${serverChannels.nationalSelectionsChannelId}/messages`, {
         method: 'POST',
@@ -327,7 +327,7 @@ const selectionAdd = async ({application_id, token, guild_id, options, callerId,
       }),
     ])
 
-    return formatSelection(callersSelection, nationality, nationalPlayers)
+    return formatSelection(callersSelection, selectionNationalities, nationalPlayers)
   })
   return updateResponse({application_id, token, content})
 }
@@ -350,11 +350,11 @@ const selectionRemove = async ({application_id, token, guild_id, options, caller
       return `Can't find <@${player}> in your selection, ${callersSelection.name}.`
     }
     await nationalContracts.deleteOne({season, playerId:player, selection: callersSelection.shortname})
-    const [nationalPlayers, nationality] = await Promise.all([
+    const [nationalPlayers, selectionNationalities] = await Promise.all([
       nationalContracts.find({season, selection:callersSelection.shortname}).toArray(),
-      nationalities.findOne({name: callersSelection.eligiblenationality})
+      nationalities.find({name: {$in: callersSelection.eligibleNationalities}}).toArray()
     ])
-    const content = `❌<@${player}> has been removed from ${nationality.flag} ${callersSelection.name} (by <@${callerId}>)`
+    const content = `❌<@${player}> has been removed from ${selectionNationalities.map(nationality=>nationality.flag).join('')} ${callersSelection.name} (by <@${callerId}>)`
     await Promise.all([
       DiscordRequest(`/channels/${serverChannels.nationalSelectionsChannelId}/messages`, {
         method: 'POST',
@@ -370,7 +370,7 @@ const selectionRemove = async ({application_id, token, guild_id, options, caller
       }),
     ])
 
-    return formatSelection(callersSelection, nationality, nationalPlayers)
+    return formatSelection(callersSelection, selectionNationalities, nationalPlayers)
   })
   return updateResponse({application_id, token, content})
 }
@@ -383,22 +383,24 @@ const selectionView = async ({application_id, token, callerId, dbClient}) => {
     if(!nationalSelection) {
       return `Can't find the selection you asked for: ${currentSelection?.selection}`
     }
-    const [nationalPlayers, nationality] = await Promise.all([
+    const [nationalPlayers, selectionNationalities] = await Promise.all([
       nationalContracts.find({season, selection:currentSelection?.selection}).toArray(),
-      nationalities.findOne({name: nationalSelection.eligiblenationality})
+      nationalities.find({name: nationalSelection.eligibleNationalities}).toArray()
     ])
-    return formatSelection(nationalSelection, nationality, nationalPlayers)
+    return formatSelection(nationalSelection, selectionNationalities, nationalPlayers)
   })
   return updateResponse({application_id, token, content})
 }
 
-const formatSelection = (nationalSelection, nationality, nationalPlayers) => {
-  return `## ${nationality.flag} ${nationalSelection.name}\r${nationalPlayers.length} players\r` 
+const formatSelection = (nationalSelection, selectionNationalities, nationalPlayers) => {
+  return `## ${selectionNationalities.map(nationality=> nationality.flag).join('')} ${nationalSelection.name}\r${nationalPlayers.length} players\r` 
   + nationalPlayers.map(player=> `> <@${player.playerId}>`).join('\r')
 }
 
 export const voteCoachCmd = {
   name: 'votecoach',
+  psaf: true,
+  func: voteCoach,
   description: 'Vote for your national team coach',
   type: 1
 }
@@ -435,10 +437,12 @@ export const showVotesCmd = {
   name: 'showvotes',
   description: 'Show the votes for a nation',
   type: 1,
+  psaf: true,
+  func: showVotes,
   options: [{
     type: 3,
-    name: 'nation',
-    description: 'Nation',
+    name: 'selection',
+    description: 'Selection',
     autocomplete: true,
     required: true,
   }],
@@ -526,4 +530,4 @@ export const selectionCmd = {
   }]
 }
 
-export default [cleanVotesCmd, selectionCmd, addSelectionCmd, removeSelectionCmd, registerElectionsCmd, showElectionCandidatesCmd]
+export default [cleanVotesCmd, selectionCmd, addSelectionCmd, removeSelectionCmd, registerElectionsCmd, showElectionCandidatesCmd, voteCoachCmd, showVotesCmd]

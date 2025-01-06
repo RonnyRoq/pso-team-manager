@@ -12,12 +12,12 @@ export const initCache = (key, value) => {
 }
 
 export const refreshAllLeagues = async (leagueConfig) => {  
-  const allLeagues = await leagueConfig.find({archived: {$ne: true}}).sort({order: 1})
+  const allLeagues = await leagueConfig.find({archived: {$ne: true}}).sort({order: 1}).toArray()
   initCache(cacheKeys.leagues, allLeagues)
 }
 
 export const refreshAllNationalities = async(nationalities) => {
-  const allNationalities = await nationalities.find({})
+  const allNationalities = await nationalities.find({}).toArray()
   initCache(cacheKeys.nationalities, allNationalities)
 }
 

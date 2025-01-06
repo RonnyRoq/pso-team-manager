@@ -294,7 +294,7 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
         body: {
           ...getConfirmTransferComponents({isActive:true, isValidated: true}),
           content: `${member.roles.includes(serverRoles.suspisciousRole)? ':warning':''}${flag1}${flag2}${flag3}<@${callerId}> requests to join <@&${team}> ${pendingLoan ? `on a loan until Season ${pendingLoan.until}, Beginning of ${seasonPhases[pendingLoan.phase]?.desc}`: `for ${seasons} season${seasons=== 1 ? '' :'s'}`}${deal ? 
-            `\r${pendingLoan ? 'LOAN' : 'TRANSFER'}: <@&${deal.teamFrom}> -> <@&${deal.destTeam}> <:EBit:1128310625873961013>**${new Intl.NumberFormat('en-US').format(deal.amount)} Ebits\rDeal link: https://discord.com/channels/${guild_id}/${serverChannels.confirmationTransferChannel}/${deal.adminMessage}`:''}`,
+            `\r${pendingLoan ? 'LOAN' : 'TRANSFER'}: <@&${deal.teamFrom}> -> <@&${deal.destTeam}> <:EBit:1128310625873961013>**${new Intl.NumberFormat('en-US').format(deal.amount)} Ebits**\rDeal link: https://discord.com/channels/${guild_id}/${serverChannels.confirmationTransferChannel}/${deal.adminMessage}`:''}`,
         }
       })
     ])

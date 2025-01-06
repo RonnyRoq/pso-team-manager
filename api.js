@@ -12,6 +12,9 @@ import { getAllNationalities } from './functions/allCache.js'
 import { updateTeamStatus } from './commands/editTeams.js'
 import { getAllSelections } from './functions/countriesCache.js'
 import { getLft, getTransferList } from './commands/transfers/transferList.js'
+import { getSelection } from './commands/nationalTeams/nationalTeamManagement.js'
+import { buildPlayerSearch } from './commands/search/buildSearchIndexes.js'
+import { globalSearch } from './commands/search/search.js'
 
 export const getApi = (localdev=false, dbClient={}) =>{
   const api = express() // the API app
@@ -160,6 +163,23 @@ export const getApi = (localdev=false, dbClient={}) =>{
 
   api.get('/nationalselections', async(req, res) => {
     const response = await getAllSelections(dbClient)
+    return res.json(response)
+  })
+
+  api.get('/nationalselection', async (req, res) => {
+    const {shortname, name} = req.query || {}
+    const response = await getSelection({dbClient, shortname, name})
+    return res.json(response)
+  })
+
+  api.get('/search', async (req, res) => {
+    const {s = ''} = req.query || {}
+    const response = await globalSearch({dbClient, s})
+    return res.json(response)
+  })
+
+  api.get('/buildsearch', async (req, res) => {
+    const response = await buildPlayerSearch({dbClient})
     return res.json(response)
   })
 

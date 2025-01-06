@@ -1,7 +1,6 @@
-import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions";
 import { ObjectId, ReturnDocument } from "mongodb";
 import { elimMatchDaysSorted, matchDays, serverChannels } from "../config/psafServerConfig.js";
-import { deleteMessage, getCurrentSeason, getFlags, getPlayerNick, handleSubCommands, isTopAdminRole, msToTimestamp, optionsToObject, postMessage, quickResponse, updatePost, updateResponse, waitingMsg } from "../functions/helpers.js";
+import { deleteMessage, followUpResponse, getCurrentSeason, getFlags, getPlayerNick, handleSubCommands, isTopAdminRole, msToTimestamp, optionsToObject, postMessage, publicFollowUpResponse, quickResponse, silentResponse, updatePost, updateResponse, waitingMsg } from "../functions/helpers.js";
 import { DiscordRequest } from "../utils.js";
 import { sleep } from "../functions/helpers.js";
 import { parseDate } from "./timestamp.js";
@@ -55,7 +54,11 @@ export const formatMatch = async (league, homeTeam, awayTeam, match) => {
   
   if(match.refs) {
     const refsArray = match.refs.split(',')
-    extra += '\r'+refsArray.map(ref=> `<@${ref}>`).join(', ')
+    extra += '\rRefs: '+refsArray.map(ref=> `<@${ref}>`).join(', ')
+  }
+  if(match.streamers) {
+    const streamersArray = match.streamers.split(',')
+    extra += '\rStreamer(s): '+streamersArray.map(streamer=> `<@${streamer}>`).join(', ')
   }
   
   return [response, extra]
@@ -72,12 +75,12 @@ export const updateMatch = async ({currentLeague, homeTeam, awayTeam, match, hom
   return content
 }
 
-export const formatMatchResult = (homeTeam, awayTeam, match, callerId, homeEntries, awayEntries) => {
+export const formatMatchResult = (league, homeTeam, awayTeam, match, callerId, homeEntries, awayEntries) => {
   let content = '# '
   if(match.isInternational) {
-    content += `${homeTeam.flag} **${homeTeam.name} ${match.homeScore} - ${match.awayScore} ${awayTeam.name}** ${awayTeam.flag}`
+    content += `<${league.emoji}> | ${homeTeam.flag} **${homeTeam.name} ${match.homeScore} - ${match.awayScore} ${awayTeam.name}** ${awayTeam.flag}`
   } else {
-    content += `${homeTeam.emoji} ${homeTeam.name} ${match.homeScore} - ${match.awayScore} ${awayTeam.name} ${awayTeam.emoji}`
+    content += `<${league.emoji}> | ${homeTeam.emoji} ${homeTeam.name} ${match.homeScore} - ${match.awayScore} ${awayTeam.name} ${awayTeam.emoji}`
   }
   const allEntries = homeEntries.concat(awayEntries)
   const allGoals = allEntries.filter(player => player.Goals > 0).sort((a,b)=> b.Goals - a.Goals)
@@ -144,7 +147,10 @@ export const formatDMMatch = (league, homeTeam, awayTeam, match, homeLineup, awa
     if(match.refs) {
       lobbyEmbed.fields.push({name: 'Referee(s)', value: match.refs.split(',').map(ref=> ref?`<@${ref}>`:'').join(', ')})
     } else {
-      lobbyEmbed.fields.push({name: 'NO REFEREE', value: `${homeTeam.name} is responsible for creating the lobby`})
+      lobbyEmbed.fields.push({name: 'NO REFEREE', value: `${homeTeam.name} is responsible for creating the lobby. Don't forget to export stats at the end.`})
+    }
+    if(match.streamers) {
+      lobbyEmbed.fields.push({name: 'Streamer(s)', value: match.refs.split(',').map(ref=> ref?`<@${ref}>`:'').join(', ')})
     }
     embeds.push(lobbyEmbed)
   }
@@ -248,48 +254,38 @@ export const internationalMatch = async ({application_id, token, options, dbClie
   return createMatch({application_id, token, options, dbClient, isInternational: true})
 }
 
-export const matchId = async ({interaction_id, token, options, dbClient}) => {
+export const matchId = async ({interaction_id, token, application_id, options, dbClient}) => {
   const {home, away} = optionsToObject(options)
-  return await dbClient(async ({matches, leagueConfig})=> {
+  const currentSeason = getFastCurrentSeason()
+  return dbClient(async ({matches, leagueConfig})=> {
     const allLeagues = await leagueConfig.find({}).toArray()
     const foundMatches = await matches.find({home, away}).sort({dateTimestamp: 1}).toArray()
     if(foundMatches.length === 0) {
-      return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-        method: 'POST',
-        body: {
-          type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: {
-            content: `Match <@&${home}> - <@&${away}> not found`,
-            flags: 1 << 6
-          }
-        }
-      })
+      return silentResponse({interaction_id, token, content: `Match <@&${home}> - <@&${away}> not found`})
     }
-    const response = foundMatches.map(({league, matchday, home, away, dateTimestamp, _id})=> `${allLeagues.find(fixLeague=>fixLeague.value === league)?.name || ''} ${matchday} <@&${home}> - <@&${away}> <t:${dateTimestamp}:F> ${_id}`).join('\r')
-    return DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
-      method: 'POST',
-      body: {
-        type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: response,
-          flags: 1 << 6,
-          components: [{
-            type: 1,
-            components: [{
-              type: 2,
-              label: `Enter Result`,
-              style: 2,
-              custom_id: `match_result_${foundMatches[0]._id}`
-            },{
-              type: 2,
-              label: `Enter Exported Stats`,
-              style: 2,
-              custom_id: `match_stats_${foundMatches[0]._id}`
-            }]
-          }]
-        }
-      }
-    })
+    const matchPosts = foundMatches.map(({league, matchday, home, away, dateTimestamp, season, _id})=> ({
+      content:`Season: ${season} ${allLeagues.find(fixLeague=>fixLeague.value === league)?.name || ''} ${matchday} <@&${home}> - <@&${away}> <t:${dateTimestamp}:F> ${_id}`,
+      components: [{
+        type: 1,
+        components: [{
+          type: 2,
+          label: `Enter Result`,
+          style: 2,
+          custom_id: `match_result_${_id}`,
+          disabled: currentSeason !== season
+        },{
+          type: 2,
+          label: `Enter Exported Stats`,
+          style: 3,
+          custom_id: `match_stats_${_id}`,
+          disabled: currentSeason !== season
+        }]
+      }]
+    }))
+    await silentResponse({interaction_id, token, content: 'Found matches: '});
+    for await (const matchPost of matchPosts) {
+      await followUpResponse({application_id, token, content: matchPost.content, components: matchPost.components})
+    }
   })
 }
 
@@ -347,7 +343,7 @@ export const editInterMatch = async ({application_id, token, options, dbClient})
   return editAMatch({application_id, token, options, dbClient})
 }
 
-export const internalEndMatch = async ({id, homeScore, awayScore, ff, dbClient}) => {
+export const internalEndMatch = async ({id, homeScore, awayScore, ff, dbClient, callerId}) => {
   const matchId = new ObjectId(id)
   return dbClient(async ({teams, matches, nationalTeams, leagueConfig}) => {
     const match = await matches.findOne(matchId)
@@ -363,7 +359,8 @@ export const internalEndMatch = async ({id, homeScore, awayScore, ff, dbClient})
       homeScore,
       awayScore,
       isFF: ff,
-      finished: true
+      finished: true,
+      finishedBy: callerId
     }})
     const updatedMatch = await matches.findOne({"_id": matchId})
     console.log(updatedMatch)
@@ -499,7 +496,7 @@ export const internalEndMatchStats = async ({id, matchDetails, guild_id, callerI
 
     const [post, extra] = await formatMatch(currentLeague, homeTeam, awayTeam, {...updatedMatch, homeScore, awayScore})
     const response = post + extra
-    const {content, embeds, homeContent, awayContent} = formatMatchResult(homeTeam, awayTeam, updatedMatch, callerId, homeEntries, awayEntries)
+    const {content, embeds, homeContent, awayContent} = formatMatchResult(currentLeague, homeTeam, awayTeam, updatedMatch, callerId, homeEntries, awayEntries)
     await updateMatchMessage({match, channel, post, content: post+'\r'+content})
     await postMessage({channel_id: serverChannels.matchResultsChannelId, content, embeds})
     await postMessage({channel_id: serverChannels.matchResultsChannelId, content: homeContent})
@@ -508,11 +505,11 @@ export const internalEndMatchStats = async ({id, matchDetails, guild_id, callerI
   })
 }
 
-export const endMatch = async ({interaction_id, token, application_id, options, dbClient}) => {
+export const endMatch = async ({interaction_id, token, application_id, options, dbClient, callerId}) => {
   const {id, homescore, awayscore, ff} = optionsToObject(options)
   await waitingMsg({interaction_id, token})
 
-  const content = await internalEndMatch({id, homeScore:homescore, awayScore:awayscore, ff, dbClient})
+  const content = await internalEndMatch({id, homeScore:homescore, awayScore:awayscore, ff, dbClient, callerId})
   return updateResponse({application_id, token, content})
 }
 
@@ -595,8 +592,8 @@ export const internalPublishMatch = async ({league, matchday, postping=true, sea
   }
   let endMessageId = null
   if(postping) {
-    const pingRole = currentLeague.pingRole ? `<@&${currentLeague.pingRole}>`:'Everyone'
-    const endMessage = `[ ${pingRole} ]--[ WELCOME BACK TO THE ${currentLeague.name}! VOTE YOUR WINNERS! ]`
+    const pingRole = currentLeague.pingRole ? (currentLeague.pingRole === 'everyone' ? '@everyone': `<@&${currentLeague.pingRole}>`):'Everyone'
+    const endMessage = `[ ${pingRole} ]--[ **${currentLeague.name}** | VOTE YOUR WINNERS! ]`
     const resp = await DiscordRequest(`/channels/${channel}/messages`, {
       method: 'POST',
       body: {
@@ -762,7 +759,8 @@ export const getMatchesOfDay = async ({date='today', finished=false, dbClient, f
         }
       })
     } else {
-      let response = [{content: `${matchesOfDay.length} match${matchesOfDay.length >1?'es':''} on <t:${startDateTimestamp}:d>.`}]
+      const headerLine = {content: `${matchesOfDay.length} match${matchesOfDay.length >1?'es':''} on <t:${startDateTimestamp}:d>.`}
+      let response = [{matchToPush: headerLine, streamerMatch: headerLine}]
       for (const match of matchesOfDay) {
         const [homeTeam, awayTeam] = getMatchTeamsSync(match.home, match.away, match.isInternational, allNationalTeams, allTeams)
         const channels = []
@@ -804,24 +802,47 @@ export const getMatchesOfDay = async ({date='today', finished=false, dbClient, f
             custom_id: `streamer_${match._id}`
           }]
         }]}
-        response.push(matchToPush)
+        const streamerMatch = {
+          content,
+          matchId: match._id.toString(),
+          shortName: `${homeTeam.name} vs ${awayTeam.name}`,
+          channels,
+          components: [{
+          type: 1,
+          components: [{
+            type: 2,
+            label: `Streamer`,
+            style: 1,
+            custom_id: `streamer_${match._id}`
+          }]
+        }]}
+        response.push({matchToPush, streamerMatch})
       }
       if(isSchedule) {
         const channelsToPush = new Map()
-        for await (const match of response) {
-          const {matchId, content, shortName, components} = match
+        for await (const oneResp of response) {
+          const {matchToPush, streamerMatch} = oneResp
+          const {matchId, content, shortName, components, channels} = matchToPush
           const body = matchId ? {
             content,
             components
           } : {
             content
           }
+          const streamerBody = matchId ? {
+            content: streamerMatch.content,
+            components: streamerMatch.components
+          } : {
+            content: streamerMatch.content
+          }
           const messageResp = await DiscordRequest(`/channels/${serverChannels.scheduleChannelId}/messages`, {
             method: 'POST',
             body
           })
           const message = await messageResp.json()
-          if(match.shortName) {
+          const streamMessageResp = await postMessage({...streamerBody, channel_id: serverChannels.streamersChannelId})
+          const streamMessage = await streamMessageResp.json()
+          if(shortName) {
             const threadResp = await DiscordRequest(`/channels/${serverChannels.scheduleChannelId}/messages/${message.id}/threads`, {
               method: 'POST',
               body: {
@@ -829,7 +850,7 @@ export const getMatchesOfDay = async ({date='today', finished=false, dbClient, f
               }
             })
             const thread = await threadResp.json()
-            await matches.updateOne({_id: new ObjectId(matchId)}, {$set: {scheduleMessage: message.id, thread: thread.id}})
+            await matches.updateOne({_id: new ObjectId(matchId)}, {$set: {scheduleMessage: message.id, streamMessage: streamMessage.id, thread: thread.id}})
             await DiscordRequest(`/channels/${thread.id}/messages`, {
               method: 'POST',
               body: {
@@ -837,8 +858,9 @@ export const getMatchesOfDay = async ({date='today', finished=false, dbClient, f
               }
             })
           }
-          if(match.channels) {
-            for (const channel of match.channels) {
+          
+          if(channels) {
+            for (const channel of channels) {
               const currentChannel = channelsToPush.get(channel) || []
               channelsToPush.set(channel, [content, ...currentChannel])
             }
@@ -997,37 +1019,35 @@ export const matches = async ({interaction_id, token, application_id, options=[]
   }
   await response.forEach(async ({content, matchId}, index) => {
     if(index>0) {
-      await DiscordRequest(`/webhooks/${application_id}/${token}`, {
-        method: 'POST',
-        body: {
-          content: content,
-          flags: !post ? InteractionResponseFlags.EPHEMERAL : 0,
-          components: [{
-            type: 1,
-            components: [{
-              type: 2,
-              label: `Referee`,
-              style: 1,
-              custom_id: `referee_${matchId}`
-            }, {
-              type: 2,
-              label: `Enter Result`,
-              style: 1,
-              custom_id: `match_result_${matchId}`
-            }, {
-              type: 2,
-              label: `Enter stats`,
-              style: 3,
-              custom_id: `match_stats_${matchId}`
-            }, {
-              type: 2,
-              label: `Streamer`,
-              style: 1,
-              custom_id: `streamer_${match._id}`
-            }]
-          }]
-        }
-      })
+      const components = [{
+        type: 1,
+        components: [{
+          type: 2,
+          label: `Referee`,
+          style: 1,
+          custom_id: `referee_${matchId}`
+        }, {
+          type: 2,
+          label: `Enter Result`,
+          style: 1,
+          custom_id: `match_result_${matchId}`
+        }, {
+          type: 2,
+          label: `Enter stats`,
+          style: 3,
+          custom_id: `match_stats_${matchId}`
+        }, {
+          type: 2,
+          label: `Streamer`,
+          style: 1,
+          custom_id: `streamer_${match._id}`
+        }]
+      }]
+      if(post) {
+        await publicFollowUpResponse({application_id, token, content, components })
+      } else {
+        await followUpResponse({application_id, token, content, components})
+      }
     }
   });
 }
