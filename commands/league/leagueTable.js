@@ -23,9 +23,11 @@ const internalLeagueTable = async ({dbClient, league, season}) => {
   const allLeagues = await getAllLeagues()
   const leagueObj = allLeagues.find(fixChannel => fixChannel.value === league)
   const nationalTeamsWithEmojis = []
-  for await(const selection of allNationalTeams) {
-    const flags = await getFlags(selection)
-    nationalTeamsWithEmojis.push({...selection, emoji: flags, id: selection.shortname})
+  if(leagueObj?.isInternational) {
+    for await(const selection of allNationalTeams) {
+      const flags = await getFlags(selection)
+      nationalTeamsWithEmojis.push({...selection, emoji: flags, id: selection.shortname})
+    }
   }
   const currentTeams = (leagueObj?.isInternational ? 
     nationalTeamsWithEmojis

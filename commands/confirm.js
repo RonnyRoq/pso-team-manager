@@ -238,7 +238,7 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
         return `Your team <@&${currentTeam.id}> is banned from doing exit transfers, you cannot leave it.`
       }
       if(!deal) {
-        console.log(`${getPlayerNick(member)} tried to confirm for ${teamToJoin.name} but no deal`)
+        console.log(`${getPlayerNick(member)} tried to confirm for ${teamToJoin?.name} but no deal`)
         return 'You can only confirm a transfer to teams your club has a deal with.'
       }
       if(deal.destTeam !== team) {

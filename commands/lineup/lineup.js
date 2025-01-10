@@ -230,9 +230,16 @@ const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam,
         getPlayerTeam(member, teams),
         teams.find({}).toArray()
       ])
-      const memberSelection = await nationalSelections.find(selection=> selection?.shortName=== selfNationalContract?.selection)
+      console.log(season, selfNationalContract)
+      if(selfNationalContract) {
+        console.log(memberSelection)
+        console.log(nationalSelections)
+      }
+      const memberSelection = nationalSelections.find(selection=> selection?.shortName === selfNationalContract?.selection)
       const teamIds = [memberTeam?.id, memberSelection?.shortname].filter(item=> item)
+      console.log(teamIds)
       const nextMatches = await matches.find({season, dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, finished: {$in: [false, null]}, $or: [{home: {$in: teamIds}}, {away: {$in: teamIds}}]}).sort({dateTimestamp:1}).toArray()
+      console.log(nextMatches)
       let savedLineup
       const lineupId = Math.random().toString(36).slice(-6)
       if(lineup.id) {
@@ -366,6 +373,9 @@ const verifyInternationalLineup = (discPlayer, playerId) => {
   }
   if(!discPlayer.roles.includes(serverRoles.nationalTeamPlayerRole)) {
      response.message = `<@${playerId}> is not an international player`
+  }
+  if(!discPlayer.roles.includes(serverRoles.clubPlayerRole)) {
+     response.message = `<@${playerId}> cannot play in a national team without a PSAF club`
   }
   if(!discPlayer.roles.some(role => lineupRolesWhitelist === role)) {
      response.message = `<@${playerId}> isn't verified`

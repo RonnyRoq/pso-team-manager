@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises"
 import { lookup } from "mime-types"
 import fetch from 'node-fetch';
 import { verifyKey } from 'discord-interactions';
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 
 export function VerifyDiscordRequest(clientKey) {
   return function (req, res, buf) {
@@ -153,19 +154,28 @@ export async function DiscordRequest(endpoint, options={}) {
   return res;
 }
 
-const errorHook = "webhooks/1287703911637192705/lOCdbCD4H9qXLubpWfkSh9PFErUVbvf3S1rHknJXRrTtyhZ5vNxePm-XFeX353VWeBQJ"
-const crashHook = "webhooks/1303796695179591781/nmLz2Gz10zSSESGpyDrsmMf8Miz1dz3zuv_T-3yRGjI4uAZwiwU2PEoy4ECKFYdOEv1_"
-
-export async function logSystemCrash(content) {
+export function logSystemCrash(content) {
   console.log("logSystemCrash")
   console.log(content)
-  await sendSystemHook(content, crashHook)
+  writeFileSync(process.env.ERROR_LOG, content)
 }
 
+export async function sendErrorLog() {
+  console.log("sendErrorLog")
+  if(existsSync(process.env.ERROR_LOG)){
+    const content = readFileSync(process.env.ERROR_LOG)
+    if(content){
+      await sendSystemHook(content, process.env.CRASHESHOOK)
+      renameSync(process.env.ERROR_LOG, `${process.env.ERROR_LOG}-${Date.now()}`)
+    }
+  } else {
+    await sendSystemHook('Regular restart', process.env.CRASHESHOOK)
+  }
+}
 
 export async function logSystemError(content) {
   console.log("logSystemError")
-  await sendSystemHook(content, errorHook)
+  await sendSystemHook(content, process.env.ERRORHOOK)
 }
 
 async function sendSystemHook(content, hook) {

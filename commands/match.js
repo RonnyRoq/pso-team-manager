@@ -7,7 +7,7 @@ import { parseDate } from "./timestamp.js";
 import { formatDMLineup } from "./lineup/lineup.js";
 import { getAllPlayers } from "../functions/playersCache.js";
 import { leagueChoices } from "../config/leagueData.js";
-import { getAllLeagues } from "../functions/allCache.js";
+import { getAllLeagues, getAllNationalities } from "../functions/allCache.js";
 import { getFastCurrentSeason } from "./season.js";
 
 const matchLogChannelId = '1151131972568092702'
@@ -75,10 +75,12 @@ export const updateMatch = async ({currentLeague, homeTeam, awayTeam, match, hom
   return content
 }
 
-export const formatMatchResult = (league, homeTeam, awayTeam, match, callerId, homeEntries, awayEntries) => {
+export const formatMatchResult = async (league, homeTeam, awayTeam, match, callerId, homeEntries, awayEntries) => {
   let content = '# '
   if(match.isInternational) {
-    content += `<${league.emoji}> | ${homeTeam.flag} **${homeTeam.name} ${match.homeScore} - ${match.awayScore} ${awayTeam.name}** ${awayTeam.flag}`
+    const homeFlag = await getFlags(homeTeam)
+    const awayFlag = await getFlags(awayTeam)
+    content += `<${league.emoji}> | ${homeFlag} **${homeTeam.name} ${match.homeScore} - ${match.awayScore} ${awayTeam.name}** ${awayFlag}`
   } else {
     content += `<${league.emoji}> | ${homeTeam.emoji} ${homeTeam.name} ${match.homeScore} - ${match.awayScore} ${awayTeam.name} ${awayTeam.emoji}`
   }
@@ -127,11 +129,13 @@ export const formatMatchResult = (league, homeTeam, awayTeam, match, callerId, h
   }
 }
 
-export const formatDMMatch = (league, homeTeam, awayTeam, match, homeLineup, awayLineup, isInternational, allPlayers) => {
+export const formatDMMatch = async (league, homeTeam, awayTeam, match, homeLineup, awayLineup, isInternational, allPlayers) => {
   let response = `## PSAF Match starting\r`
   const embeds= []
   if(isInternational) {
-    response += `\r${homeTeam.flag} **${homeTeam.name} :vs: ${awayTeam.name}** ${awayTeam.flag}`
+    const homeFlag = await getFlags(homeTeam)
+    const awayFlag = await getFlags(awayTeam)
+    response += `\r${homeFlag} **${homeTeam.name} :vs: ${awayTeam.name}** ${awayFlag}`
   } else {
     response += `\r${homeTeam.flag} ${homeTeam.disqualified?':no_entry_sign: ':''}${homeTeam.emoji} **${homeTeam.name}** :vs: **${awayTeam.name}** ${awayTeam.emoji}${awayTeam.disqualified?':no_entry_sign: ':''} ${awayTeam.flag}`
   }
@@ -150,7 +154,7 @@ export const formatDMMatch = (league, homeTeam, awayTeam, match, homeLineup, awa
       lobbyEmbed.fields.push({name: 'NO REFEREE', value: `${homeTeam.name} is responsible for creating the lobby. Don't forget to export stats at the end.`})
     }
     if(match.streamers) {
-      lobbyEmbed.fields.push({name: 'Streamer(s)', value: match.refs.split(',').map(ref=> ref?`<@${ref}>`:'').join(', ')})
+      lobbyEmbed.fields.push({name: 'Streamer(s)', value: match.streamers.split(',').map(ref=> ref?`<@${ref}>`:'').join(', ')})
     }
     embeds.push(lobbyEmbed)
   }
@@ -496,7 +500,7 @@ export const internalEndMatchStats = async ({id, matchDetails, guild_id, callerI
 
     const [post, extra] = await formatMatch(currentLeague, homeTeam, awayTeam, {...updatedMatch, homeScore, awayScore})
     const response = post + extra
-    const {content, embeds, homeContent, awayContent} = formatMatchResult(currentLeague, homeTeam, awayTeam, updatedMatch, callerId, homeEntries, awayEntries)
+    const {content, embeds, homeContent, awayContent} = await formatMatchResult(currentLeague, homeTeam, awayTeam, updatedMatch, callerId, homeEntries, awayEntries)
     await updateMatchMessage({match, channel, post, content: post+'\r'+content})
     await postMessage({channel_id: serverChannels.matchResultsChannelId, content, embeds})
     await postMessage({channel_id: serverChannels.matchResultsChannelId, content: homeContent})
@@ -571,12 +575,12 @@ export const internalPublishMatch = async ({league, matchday, postping=true, sea
     const message = await messageResp.json()
     await matches.updateOne({_id: match._id}, {$set: {messageId: message.id}})
     if(match.isInternational) {
-      const [homeFlag, awayFlag] = await Promise.all([getFlags(homeTeam), getFlags(awayTeam)])
+      /*const [homeFlag, awayFlag] = await Promise.all([getFlags(homeTeam), getFlags(awayTeam)])
       await DiscordRequest(`/channels/${message.channel_id}/messages/${message.id}/reactions/${homeFlag}/@me`, {method: 'PUT', body:{}})
       await sleep(300)
       await DiscordRequest(`/channels/${message.channel_id}/messages/${message.id}/reactions/🇽/@me`, {method: 'PUT', body:{}})
       await sleep(300)
-      await DiscordRequest(`/channels/${message.channel_id}/messages/${message.id}/reactions/${awayFlag}/@me`, {method: 'PUT', body:{}})
+      await DiscordRequest(`/channels/${message.channel_id}/messages/${message.id}/reactions/${awayFlag}/@me`, {method: 'PUT', body:{}})*/
     } else {
       const [,homeEmoji, homeEmojiId] = homeTeam.emoji.split(':')
       const [,awayEmoji, awayEmojiId] = awayTeam.emoji.split(':')
@@ -674,9 +678,9 @@ export const getMatchesSummary = async({dbClient}) => {
   leagues.forEach((leagueMatches, index) => {
     if(leagueMatches?.length > 0) {
       const message = `## ${allLeagues[index].name} <${allLeagues[index].emoji}>\r`
-      const matchesMessage = leagueMatches.map(({isInternational, homeTeam, awayTeam, homeLineup, awayLineup, homeScore, awayScore, isFF}) => (
+      const matchesMessage = leagueMatches.map(({isInternational, homeTeam, awayTeam, homeFlag, awayFlag, homeLineup, awayLineup, homeScore, awayScore, isFF}) => (
         isInternational ? (
-          `> ${homeTeam.flag} **${homeTeam.name} ${homeScore} : ${awayScore}${isFF ? ' **ff**': ''} ${awayTeam.name}** ${awayTeam.flag}`
+          `> ${homeFlag} **${homeTeam.name} ${homeScore} : ${awayScore}${isFF ? ' **ff**': ''} ${awayTeam.name}** ${awayFlag}`
         ) : (
           `> ${homeTeam.flag} ${homeTeam.emoji}${homeLineup ? '✅' : '❓'} <@&${homeTeam.id}> ${homeScore} : ${awayScore}${isFF ? ' **ff**': ''} <@&${awayTeam.id}> ${awayLineup ? '✅' : '❓'}${awayTeam.emoji} ${awayTeam.flag}`
         )
@@ -734,10 +738,11 @@ export const getMatchesOfDay = async ({date='today', finished=false, dbClient, f
   return dbClient(async ({teams, matches, nationalTeams, lineups}) => {
     const finishedArg = forSite ? {} : (finished ? {finished: true} : {$or: [{finished:false}, {finished:null}]})
     let lineupsOfDay = []
-    const [allTeams, allNationalTeams, matchesOfDay] = await Promise.all([
+    const [allTeams, allNationalTeams, matchesOfDay, allNationalities] = await Promise.all([
       teams.find({}).toArray(),
       nationalTeams.find({}).toArray(),
       matches.find({dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, ...finishedArg}).sort({dateTimestamp:1}).toArray(),
+      getAllNationalities(),
     ])
     const allLeagues = await getAllLeagues()
     if(forSite) {
@@ -749,12 +754,16 @@ export const getMatchesOfDay = async ({date='today', finished=false, dbClient, f
         const league = allLeagues.find(({value})=> value === match.league)
         const homeLineup = lineupsOfDay.find(lineup => lineup.matchId === match._id.toString() && match.home === lineup.team)
         const awayLineup = lineupsOfDay.find(lineup => lineup.matchId === match._id.toString() && match.away === lineup.team)
+        const homeFlag = match.isInternational ? allNationalities.filter(nationality=> homeTeam.eligibleNationalities.includes(nationality.name)).map(nat=>nat.flag).join('') : ''
+        const awayFlag = match.isInternational ? allNationalities.filter(nationality=> awayTeam.eligibleNationalities.includes(nationality.name)).map(nat=>nat.flag).join('') : ''
         return {
           ...match,
           homeLineup,
           awayLineup,
           homeTeam,
           awayTeam,
+          homeFlag,
+          awayFlag,
           league,
         }
       })

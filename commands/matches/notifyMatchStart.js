@@ -62,8 +62,6 @@ export const notifyMatchStart = async ({dbClient}) => {
     if(startingMatch.isInternational){
       homeTeam = allNationalTeams.find(selection => selection.shortname === startingMatch.home)
       awayTeam = allNationalTeams.find(selection => selection.shortname === startingMatch.away)
-      homeTeam.flag = allNationalities.filter(nat=>homeTeam.eligiblenationality === nat.name)
-      awayTeam.flag = allNationalities.filter(nat=>awayTeam.eligiblenationality === nat.name)
     } else {
       homeTeam = allTeams.find(team => startingMatch.home === team.id)
       awayTeam = allTeams.find(team => startingMatch.away === team.id)
@@ -71,7 +69,7 @@ export const notifyMatchStart = async ({dbClient}) => {
     const matchId = startingMatch._id.toString()
     const homeLineup = matchLineups.find(lineup => lineup.matchId === matchId && lineup.team === startingMatch.home)
     const awayLineup = matchLineups.find(lineup => lineup.matchId === matchId && lineup.team === startingMatch.away)
-    const body = formatDMMatch(league, homeTeam, awayTeam, startingMatch, homeLineup, awayLineup, startingMatch.isInternational, allPlayers)
+    const body = await formatDMMatch(league, homeTeam, awayTeam, startingMatch, homeLineup, awayLineup, startingMatch.isInternational, allPlayers)
     const refs = startingMatch.refs || ''
     const streamers = startingMatch.streamers || ''
     const matchRefs = refs.split(',')
@@ -107,8 +105,8 @@ export const notifyMatchStart = async ({dbClient}) => {
             })
           }
           catch(e) {
+            console.log(matchRef)
             console.log(e)
-            
           }
           recipients.push(matchRef)
           await sleep(500)
@@ -132,6 +130,7 @@ export const notifyMatchStart = async ({dbClient}) => {
             })
           }
           catch(e) {
+            console.log(matchStreamer)
             console.log(e)
           }
           recipients.push(matchStreamer)
@@ -163,6 +162,7 @@ export const notifyMatchStart = async ({dbClient}) => {
             recipients.push(homePlayer)
           }
           catch(e){
+            console.log(homePlayer)
             console.log(e)
           }
           return sleep(500)
@@ -195,6 +195,7 @@ export const notifyMatchStart = async ({dbClient}) => {
             recipients.push(awayPlayer)
           }
           catch(e){
+            console.log(awayPlayer)
             console.log(e)
           }
           return sleep(500)

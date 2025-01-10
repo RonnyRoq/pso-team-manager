@@ -7,6 +7,7 @@ import { shuffleArray } from "../../functions/helpers.js"
 export const generateGroup = async ({application_id, token, dbClient, options}) => {
   const {league, homeaway} = optionsToObject(options)
   const content = await dbClient(async ({leagues, teams, matches, nationalTeams, seasonsCollect, leagueConfig})=> {
+    const currentLeague = await leagueConfig.findOne({value: league})
     const leagueTeams = await leagues.find({leagueId: league}).toArray()
     const teamsPerGroup = {
       'A': [],
@@ -47,11 +48,13 @@ export const generateGroup = async ({application_id, token, dbClient, options}) 
       return matchDays
     })
     let matchesCreated = 0
+    console.log(currentLeague)
     for await(const matchDays of groupMatchDays) {
       let currentMatchDay = 0
       for await(const matchDay of matchDays) {
         for await(const match of matchDay) {
-          const response = await internalCreateMatch({league, home:match[0], away:match[1], isInternational:false, matchday: matchDayRef[currentMatchDay]?.name, teams, matches, nationalTeams, seasonsCollect, leagueConfig, group: match[2]})
+          console.log(match)
+          const response = await internalCreateMatch({league, home:match[0], away:match[1], isInternational:currentLeague.isInternational, matchday: matchDayRef[currentMatchDay]?.name, teams, matches, nationalTeams, seasonsCollect, leagueConfig, group: match[2]})
           console.log(response)
           matchesCreated++
         }

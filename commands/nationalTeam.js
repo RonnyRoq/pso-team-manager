@@ -1,10 +1,10 @@
 import { InteractionResponseType } from "discord-interactions"
 import { DiscordRequest } from "../utils.js"
 import { getAllPlayers } from "../functions/playersCache.js"
-import { getCurrentSeason, getNationalCaptainRole, getPlayerNick, getRegisteredRole, handleSubCommands, optionsToObject, quickResponse, removeInternational, silentResponse, sleep, updateResponse, waitingMsg } from "../functions/helpers.js"
-import { getAllSelections } from "../functions/countriesCache.js"
+import { genericInterFormatMatch, getCurrentSeason, getNationalCaptainRole, getPlayerNick, getRegisteredRole, handleSubCommands, optionsToObject, quickResponse, removeInternational, silentResponse, updateResponse, waitingMsg } from "../functions/helpers.js"
+import { getAllSelections, getAllSelectionsFromDbClient } from "../functions/countriesCache.js"
 import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
-import { getAllNationalities } from "../functions/allCache.js"
+import { getAllLeagues, getAllNationalities } from "../functions/allCache.js"
 
 const nationalTeamPlayerRole = '1103327647955685536'
 /*
@@ -260,13 +260,12 @@ export const cleanVotes = async({interaction_id, token, dbClient, callerId}) => 
   return silentResponse({interaction_id, token, content})
 }
 
-export const autoCompleteSelections = async (currentOption, dbClient, res, member) => {
+export const autoCompleteSelections = async (currentOption, dbClient, res) => {
   const toSearch = (currentOption.value || "").toLowerCase()
   let autoCompleteSelections = await getAllSelections(dbClient)
-  if(true) {
   //if(!isMemberAdmin(member)) {
     autoCompleteSelections = autoCompleteSelections.filter(selection=>selection.active === true)
-  }
+  //}
   const searchSelections = autoCompleteSelections.map(({name, shortname})=> ({name, shortname, display: `${shortname} - ${name}`, search: name.toLowerCase()}))
   const countryChoices = searchSelections
     .filter(({search}) => toSearch.length === 0 || search.includes(toSearch))
@@ -376,20 +375,51 @@ const selectionRemove = async ({application_id, token, guild_id, options, caller
 }
 
 const selectionView = async ({application_id, token, callerId, dbClient}) => {
-  const content = await dbClient(async ({seasonsCollect, nationalContracts, nationalTeams, nationalities})=> {
+  const {content, matchEmbeds} = await dbClient(async ({seasonsCollect, nationalContracts, nationalTeams, nationalities, matches})=> {
     const season = await getCurrentSeason(seasonsCollect)
     const currentSelection = await nationalContracts.findOne({season, playerId: callerId})
     const nationalSelection = await nationalTeams.findOne({shortname:currentSelection?.selection})
     if(!nationalSelection) {
       return `Can't find the selection you asked for: ${currentSelection?.selection}`
     }
-    const [nationalPlayers, selectionNationalities] = await Promise.all([
+    const [nationalPlayers, selectionNationalities, teamsMatches, allNationalities, allSelections] = await Promise.all([
       nationalContracts.find({season, selection:currentSelection?.selection}).toArray(),
-      nationalities.find({name: nationalSelection.eligibleNationalities}).toArray()
+      nationalities.find({name: nationalSelection.eligibleNationalities}).toArray(),
+      matches.find({$or: [{home: nationalSelection.shortname}, {away: nationalSelection.shortname}], season }).sort({dateTimestamp: 1}).toArray(),
+      getAllNationalities(),
+      getAllSelectionsFromDbClient(nationalTeams)
     ])
-    return formatSelection(nationalSelection, selectionNationalities, nationalPlayers)
+    let content = formatSelection(nationalSelection, selectionNationalities, nationalPlayers)
+    content += '\r**Upcoming matches:**'
+    let matchEmbeds = []
+    if(teamsMatches.length === 0 ) {
+      content += '\rNone'
+    } else {
+      let i = 0
+      let currentEmbed = ''
+      const allLeagues = await getAllLeagues()
+      for (const match of teamsMatches) {
+        currentEmbed += '\r'+genericInterFormatMatch(allNationalities, allSelections, match, allLeagues)
+        i++
+        if(i === 4) {
+          matchEmbeds.push(currentEmbed)
+          currentEmbed = ''
+          i = 0
+        }
+      }
+      if(i!==0) {
+        matchEmbeds.push(currentEmbed)
+      }
+    }
+    return {content, matchEmbeds}
   })
-  return updateResponse({application_id, token, content})
+  const embeds = matchEmbeds.map(matchEmbed => ({
+    "type": "rich",
+    "color": 16777215,
+    "title": "Matches",
+    "description": matchEmbed,
+  }))
+  return updateResponse({application_id, token, content, embeds})
 }
 
 const formatSelection = (nationalSelection, selectionNationalities, nationalPlayers) => {

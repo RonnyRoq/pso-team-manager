@@ -1,31 +1,42 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { serverChannels, serverRoles } from "../../config/psafServerConfig.js"
-import { msToTimestamp, postMessage, quickResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { msToTimestamp, postMessage, quickResponse, silentResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { editAMatchInternal, formatMatch, getMatchTeams, getMatchTeamsSync } from "../match.js"
 import { DiscordRequest } from "../../utils.js"
 import { ObjectId } from "mongodb"
 import { parseDate } from "../timestamp.js"
 import { twoWeeksMs } from "../../config/constants.js"
 import { getAllLeagues } from "../../functions/allCache.js"
+import { getFastCurrentSeason } from "../season.js"
 
 const oneWeekMs = 604800016
 
 export const moveMatch = async ({interaction_id, token, application_id, dbClient, member, callerId}) => {
   await waitingMsg({interaction_id, token})
-  if(!member.roles.includes(serverRoles.clubManagerRole)) {
-    return updateResponse({application_id, token, content: 'This command is restricted to club managers'})
+  if(!(member.roles.includes(serverRoles.clubManagerRole) || member.roles.includes(serverRoles.nationalTeamCaptainRole))) {
+    return updateResponse({application_id, token, content: 'This command is restricted to managers'})
   }
-  const response = await dbClient(async ({teams, matches, nationalTeams})=> {
+  const season = getFastCurrentSeason()
+  const response = await dbClient(async ({teams, matches, nationalTeams, nationalContracts})=> {
     const userTeam = await teams.findOne({active:true, $or: member.roles.map(id=> ({id}))})
     if(!userTeam) {
       return `Can't find the team for ${callerId}`
+    }
+    const userSelection = await nationalContracts.findOne({season, playerId: callerId})
+    console.log(userSelection)
+    let teamIds = []
+    if(userSelection && member.roles.includes(serverRoles.nationalTeamCaptainRole)) {
+      teamIds.push(userSelection.selection)
+    }
+    if(userTeam && member.roles.includes(serverRoles.clubManagerRole)) {
+      teamIds.push(userTeam.id)
     }
     const startOfDay = new Date()
     startOfDay.setUTCHours(0,0,0,0)
     const aWeekLater = new Date(Date.now()+oneWeekMs)
     aWeekLater.setUTCHours(23,59,59,999)
     
-    const request = {finished: null, $or: [{home: userTeam.id}, {away: userTeam.id}], dateTimestamp: {$gte: msToTimestamp(startOfDay.getTime()), $lte: msToTimestamp(aWeekLater.getTime())}}
+    const request = {finished: null, $or: [{home: {$in: teamIds}}, {away: {$in: teamIds}}], dateTimestamp: {$gte: msToTimestamp(startOfDay.getTime()), $lte: msToTimestamp(aWeekLater.getTime())}}
     const weekMatches = await matches.find(request, {dateTimestamp: 1}).toArray()
     const allNationalTeams = await nationalTeams.find({}).toArray()
     const allTeams = await teams.find({active:true}).toArray()
@@ -180,18 +191,27 @@ export const moveMatchModalResponse = async ({interaction_id, token, callerId, m
   return quickResponse({interaction_id, token, content, isEphemeral: true})
 }
 
-export const listMatchMoves = async ({interaction_id, token, application_id, member, dbClient}) => {
-  if(!member.roles.includes(serverRoles.clubManagerRole)) {
-    return quickResponse({interaction_id, token, content: 'Only Club Managers can list moves.', isEphemeral:true})
+export const listMatchMoves = async ({interaction_id, token, application_id, member, callerId, dbClient}) => {
+  if(!(member.roles.includes(serverRoles.clubManagerRole)||member.roles.includes(serverRoles.nationalTeamCaptainRole))) {
+    return silentResponse({interaction_id, token, content: 'Only Managers can list moves.'})
   }
   await waitingMsg({interaction_id, token})
+  const season = getFastCurrentSeason()
   const allLeagues = await getAllLeagues()
-  const{team, allTeams, matchesToMove, teamMatches} = await dbClient(async ({moveRequest, teams, matches})=> {
+  const{team, allTeams, matchesToMove, teamMatches} = await dbClient(async ({moveRequest, teams, matches, nationalContracts})=> {
     const orArg = [...member.roles.map(id=> ({id})), {_id:'__'}]
     console.log(orArg)
     const team = await teams.findOne({$or: orArg, active: true})
+    let teamIds = []
+    if(team && (member.roles.includes(serverRoles.clubManagerRole))) {
+      teamIds.push(team.id)
+    }
+    const selection = await nationalContracts.findOne({season, playerId: callerId})
+    if(selection && (member.roles.includes(serverRoles.nationalTeamCaptainRole))) {
+      teamIds.push(selection.shortname)
+    }
     const allTeams = await teams.find({active:true}).toArray()
-    const moveRequestFilter = {destinationTeam: team.id}
+    const moveRequestFilter = {destinationTeam: {$in: teamIds}}
     console.log(moveRequestFilter)
     const matchesToMove = await moveRequest.find(moveRequestFilter).toArray()
     const matchesRequest = {$or: matchesToMove.map(({id})=> ({_id: new ObjectId(id)}))}

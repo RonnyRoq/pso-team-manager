@@ -116,7 +116,7 @@ export const removeSubCommands = (commands) => (
 
 export const getFlags = async (selection) => {
   const allNationalities = await getAllNationalities()
-  return allNationalities.filter(nat => nat.name === selection.eligiblenationality).map(nat=>nat.flag).join('')
+  return allNationalities.filter(nat => (selection?.eligibleNationalities || []).includes(nat.name)).map(nat=>nat.flag).join('')
 }
 
 export const isStaffRole = (role) => [serverRoles.presidentRole, serverRoles.engineerRole, serverRoles.adminRole, serverRoles.psafManagementRole, serverRoles.trialStaffRole, serverRoles.psoStaffRole].includes(role)

@@ -9,7 +9,7 @@ import {
   InteractionResponseType,
   InteractionResponseFlags
 } from 'discord-interactions';
-import { VerifyDiscordRequest, DiscordRequest, logSystemCrash } from './utils.js';
+import { VerifyDiscordRequest, DiscordRequest, logSystemCrash, sendErrorLog } from './utils.js';
 import mongoClient from './functions/mongoClient.js';
 import { now } from './commands/now.js';
 import { timestamp } from './commands/timestamp.js';
@@ -765,7 +765,13 @@ function start() {
       }
     })
   });
-
+  app.use((err, req, res, next) => {
+    console.error(req)
+    console.error(err.stack)
+    
+    res.status(500).send('Server error!')
+    next()
+  })
 
   let allActiveTeams = []
   let allNationalSelections = []
@@ -811,7 +817,7 @@ function start() {
         await client.db("PSOTeams").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
         global.isConnected = true
-        logSystemCrash("Started PSAF Bot")
+        await sendErrorLog()
       }
       catch(e){
         console.error(e)
@@ -835,7 +841,7 @@ function start() {
 }
 
 process.on('uncaughtException', async function (err) {
-  await logSystemCrash(err)
+  logSystemCrash(err)
   process.exit(1)
 });
 
