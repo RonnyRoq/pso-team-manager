@@ -1,9 +1,10 @@
 import 'dotenv/config';
 import { readFile } from "node:fs/promises"
+import util from "util"
 import { lookup } from "mime-types"
-import fetch from 'node-fetch';
-import { verifyKey } from 'discord-interactions';
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import fetch from 'node-fetch'
+import { verifyKey } from 'discord-interactions'
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 
 export function VerifyDiscordRequest(clientKey) {
   return function (req, res, buf) {
@@ -165,8 +166,9 @@ export async function sendErrorLog() {
   if(existsSync(process.env.ERROR_LOG)){
     const content = readFileSync(process.env.ERROR_LOG)
     if(content){
-      await sendSystemHook(content, process.env.CRASHESHOOK)
-      renameSync(process.env.ERROR_LOG, `${process.env.ERROR_LOG}-${Date.now()}`)
+      await sendSystemHook(`Crash at ${new Date().toISOString()}`, process.env.CRASHESHOOK)
+      await sendSystemHook(util.format(content.toString()), process.env.CRASHESHOOK)
+      renameSync(process.env.ERROR_LOG, `${process.env.ERROR_LOG}-${(new Date()).toISOString()}`)
     }
   } else {
     await sendSystemHook('Regular restart', process.env.CRASHESHOOK)

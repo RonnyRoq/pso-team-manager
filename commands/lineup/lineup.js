@@ -231,11 +231,13 @@ const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam,
         teams.find({}).toArray()
       ])
       console.log(season, selfNationalContract)
+      let memberSelection
       if(selfNationalContract) {
         console.log(memberSelection)
         console.log(nationalSelections)
+        memberSelection = await nationalTeams.findOne({shortname: selfNationalContract?.selection})
+        console.log(memberSelection)
       }
-      const memberSelection = nationalSelections.find(selection=> selection?.shortName === selfNationalContract?.selection)
       const teamIds = [memberTeam?.id, memberSelection?.shortname].filter(item=> item)
       console.log(teamIds)
       const nextMatches = await matches.find({season, dateTimestamp: { $gt: startDateTimestamp, $lt: endDateTimestamp}, finished: {$in: [false, null]}, $or: [{home: {$in: teamIds}}, {away: {$in: teamIds}}]}).sort({dateTimestamp:1}).toArray()
@@ -265,8 +267,8 @@ const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam,
           components: [{
             type: 1,
             components: nextMatches.map(match=> {
-              const home = allTeams.find(team=> team.id === match.home)
-              const away = allTeams.find(team=> team.id === match.away)
+              const home = match.isInternational ? nationalSelections.find(sel=>sel.shortname === match.home) : allTeams.find(team=> team.id === match.home)
+              const away = match.isInternational ? nationalSelections.find(sel=>sel.shortname === match.away) : allTeams.find(team=> team.id === match.away)
               return {
                 type: 2,
                 label: `${home.name} vs ${away.name}`.substring(0, 79),
@@ -285,7 +287,7 @@ const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam,
           const teamsOfMatch = await teams.find({id: {$in: [nextMatch.home,nextMatch.away]}}).toArray()
           playerTeam = genericFormatMatch(teamsOfMatch, nextMatch, allLeagues) + '\r'
         } else {
-          playerTeam = genericInterFormatMatch(nations, nationalSelections, nextMatch, allLeagues)
+          playerTeam = genericInterFormatMatch(nations, nationalSelections, nextMatch, allLeagues) + '\r'
         }
         await lineups.updateOne({postedBy:callerId, id:savedLineup.id}, {
           $set: {

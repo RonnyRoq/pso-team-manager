@@ -129,7 +129,7 @@ export const getSite = (localdev=false, uri='', dbClient={}) =>{
   })
 
   site.get('/', async function (req, res) {
-    console.log('main', req.session)
+    //console.log('main', req.session)
     return res.send('<p>no thank you</p>')
   })
 

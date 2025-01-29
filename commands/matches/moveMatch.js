@@ -8,6 +8,7 @@ import { parseDate } from "../timestamp.js"
 import { twoWeeksMs } from "../../config/constants.js"
 import { getAllLeagues } from "../../functions/allCache.js"
 import { getFastCurrentSeason } from "../season.js"
+import { getAllSelectionsFromDbClient } from "../../functions/countriesCache.js"
 
 const oneWeekMs = 604800016
 
@@ -119,7 +120,7 @@ export const moveMatchPrompt = async ({interaction_id, token, custom_id, dbClien
   })
 }
 
-export const moveMatchModalResponse = async ({interaction_id, token, callerId, member, custom_id, components, dbClient}) => {
+export const moveMatchModalResponse = async ({interaction_id, token, callerId, custom_id, components, dbClient}) => {
   const [,,,id] = custom_id.split('_')
   const entries = components.map(({components})=> components[0])
   const {match_time, timezone='UK'} = Object.fromEntries(entries.map(entry=> [entry.custom_id, entry.value.trim()]))
@@ -155,12 +156,10 @@ export const moveMatchModalResponse = async ({interaction_id, token, callerId, m
   if(!numberRegExp.test(dateTimestamp)) {
     return quickResponse({interaction_id, token, content: `${match_time} was interpreted as <t:${dateTimestamp}:F> which is not a valid option. Try again`, isEphemeral: true})
   }
-  const content = await dbClient(async ({moveRequest, teams, matches, matchDays})=> {
-    const requesterTeamObj = await teams.findOne({active:true, $or: member.roles.map(id=> ({id}))})
-    const requesterTeam = requesterTeamObj.id
+  const content = await dbClient(async ({moveRequest, matches, contracts, nationalContracts, nationalTeams, matchDays})=> {
     const matchId = new ObjectId(id)
     const match = await matches.findOne(matchId)
-    if(!match) 
+    if(!match)
       return `Can't find the requested match`
     const matchDay = await matchDays.findOne({season: match.season, league: match.league, matchday: match.matchday})
     if(matchDay) {
@@ -176,12 +175,34 @@ export const moveMatchModalResponse = async ({interaction_id, token, callerId, m
         return `You requested to move this match at <t:${dateTimestamp}:F> however the deadline to play this match is <t:${endingTimestamp}:F>`
       }
     }
+    const season = getFastCurrentSeason()
+    let requesterTeam
+    let homeTeam, awayTeam
+    if(match.isInternational) {
+      const currentNationalTeam = await nationalContracts.findOne({season, playerId: callerId})
+      requesterTeam = currentNationalTeam?.selection
+      const [first, second] = await nationalTeams.find({shortname: {$in: [match.home, match.away]}}).toArray()
+      if(first.shortname === match.home) {
+        homeTeam = first.name
+        awayTeam = second.name
+      } else {
+        homeTeam = first.name
+        awayTeam = second.name
+      }
+    } else {
+      const requesterContracts = await contracts.find({playerId: callerId, endedAt: null}).sort({isLoan: -1}).toArray()
+      //const requesterTeamObj = await teams.findOne({active:true, $or: member.roles.map(id=> ({id}))})
+      requesterTeam = requesterContracts?.[0]?.team
+      homeTeam = `<@&${match.home}>`
+      awayTeam = `<@&${match.away}>`
+    }
     const destinationTeam = match.home === requesterTeam ? match.away : match.home
     await moveRequest.updateOne({id, requesterTeam, destinationTeam}, {$set: {id, requester: callerId, requesterTeam, destinationTeam, dateTimestamp, expiryTime, timeOfTheRequest }}, {upsert: true})
+
     const resp = await DiscordRequest(`/channels/${serverChannels.moveMatchChannelId}/messages`, {
       method: 'POST',
       body: {
-        content: `<@${callerId}> requests to move <@&${match.home}> - <@&${match.away}>, initially at <t:${match.dateTimestamp}:F>\rto <t:${dateTimestamp}:F>`
+        content: `<@${callerId}> requests to move ${homeTeam} - ${awayTeam}, initially at <t:${match.dateTimestamp}:F>\rto <t:${dateTimestamp}:F>`
       }
     })
     const message = await resp.json()
@@ -198,7 +219,7 @@ export const listMatchMoves = async ({interaction_id, token, application_id, mem
   await waitingMsg({interaction_id, token})
   const season = getFastCurrentSeason()
   const allLeagues = await getAllLeagues()
-  const{team, allTeams, matchesToMove, teamMatches} = await dbClient(async ({moveRequest, teams, matches, nationalContracts})=> {
+  const{team, allTeams, matchesToMove, teamMatches, allNationalSelections} = await dbClient(async ({moveRequest, teams, matches, nationalContracts, nationalTeams})=> {
     const orArg = [...member.roles.map(id=> ({id})), {_id:'__'}]
     console.log(orArg)
     const team = await teams.findOne({$or: orArg, active: true})
@@ -208,7 +229,7 @@ export const listMatchMoves = async ({interaction_id, token, application_id, mem
     }
     const selection = await nationalContracts.findOne({season, playerId: callerId})
     if(selection && (member.roles.includes(serverRoles.nationalTeamCaptainRole))) {
-      teamIds.push(selection.shortname)
+      teamIds.push(selection.selection)
     }
     const allTeams = await teams.find({active:true}).toArray()
     const moveRequestFilter = {destinationTeam: {$in: teamIds}}
@@ -217,19 +238,27 @@ export const listMatchMoves = async ({interaction_id, token, application_id, mem
     const matchesRequest = {$or: matchesToMove.map(({id})=> ({_id: new ObjectId(id)}))}
     console.log(matchesRequest)
     const teamMatches = await (matchesToMove.length === 0 ? Promise.resolve([]) : matches.find(matchesRequest).toArray())
+    const allNationalSelections = await getAllSelectionsFromDbClient(nationalTeams)
     return {
       team,
       allTeams,
       matchesToMove,
-      teamMatches
+      teamMatches,
+      allNationalSelections
     }
   })
   const content = matchesToMove.length > 0 ? `Move requests for <@&${team.id}>:\r` : `No requests to move a match for <@&${team.id}>.`
   await updateResponse({application_id, token, content})
   for await (const matchToMove of matchesToMove) {
     const match = teamMatches.find(({_id})=> (_id.toString() === matchToMove.id))
-    const homeTeam = allTeams.find(({id})=> id === match.home)
-    const awayTeam = allTeams.find(({id})=> id === match.away)
+    let homeTeam, awayTeam
+    if(match.isInternational) {
+      homeTeam = allNationalSelections.find(({shortname})=> shortname === match.home)
+      awayTeam = allNationalSelections.find(({shortname})=> shortname === match.away)
+    } else {
+      homeTeam = allTeams.find(({id})=> id === match.home)
+      awayTeam = allTeams.find(({id})=> id === match.away)
+    }
     const currentLeague = allLeagues.find(({value})=> value === match.league)
     const [post] = await formatMatch(currentLeague, homeTeam, awayTeam, match)
     const content = `${post}\rRequested time: <t:${matchToMove.dateTimestamp}:F>`
@@ -277,12 +306,7 @@ export const approveMoveMatch = async ({interaction_id, token, application_id, c
       }
     })
     const moveContent = `Match moved, requested by <@${matchToMove.requester}> accepted by <@${callerId}>.\r${updatedMatch}`
-    await DiscordRequest(`/channels/${serverChannels.scheduleChannelId}/messages`, {
-      method: 'POST',
-      body: {
-        content: moveContent
-      }
-    })
+    await postMessage({channel_id:serverChannels.scheduleChannelId, content: moveContent})
     await postMessage({channel_id:serverChannels.streamersChannelId, content: moveContent})
     await moveRequest.deleteOne({_id: matchToMove._id})
     return `Move confirmed:\r${updatedMatch}`

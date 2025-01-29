@@ -30,14 +30,17 @@ const callCronJob = (name, callback) => {
 let currentTeamIndex = 0
 let currentSelectionIndex = 0
 let playerIdsToPSOCheck = []
+let cronJobs
 export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, allLeagues}) => {
-  const cronJobs = [[
+  cronJobs = [[
+    'postMatchesOfDay',
     '1 9 * * *',
     callCronJob('postMatchesOfDay',
     async function() {
       getMatchesOfDay({date:'today', dbClient, isSchedule: true})
     }),
   ],[
+    'Update team details',
     '*/5 * * * *',
     callCronJob('Update team details',
       async function() {
@@ -62,6 +65,7 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
       }
     ),
   ],[
+    'Update National Selection',
     '*/9 7-22 * * *',
     callCronJob('Update National Selection',
       async function() {
@@ -85,6 +89,7 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
       }
     ),
   ],[
+    'notify match start',
     '*/2 6-22 * * *',
     callCronJob('notify match start',
       async function() {
@@ -92,6 +97,7 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
       }
     ),
   ],[
+    'post matches summary of day',
     '1 22 * * *',
     callCronJob('post matches summary of day',
       async function() {
@@ -107,6 +113,7 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
       }
     ),
   ],[
+    'detectSteamAlts',
     '51 22 * * 1',
     callCronJob('detectSteamAlts',
       async function () {
@@ -121,7 +128,8 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
       await postMessage({channel_id: serverChannels.botTestingChannelId, content: 'Match result stats:'+refs.map(ref=> `<@${ref._id}>: ${ref.finishedCount}`).join('\r')})
     }*/
   ],[
-    '53 22 * * *',
+    'update league table',
+    '35 22 * * *',
     callCronJob('update league table', 
       async function() {
         for await (const league of allLeagues) {
@@ -130,6 +138,7 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
       }
     ),
   ],[
+    'publish next matchday',
     '1 22 * * *',
     callCronJob('publish next matchday',
       async function() {
@@ -137,6 +146,7 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
       }
     ),
   ],[
+    'remind missed matches',
     '34 21 * * *',
     callCronJob('remind missed matches',
       async function() {
@@ -144,6 +154,7 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
       }
     ),
   ],[
+    'validate steam IDs',
     '1 12 * * *',
     callCronJob('validate steam IDs',
       async function() {
@@ -161,6 +172,7 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
       await internalUpdateRegister({dryrun: false, guild_id: process.env.GUILD_ID, dbClient})
     },*/
   ],[
+    'update steam names',
     '11 11,15,19 * * *',
     callCronJob('update steam names',
       async function() {
@@ -168,6 +180,7 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
       }
     ),
   ],[
+    'update season cache',
     '0 8 * * *',
     callCronJob('update season cache',
       async function() {
@@ -177,6 +190,7 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
       }
     ),
   ],[
+    'Steam verified check',
     '*/10 * * * *',
     callCronJob('Steam verified check',
       async function() {
@@ -184,6 +198,7 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
       }
     )
   ],[
+    'find unregisted playerids',
     '1 23 * * *',
     callCronJob('find unregisted playerids',
       async function() {
@@ -191,6 +206,7 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
       }
     )
   ],[
+    'refreshing search indexes',
     '0 */6 * * *',
     callCronJob('refreshing search indexes',
       async function() {

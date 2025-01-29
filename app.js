@@ -3,6 +3,7 @@ import express from 'express';
 import http from 'http';
 import https from 'https';
 import fs from 'fs';
+import util from 'util'
 //import pinoHttp from 'pino-http'
 import {
   InteractionType,
@@ -14,8 +15,8 @@ import mongoClient from './functions/mongoClient.js';
 import { now } from './commands/now.js';
 import { timestamp } from './commands/timestamp.js';
 import { help, helpAdmin } from './commands/help.js';
-import { allPlayers, autoCompleteNation, player, players } from './commands/player.js';
-import { editMatch, endMatch, match, matchId, matches, pastMatches, publishMatch, resetMatch, unpublishMatch } from './commands/match.js';
+import { actionConfirmMigrate, allPlayers, autoCompleteNation, player, players } from './commands/player.js';
+import { endMatch, match, matchId, matches, pastMatches, publishMatch, resetMatch, unpublishMatch } from './commands/match.js';
 import { blacklistTeam, doubleContracts, emoji, expireThings, fixNames, initCountries, managerContracts, systemTeam } from './commands/system.js';
 import { addSelection, autoCompleteSelections, removeSelection } from './commands/nationalTeam.js';
 import { confirm, pendingConfirmations, register, releasePlayer } from './commands/confirm.js';
@@ -30,7 +31,7 @@ import { emergencyOneSeasonContract, expireContracts, showExpiringContracts, sho
 import { disbandTeam, disbandTeamConfirmed } from './commands/disbandTeam.js';
 import { getCurrentSeasonPhase, progressCurrentSeasonPhase, updateCacheCurrentSeason } from './commands/season.js';
 import { setAllMatchToSeason } from './commands/matches/batchWork.js';
-import { endMatchModalResponse, matchResultPrompt, matchStatsModalResponse, matchStatsPrompt, refereeMatch } from './commands/matches/actions.js';
+import { endMatchModalResponse, matchResultPrompt, matchStatsModalResponse, matchStatsPrompt, refereeMatch, streamerMatch } from './commands/matches/actions.js';
 import { testDMMatch } from './commands/matches/notifyMatchStart.js';
 import { voteAction } from './commands/nationalTeams/actions.js';
 import { client, uri } from './config/mongoConfig.js';
@@ -218,7 +219,7 @@ function start() {
             return refereeMatch(componentOptions)
           }
           if(custom_id.startsWith("streamer_")) {
-            return refereeMatch(componentOptions)
+            return streamerMatch(componentOptions)
           }
           if(custom_id.startsWith("loan_")) {
             return finishLoanRequest(componentOptions)
@@ -243,6 +244,9 @@ function start() {
           }
           if(custom_id.startsWith("lineup_")) {
             return selectMatchLineup(componentOptions)
+          }
+          if(custom_id.startsWith("confirm_migrate_")) {
+            return actionConfirmMigrate(componentOptions)
           }
           return res.send({
             type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -322,14 +326,6 @@ function start() {
 
           if (name === "match") {
             return match(commandOptions)
-          }
-
-          if (name === "editmatch") {
-            return editMatch(commandOptions)
-          }
-
-          if (name === "movethematch") {
-            return editMatch(commandOptions) //movethematch has less options and is aimed at non admin staff
           }
 
           if (name === "endmatch") {
@@ -841,16 +837,19 @@ function start() {
 }
 
 process.on('uncaughtException', async function (err) {
-  logSystemCrash(err)
+  console.log(err)
+  console.log(util.format(err))
+  logSystemCrash(util.format(err))
   process.exit(1)
 });
 
 process.on('beforeExit', code => {
+  console.log(`Process will exit with code: ${code}`)
   // Can make asynchronous calls
-  setTimeout(() => {
+  /*setTimeout(() => {
     console.log(`Process will exit with code: ${code}`)
     process.exit(code)
-  }, 100)
+  }, 100)*/
 })
 
 start()

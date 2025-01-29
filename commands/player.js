@@ -6,10 +6,12 @@ import { DiscordRequest } from "../utils.js"
 import { getPlayerNick, msToTimestamp, optionsToObject, sleep, updateResponse, waitingMsg, isMemberStaff, postMessage, displayTeamName, updateDiscordPlayer } from "../functions/helpers.js"
 import { getAllPlayers } from "../functions/playersCache.js"
 import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
-import { seasonPhases } from "./season.js"
+import { getFastCurrentSeason, seasonPhases } from "./season.js"
 import { getAllCountries } from "../functions/countriesCache.js"
 import { getAllNationalities } from '../functions/allCache.js';
 import { getPSOSteamDetails, getSteamIdFromSteamUrl } from '../functions/steamUtils.js';
+
+const twoSeasons = 1.57788e+10
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -294,20 +296,178 @@ const editSteamUrl = async ({options=[], callerId, guild_id, member, application
   return updateResponse({application_id, token, content})
 }
 
-export const migratePlayer = async ({application_id, token, guild_id, options, dbClient}) => {
-  const {newPlayer, oldPlayer, oldPlayerId} = options
-  const allPlayers = await getAllPlayers(guild_id)
-  let discPlayer = oldPlayer
+export const swapPlayerNationalities = async ({application_id, token, guild_id, callerId, options, dbClient}) => {
+  const {player, nationality} = options
+  const [allPlayers, allNationalities] = await Promise.all([getAllPlayers(guild_id), getAllNationalities()])
+  const discPlayer = allPlayers.find(discPlayer=>discPlayer?.user?.id === player)
   if(!discPlayer) {
-    discPlayer = allPlayers.find(player => player.user.id === oldPlayerId)
+    return updateResponse({application_id, token, content: `Cannot find <@${player}> on discord.`})
   }
-  if(!discPlayer) {
-    return updateResponse({application_id, token, content:`Can't find the player you're trying to migrate.`})
-  }
-  const content = await dbClient(({players})=> {
-    
+  const now = Date.now()
+  const requestedNationality = allNationalities.find(nat=>nat.name===nationality)
+  const content = await dbClient(async ({players})=> {
+    const dbPlayer = await players.findOne({id: player})
+    if(!dbPlayer) {
+      return `Cannot find <@${player}> in DB.`
+    }
+    if(!requestedNationality) {
+      return `Cannot find nationality ${nationality}`
+    }
+    const nat1 = allNationalities.find(nat=>nat.name === dbPlayer.nat1) || null
+    const nat2 = allNationalities.find(nat=>nat.name === dbPlayer.nat2) || null
+    const nat3 = allNationalities.find(nat=>nat.name === dbPlayer.nat3) || null
+    const flags = `${nat1? nat1.flag : ''}${nat2? nat2.flag: ''}${nat3? nat3.flag: ''}`
+    if(dbPlayer.nat1 === nationality) {
+      return `No changes, <@${player}>'s main nationality is already ${nationality}`
+    }
+    if(![dbPlayer.nat2, dbPlayer.nat3].includes(nationality)) {
+      return `${flags} <@${player}> is not having the ${requestedNationality.flag} ${requestedNationality.name} nationality.`
+    }
+    if(dbPlayer.lastNatChange && dbPlayer.lastNatChange+twoSeasons < now){
+      return `<@${player}>'s last nationality swap was on <t:${msToTimestamp(dbPlayer.lastNatChange)}:f>, need to wait until <t:${msToTimestamp(dbPlayer.lastNatChange+twoSeasons)}:f> to change again.`
+    }
+    const newNat1 = requestedNationality
+    const newNat2 = dbPlayer.nat2 === requestedNationality ? nat1 : nat2
+    const newNat3 = dbPlayer.nat3 === requestedNationality ? nat1 : nat3
+    const newFlags = `${newNat1? newNat1.flag : ''}${newNat2? newNat2.flag: ''}${newNat3? newNat3.flag: ''}`
+    await players.updateOne({id: player}, {$set: {nat1: newNat1.name, nat2: newNat2.name, nat3: newNat3.name, lastNatChange: now}})
+    const content = `<@${callerId}> swapped ${flags} <@${player}> nationalities to ${newFlags} <@${player}>. New main nationality is ${newNat1.flag} ${nationality}.`
+    await postMessage({channel_id:serverChannels.botActivityLogsChannelId, content})
+    return content
   })
-  return updateResponse({application_id, token, content:'done'})
+  return updateResponse({application_id, token, content})
+}
+
+export const migratePlayer = async ({application_id, token, guild_id, options, dbClient}) => {
+  const {newplayer, oldplayer, oldplayerid} = optionsToObject(options)
+  const newPlayer = newplayer
+  const oldPlayer = oldplayer
+  const oldPlayerId = oldPlayer || oldplayerid
+  const allPlayers = await getAllPlayers(guild_id)
+  console.log(oldPlayerId)
+  let discPlayer = allPlayers.find(player => player.user.id === oldPlayerId)
+  console.log(discPlayer)
+  if(!oldPlayerId) {
+    return updateResponse({application_id, token, content:`Can't find the player you're trying to migrate. Maybe send the old player ID if the player has left discord already.`})
+  }
+  const oldDiscPlayerId = discPlayer?.user?.id || oldPlayerId
+  const newDiscPlayer = allPlayers.find(disPlayer=> disPlayer.user.id === newPlayer)
+  if(!newDiscPlayer) {
+    return updateResponse({application_id, token, content:`Can't find the player you're trying to migrate to.`})
+  }
+  const newDiscPlayerId = newDiscPlayer.user.id
+  return await dbClient(async ({players, contracts})=> {
+    const [dbOldPlayer, dbNewPlayer] = await Promise.all([players.findOne({id: oldDiscPlayerId}), players.findOne({id: newDiscPlayerId})])
+    const oldPlayerContracts = await contracts.find({playerId: oldDiscPlayerId}).toArray()
+    if(!dbOldPlayer && !dbNewPlayer) {
+      return updateResponse({application_id, token, content: `Can't find <@${oldDiscPlayerId}> AND <@${newDiscPlayerId}> in database. Both players aren't registered.`})
+    } else {
+      return updateResponse({
+        application_id,
+        token,
+        content: `Are you sure you want to disable <@${oldDiscPlayerId}> and transfer the ${oldPlayerContracts.length} contracts to <@${newDiscPlayerId}>`,
+        components: [{
+          type: 1,
+          components: [{
+            type: 2,
+            label: "Confirm",
+            style: 3,
+            custom_id: `confirm_migrate_${oldDiscPlayerId}_${newDiscPlayerId}`,
+          }]
+        }]
+      })
+    }
+  })
+}
+
+export const actionConfirmMigrate = async ({interaction_id, application_id, custom_id, guild_id, callerId, token, dbClient}) => {
+  await waitingMsg({interaction_id, token})
+  const customIdAttributes = custom_id.split('_')
+  const oldPlayerId = customIdAttributes[customIdAttributes.length-2]
+  const newPlayerId = customIdAttributes[customIdAttributes.length-1]
+  await postMessage({channel_id:serverChannels.botActivityLogsChannelId, content:`<@${callerId}> is requesting to migrate player <@${oldPlayerId}> to <@${newPlayerId}>`})
+  const now = Date.now()
+  const allPlayers = await getAllPlayers(guild_id)
+  const oldDiscPlayer = allPlayers.find(player=>player.user.id === oldPlayerId)
+  const newDiscPlayer = allPlayers.find(player=>player.user.id === newPlayerId)
+  const season = getFastCurrentSeason()
+  const content = await dbClient(async ({players, contracts, nationalContracts, playerMigrations})=>{
+    const [dbOldPlayer, dbNewPlayer] = await Promise.all([players.findOne({id: oldPlayerId}), players.findOne({id: newPlayerId})])
+    if(!dbOldPlayer && !dbNewPlayer){
+      return `Players <@${oldPlayerId}> <@${newPlayerId}> not found in the database, please warn the bot developer. No changes happened.`
+    } else if(dbOldPlayer && !dbNewPlayer) {
+      const {_id, knownAlts=[], ...playerData} = dbOldPlayer
+      const otherAlts = knownAlts.filter(alt=>alt.id !== newPlayerId)
+      const newPlayerResponse = await players.insertOne({...playerData, id: newPlayerId, lastDiscordChange: now, knownAlts: [...otherAlts, {_id, id: oldPlayerId}]})
+      const activeContracts = await contracts.find({playerId: oldPlayerId, endedAt: null}).toArray()
+      for await(const activeContract of activeContracts) {
+        await contracts.insertOne({...activeContract, playerId: newPlayerId})
+      }
+      const futureRoles = []
+      if(activeContracts.length>0) {
+        futureRoles.push(serverRoles.clubPlayerRole)
+        let clubRole
+        if(activeContracts.length>1) {
+          clubRole = activeContracts.find(contract=>contract.isLoan)?.team
+        } else {
+          clubRole = activeContracts[0]?.team
+        }
+        futureRoles.push(clubRole)
+      }
+      const activeNationalContract = await nationalContracts.findOne({season, playerId:oldPlayerId})
+      if(activeNationalContract) {
+        await nationalContracts.insertOne({...activeNationalContract, playerId: newPlayerId})
+        futureRoles.push(serverRoles.nationalTeamPlayerRole)
+      }
+      await Promise.all([
+        players.updateOne({_id}, {$set: {isAlt: true, knownAlts: [otherAlts, {_id: newPlayerResponse.insertedId, id: newDiscPlayer.user.id, swappedOn: now}]}}),
+        playerMigrations.insertOne({callerId, oldPlayerId, newPlayerId, at: now}),
+        updateDiscordPlayer(guild_id, newPlayerId, {
+          roles: [...new Set([...newDiscPlayer.roles, futureRoles])]
+        }),
+        updateDiscordPlayer(guild_id, oldPlayerId, {
+          roles: [...new Set([...oldDiscPlayer.roles, serverRoles.disabledRole])]
+        })
+      ])
+      return `Account Migrated. <@${oldPlayerId}> is now disabled. <@${newPlayerId}> was not previously registered. Please ensure the new account is steam verified - only the active contracts are transfered.`
+    } else if(!dbOldPlayer && dbNewPlayer) {
+      await players.updateOne({id: newDiscPlayer.user.id},{$set:{knownAlts: [...dbNewPlayer.knownAlts, { id: oldPlayerId}]}})
+      if(oldDiscPlayer) {
+        await updateDiscordPlayer(guild_id, oldPlayerId, {
+          roles: [...new Set([...oldDiscPlayer.roles, serverRoles.disabledRole])]
+        })
+      }
+      return `Account Migrated. The old account <@${oldPlayerId}> was not found in DB. Please ensure the new account <@${newPlayerId}> is steam verified - only the active contracts are transfered.`
+    } else { //old and new are present
+      const {_id, knownAlts=[], ...playerData} = dbOldPlayer
+      const otherAlts = knownAlts.filter(alt=>alt.id !== newPlayerId)
+      const newPlayerResponse = await players.updateOne({id: newPlayerId}, {$set: {...playerData, id: newPlayerId, lastDiscordChange: now, knownAlts: [...otherAlts, {_id, id: oldPlayerId, swappedOn: now}]}})
+      const activeContracts = await contracts.find({playerId: oldPlayerId, endedAt: null}).toArray()
+      await contracts.updateMany({playerId: newPlayerId, endedAt: null}, {$set: {endedAt: now}})
+      for await(const activeContract of activeContracts) {
+        await contracts.insertOne({...activeContract, playerId: newPlayerId})
+      }
+      const futureRoles = oldDiscPlayer.roles.filter(role=> ![serverRoles.registeredRole, serverRoles.steamVerified].includes(role))
+      const activeNationalContract = await nationalContracts.findOne({season, playerId:oldPlayerId})
+      if(activeNationalContract) {
+        await nationalContracts.deleteOne({season, playerId:newPlayerId})
+        await nationalContracts.insertOne({...activeNationalContract, playerId: newPlayerId})
+      }
+      await Promise.all([
+        players.updateOne({_id}, {$set: {isAlt: true, knownAlts: [otherAlts, {_id: newPlayerResponse.insertedId, id: newDiscPlayer.user.id}]}}),
+        playerMigrations.insertOne({callerId, oldPlayerId, newPlayerId, at: now}),
+        updateDiscordPlayer(guild_id, newPlayerId, {
+          roles: futureRoles
+        }),
+        updateDiscordPlayer(guild_id, oldPlayerId, {
+          roles: [...new Set([...oldDiscPlayer.roles, serverRoles.disabledRole])]
+        })
+      ])
+      return `Account Migrated. <@${oldPlayerId}> is now disabled. <@${newPlayerId}> is now getting the roles/contracts from the old account. Please ensure the new account is steam verified - only the active contracts are transfered.`
+    }
+  })
+  await postMessage({channel_id: serverChannels.botActivityLogsChannelId, content})
+  return updateResponse({application_id, token, content})
 }
 
 export const getPlayersList = async (totalPlayers, teamToList, displayCountries, players, contracts) => {
@@ -471,6 +631,7 @@ const subCommands = {
   'picture': editPlayerPicture,
   'steam': editSteamUrl,
   'migrate': migratePlayer,
+  'mainnationality': swapPlayerNationalities,
 }
 
 
@@ -535,7 +696,41 @@ const updatePlayerCmd = {
       required: true,
       type: 3,
     }]
-  }]
+  },{
+    name: 'mainnationality',
+    description: "Swap the nationalities of a player",
+    type: 1,
+    options: [{
+      type: 6,
+      name: 'player',
+      description: 'Player',
+      required: true,
+    },{
+      type: 3,
+      name: 'nationality',
+      description: 'Main nationality',
+      autocomplete: true,
+      required: true,
+    }]
+  },{
+    name: 'migrate',
+    description: "Migrate a player's discord account to a new one. WILL LOSE HISTORY",
+    type: 1,
+    options: [{
+      type: 6,
+      name: 'newplayer',
+      description: 'New Account',
+      required: true,
+    },{
+      type: 6,
+      name: 'oldplayer',
+      description: 'Old Discord Account',
+    },{
+      type: 3,
+      name: 'oldplayerid',
+      description: 'Old Discord Account ID (use if the old account isnt on the server anymore)'
+    }]
+  }]//newPlayer, oldPlayer, oldPlayerId
 }
 
 const playerBot = {

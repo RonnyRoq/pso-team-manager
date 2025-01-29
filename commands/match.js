@@ -132,12 +132,15 @@ export const formatMatchResult = async (league, homeTeam, awayTeam, match, calle
 export const formatDMMatch = async (league, homeTeam, awayTeam, match, homeLineup, awayLineup, isInternational, allPlayers) => {
   let response = `## PSAF Match starting\r`
   const embeds= []
+  let homeFlags, awayFlags
   if(isInternational) {
-    const homeFlag = await getFlags(homeTeam)
-    const awayFlag = await getFlags(awayTeam)
-    response += `\r${homeFlag} **${homeTeam.name} :vs: ${awayTeam.name}** ${awayFlag}`
+    homeFlags = await getFlags(homeTeam)
+    awayFlags = await getFlags(awayTeam)
+    response += `\r${homeFlags} **${homeTeam.name} :vs: ${awayTeam.name}** ${awayFlags}`
   } else {
-    response += `\r${homeTeam.flag} ${homeTeam.disqualified?':no_entry_sign: ':''}${homeTeam.emoji} **${homeTeam.name}** :vs: **${awayTeam.name}** ${awayTeam.emoji}${awayTeam.disqualified?':no_entry_sign: ':''} ${awayTeam.flag}`
+    homeFlags = homeTeam.flag
+    awayFlags = awayTeam.flag
+    response += `\r${homeFlags} ${homeTeam.disqualified?':no_entry_sign: ':''}${homeTeam.emoji} **${homeTeam.name}** :vs: **${awayTeam.name}** ${awayTeam.emoji}${awayTeam.disqualified?':no_entry_sign: ':''} ${awayFlags}`
   }
   if(match.password) {
     const lobbyEmbed = {
@@ -162,7 +165,7 @@ export const formatDMMatch = async (league, homeTeam, awayTeam, match, homeLineu
   if(homeLineup) {
     const homeEmbed = {
       type: 'rich',
-      title: `${homeTeam.flag} ${homeTeam.emoji} ${homeTeam.name}`,
+      title: `${homeFlags} ${homeTeam.emoji || ''} ${homeTeam.name}`,
       color: homeTeam.color,
     }
     const lineup = Object.fromEntries(
@@ -176,7 +179,7 @@ export const formatDMMatch = async (league, homeTeam, awayTeam, match, homeLineu
   if(awayLineup) {
     const awayEmbed = {
       type: 'rich',
-      title: `${awayTeam.flag} ${awayTeam.emoji} ${awayTeam.name}`,
+      title: `${awayFlags} ${awayTeam.emoji || ''} ${awayTeam.name}`,
       color: awayTeam.color,
     }
     const lineup = Object.fromEntries(
@@ -330,21 +333,22 @@ export const editAMatchInternal = async ({id, home, away, league, matchday, date
   return response
 }
 
-export const editAMatch = async ({application_id, token, options, dbClient}) => {
+export const editAMatch = async ({application_id, token, options, callerId, dbClient}) => {
   const optionsObj = optionsToObject(options)
+  await postMessage({channel_id: serverChannels.botActivityLogsChannelId, content: `<@${callerId}> edited match ${optionsObj.id} : ${JSON.stringify(optionsObj)}`})
   const response = await dbClient(async ({teams, matches, nationalTeams, leagueConfig}) => {
     return await editAMatchInternal({...optionsObj, teams, matches, nationalTeams, leagueConfig})
   })
   return updateResponse({application_id, token, content: `Updated \r`+response})
 }
 
-export const editMatch = async ({interaction_id, application_id, token, options, dbClient}) => {
+export const editMatch = async ({interaction_id, application_id, token, options, callerId, dbClient}) => {
   await waitingMsg({interaction_id, token})
-  return editAMatch({application_id, token, options, dbClient})
+  return editAMatch({application_id, token, options, callerId, dbClient})
 }
 
-export const editInterMatch = async ({application_id, token, options, dbClient}) => {
-  return editAMatch({application_id, token, options, dbClient})
+export const editInterMatch = async ({application_id, token, options, callerId, dbClient}) => {
+  return editAMatch({application_id, token, options, callerId, dbClient})
 }
 
 export const internalEndMatch = async ({id, homeScore, awayScore, ff, dbClient, callerId}) => {
@@ -400,7 +404,7 @@ export const internalEndMatch = async ({id, homeScore, awayScore, ff, dbClient, 
 export const internalEndMatchStats = async ({id, matchDetails, guild_id, callerId, dbClient}) => {
   const matchId = new ObjectId(id)
   const allPlayers = await getAllPlayers(guild_id)
-  return dbClient(async ({teams, matches, nationalTeams, players, playerStats, leagueConfig}) => {
+  return dbClient(async ({teams, matches, nationalTeams, nationalContracts, players, playerStats, leagueConfig}) => {
     const match = await matches.findOne(matchId)
     if(!match) {
       return `Match ${id} not found`
@@ -413,9 +417,9 @@ export const internalEndMatchStats = async ({id, matchDetails, guild_id, callerI
     let matchPlayers
     if(match.isInternational) {
       console.log(homeTeam.name, awayTeam.name)
-      const dbPlayers = await players.find({nat1: {$in: [homeTeam.name, awayTeam.name]}}).toArray()
+      const dbPlayers = await nationalContracts.find({season, selection: {$in: [homeTeam.shortname, awayTeam.shortname]}}).toArray()
       console.log(dbPlayers)
-      const dbPlayerIds = dbPlayers.map(dbPlayer=>dbPlayer.id)
+      const dbPlayerIds = dbPlayers.map(dbPlayer=>dbPlayer.playerId)
       matchPlayers = allPlayers.filter(player => dbPlayerIds.includes(player.user.id))
         .map(player=> ({...player, ingamename: dbPlayers.find(dbPlayer=> dbPlayer.id === player.user.id)?.ingamename || getPlayerNick(player)})).sort((a, b)=> b.ingamename.length - a.ingamename.length)
     } else {
@@ -1178,10 +1182,12 @@ const internationalMatchCmd = {
   }]
 }
 
-export const editMatchCmd = {
+const editMatchCmd = {
   name: 'editmatch',
   description: 'Update a match',
   type: 1,
+  psaf: true,
+  func: editMatch,
   options: [
     {
       type: 3,
@@ -1231,10 +1237,12 @@ const selectionMatchCmd = {
     }
   ]
 }
-export const moveTheMatchCmd = {
+const moveTheMatchCmd = {
   name: 'movethematch',
   description: 'Update a match date',
   type: 1,
+  psaf: true,
+  func: editMatch,
   options: [
     {
       type: 3,
@@ -1398,4 +1406,4 @@ export const pastMatchesCmd = {
   type: 1
 }
 
-export default [selectionMatchCmd]
+export default [selectionMatchCmd, moveTheMatchCmd, editMatchCmd]

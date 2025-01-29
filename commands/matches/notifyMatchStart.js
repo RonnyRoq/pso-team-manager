@@ -6,7 +6,7 @@ import { DiscordRequest } from "../../utils.js"
 import { getFastCurrentSeason } from "../season.js";
 import { formatDMMatch } from "../match.js"
 import { parseDate } from "../timestamp.js"
-import { getAllLeagues, getAllNationalities } from "../../functions/allCache.js"
+import { getAllLeagues } from "../../functions/allCache.js"
 
 export const lineupToArray = (lineup) => {
   // eslint-disable-next-line no-unused-vars
@@ -17,12 +17,11 @@ export const notifyMatchStart = async ({dbClient}) => {
   const now = Math.floor(Date.now() / 1000)
   const plusTen = now + 10*60
   const season = getFastCurrentSeason()
-  const {allTeams, allNationalTeams, notifyMatches, matchLineups, allNationalities} = await dbClient(async ({matches, teams, nationalTeams, lineups, contracts, nationalContracts})=> {
-    const [allTeams, allNationalTeams, startingMatches, allNationalities] = await Promise.all([
+  const {allTeams, allNationalTeams, notifyMatches, matchLineups} = await dbClient(async ({matches, teams, nationalTeams, lineups, contracts, nationalContracts})=> {
+    const [allTeams, allNationalTeams, startingMatches] = await Promise.all([
       teams.find({}).toArray(),
       nationalTeams.find({}).toArray(),
       matches.find({dateTimestamp: {$gte: now.toString(), $lte: plusTen.toString()}, password: null, finished: null, season }).toArray(),
-      getAllNationalities()
     ])
     console.log(startingMatches.map(match=>match._id.toString()))
     
@@ -52,7 +51,7 @@ export const notifyMatchStart = async ({dbClient}) => {
       return Promise.resolve(match)
     }))
     console.log(notifyMatches)
-    return {allTeams, allNationalTeams, notifyMatches, matchLineups, allNationalities}
+    return {allTeams, allNationalTeams, notifyMatches, matchLineups}
   })
   const allPlayers = await getAllPlayers(process.env.GUILD_ID)
   const allLeagues = await getAllLeagues()

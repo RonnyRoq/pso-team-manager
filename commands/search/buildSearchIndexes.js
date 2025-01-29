@@ -12,6 +12,12 @@ export const buildPlayerSearch = async ({dbClient}) =>
             }, 
             'nick': {
               '$toLower': '$nick'
+            },
+            'steam': {
+              '$toString': '$steam'
+            },
+            'steamId': {
+              '$toString': '$steamId'
             }
           }
         }, {

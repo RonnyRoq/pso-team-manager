@@ -202,8 +202,6 @@ export const matchStatsModalResponse = async ({interaction_id, token, applicatio
   const {all_stats/*, extra_stats*/} = Object.fromEntries(entries.map(entry=> [entry.custom_id, entry.value]))
   await waitingMsg({interaction_id, token})
 
-  //function parseMatchStats() {}
-
   function parseTeamPlayersStats(dataEntries) {
     const homePlayerStats = dataEntries
       .split("\n")
@@ -228,68 +226,73 @@ export const matchStatsModalResponse = async ({interaction_id, token, applicatio
     }
     return homeLineup;
   }
-
-  const data = all_stats.replace('\r\n', ).split("\n\n");
-  const dataEntries = [];
-  for (let i = 0; i < data.length; i += 2) {
-    dataEntries.push([data[i].trimStart(), data[i + 1]]);
-  }
-
-  const teamsAndDate = dataEntries[0][0].split(" - ");
-  const teamvs = teamsAndDate[0].split(" vs ");
   
-  const dateRegExp = new RegExp(/(\d+)-(\d+)-(\d+)_(\d+)-(\d+)-(\d+)/gm)
-  const dateMatches = dateRegExp.exec(teamsAndDate[1])
-  const dateOfMatch = new Date(dateMatches[1], dateMatches[2]-1, dateMatches[3], dateMatches[4], dateMatches[5], dateMatches[6]).toISOString()
+  try {
+    const data = all_stats.replace('\r\n', ).split("\n\n");
+    const dataEntries = [];
+    for (let i = 0; i < data.length; i += 2) {
+      dataEntries.push([data[i].trimStart(), data[i + 1]]);
+    }
 
-  const homeAwayScores = dataEntries[0][1].split(" - ");
-  const matchStatsBase = [
-    "Goals",
-    "Possession",
-    "Passes",
-    "Assists",
-    "Shots",
-    "Tackles",
-    "Interceptions",
-    "Fouls / Offsides",
-    "Free Kicks",
-    "Penalties",
-    "Goal Kicks",
-    "Corner Kicks",
-    "Throw Ins",
-    "Yellow Cards",
-    "Red Cards",
-  ];
-  const statsRegexp = /(\d+)\D+(\d+%)\D+\W+(\d+) Passes\W+(\d+) Assists\W+(\d+) Shots\W+(\d+) Tackles\W+(\d+) Interceptions\W+(\d+ \/ \d+)\D+(\d+) Free Kicks\D+(\d+) Penalties\D+(\d+)\D+(\d+)\D+(\d+)\D+(\d+)\D+(\d+)/gm;
-  const statsRegexp2 = new RegExp(statsRegexp);
-  const [, ...homeStatsValues] = statsRegexp.exec(dataEntries[1][1]);
-  const homeStats = Object.fromEntries(
-    matchStatsBase.map((attribute, index) => [attribute, homeStatsValues[index]])
-  );
+    const teamsAndDate = dataEntries[0][0].split(" - ");
+    const teamvs = teamsAndDate[0].split(" vs ");
+    
+    const dateRegExp = new RegExp(/(\d+)-(\d+)-(\d+)_(\d+)-(\d+)-(\d+)/gm)
+    const dateMatches = dateRegExp.exec(teamsAndDate[1])
+    const dateOfMatch = new Date(dateMatches[1], dateMatches[2]-1, dateMatches[3], dateMatches[4], dateMatches[5], dateMatches[6]).toISOString()
 
-  const [, ...awayStatsValues] = statsRegexp2.exec(dataEntries[2][1]);
-  const awayStats = Object.fromEntries(
-    matchStatsBase.map((attribute, index) => [attribute, awayStatsValues[index]])
-  );
+    const homeAwayScores = dataEntries[0][1].split(" - ");
+    const matchStatsBase = [
+      "Goals",
+      "Possession",
+      "Passes",
+      "Assists",
+      "Shots",
+      "Tackles",
+      "Interceptions",
+      "Fouls / Offsides",
+      "Free Kicks",
+      "Penalties",
+      "Goal Kicks",
+      "Corner Kicks",
+      "Throw Ins",
+      "Yellow Cards",
+      "Red Cards",
+    ];
+    const statsRegexp = /(\d+)\D+(\d+%)\D+\W+(\d+) Passes\W+(\d+) Assists\W+(\d+) Shots\W+(\d+) Tackles\W+(\d+) Interceptions\W+(\d+ \/ \d+)\D+(\d+) Free Kicks\D+(\d+) Penalties\D+(\d+)\D+(\d+)\D+(\d+)\D+(\d+)\D+(\d+)/gm;
+    const statsRegexp2 = new RegExp(statsRegexp);
+    const [, ...homeStatsValues] = statsRegexp.exec(dataEntries[1][1]);
+    const homeStats = Object.fromEntries(
+      matchStatsBase.map((attribute, index) => [attribute, homeStatsValues[index]])
+    );
 
-  const homeLineup = parseTeamPlayersStats(
-    dataEntries[3][1].concat('\n', dataEntries[4][1] || '', '\n', dataEntries[5][1] || '')
-  );
-  const awayLineup = parseTeamPlayersStats(
-    dataEntries[6][1].concat('\n', dataEntries[7][1] || '', '\n', dataEntries[8][1] || '')
-  );
-  const matchDetails = {
-    home: teamvs[0],
-    away: teamvs[1],
-    homeScore: homeAwayScores[0],
-    awayScore: homeAwayScores[1],
-    homeStats,
-    awayStats,
-    homeLineup,
-    awayLineup,
-    dateOfMatch,
-  };
-  
-  const endMatchResponse = await internalEndMatchStats({id, matchDetails, guild_id, callerId, dbClient})
-  return await updateResponse({application_id, token, content:endMatchResponse})
+    const [, ...awayStatsValues] = statsRegexp2.exec(dataEntries[2][1]);
+    const awayStats = Object.fromEntries(
+      matchStatsBase.map((attribute, index) => [attribute, awayStatsValues[index]])
+    );
+
+    const homeLineup = parseTeamPlayersStats(
+      dataEntries[3][1].concat('\n', dataEntries[4][1] || '', '\n', dataEntries[5][1] || '')
+    );
+    const awayLineup = parseTeamPlayersStats(
+      dataEntries[6][1].concat('\n', dataEntries[7][1] || '', '\n', dataEntries[8][1] || '')
+    );
+    const matchDetails = {
+      home: teamvs[0],
+      away: teamvs[1],
+      homeScore: homeAwayScores[0],
+      awayScore: homeAwayScores[1],
+      homeStats,
+      awayStats,
+      homeLineup,
+      awayLineup,
+      dateOfMatch,
+    };
+    
+    const endMatchResponse = await internalEndMatchStats({id, matchDetails, guild_id, callerId, dbClient})
+    return await updateResponse({application_id, token, content:endMatchResponse})
+  } catch (e) {
+    console.error(e)
+    return updateResponse({application_id, token, content: "Failed to send match stats"})
+  }  
 }

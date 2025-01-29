@@ -50,7 +50,6 @@ export const getApi = (localdev=false, dbClient={}) =>{
   })
 
   api.put('/teamstatus', async (req, res) => {
-    console.log(req.body)
     const team = req.body.team
     const active = req.body.active
     console.log(active)

@@ -3,7 +3,7 @@ import { InstallGlobalCommands, InstallGuildCommands } from './utils.js';
 import { nowCmd } from './commands/now.js';
 import { timestampCmd } from './commands/timestamp.js';
 import { helpCmd } from './commands/help.js';
-import { editMatchCmd, matchCmd, matchIdCmd, matchesCmd, moveTheMatchCmd, pastMatchesCmd, publishMatchCmd, resetMatchCmd, unPublishMatchCmd } from './commands/match.js';
+import { matchCmd, matchIdCmd, matchesCmd, pastMatchesCmd, publishMatchCmd, resetMatchCmd, unPublishMatchCmd } from './commands/match.js';
 import { blacklistTeamCmd, emojiCmd, expireThingsCmd, fixNamesCmd, managerContractsCmd, systemTeamCmd } from './commands/system.js';
 import { playerCmd } from './commands/player.js';
 import { confirmCmd, registerCmd, releaseCmd, updateConfirmCmd } from './commands/confirm.js';
@@ -119,7 +119,7 @@ export const emojisCmd = {
 const ALL_COMMANDS = [nowCmd, timestampCmd, helpCmd];
 
 const GUILD_COMMANDS = [
-  matchCmd, editMatchCmd, moveTheMatchCmd, publishMatchCmd, unPublishMatchCmd,
+  matchCmd, publishMatchCmd, unPublishMatchCmd,
   matchIdCmd, matchesCmd, resetMatchCmd,
   playerCmd,
   confirmCmd, updateConfirmCmd, renewCmd, dealCmd, loanCmd, releaseCmd, registerCmd,

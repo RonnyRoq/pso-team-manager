@@ -9,7 +9,7 @@ import { getAllPlayers } from "../../functions/playersCache.js"
 export const selectMatchLineup =  async ({member, application_id, callerId, interaction_id, channel_id, guild_id, token, dbClient, custom_id}) => {
   await waitingMsg({interaction_id, token})
   const [,id, matchId] = custom_id.split("_")
-  const content = await dbClient(async({lineups, matches, players, teams, nationalSelections, nationalContracts})=>{
+  const content = await dbClient(async({lineups, matches, players, teams, nationalTeams, nationalContracts})=>{
     let [lineup, match, nations, allPlayers] = await Promise.all([
       lineups.findOne({postedBy: callerId, id}),
       matches.findOne({_id: new ObjectId(matchId)}),
@@ -22,8 +22,9 @@ export const selectMatchLineup =  async ({member, application_id, callerId, inte
     const season = getFastCurrentSeason()
 
     let team
+    let selections = []
     if(match.isInternational) {
-      const selections = await nationalSelections.find({shortName: {$in: [match.home, match.away]}}).toArray()
+      selections = await nationalTeams.find({shortName: {$in: [match.home, match.away]}}).toArray()
       team = await nationalContracts.findOne({season, playerId: callerId, selection: selections.map(team=>team.shortName)})
     } else {
       const clubs = await teams.find({id: {$in: [match.home, match.away]}}).toArray()
@@ -38,7 +39,7 @@ export const selectMatchLineup =  async ({member, application_id, callerId, inte
       const teamsOfMatch = await teams.find({id: {$in: [nextMatch.home,nextMatch.away]}}).toArray()
       playerTeam = genericFormatMatch(teamsOfMatch, nextMatch, allLeagues) + '\r'
     } else {
-      playerTeam = genericInterFormatMatch(nations, nationalSelections, nextMatch, allLeagues)
+      playerTeam = genericInterFormatMatch(nations, selections, nextMatch, allLeagues)
     }
     await lineups.updateOne({postedBy:callerId, id}, {
       $set: {
