@@ -1,5 +1,5 @@
 import { ObjectId, ReturnDocument } from "mongodb";
-import { elimMatchDaysSorted, matchDays, serverChannels } from "../config/psafServerConfig.js";
+import { elimMatchDaysSorted, matchDays, serverChannels, serverRoles } from "../config/psafServerConfig.js";
 import { deleteMessage, followUpResponse, getCurrentSeason, getFlags, getPlayerNick, handleSubCommands, isTopAdminRole, msToTimestamp, optionsToObject, postMessage, publicFollowUpResponse, quickResponse, silentResponse, updatePost, updateResponse, waitingMsg } from "../functions/helpers.js";
 import { DiscordRequest } from "../utils.js";
 import { sleep } from "../functions/helpers.js";
@@ -205,7 +205,7 @@ export const internalCreateMatch = async ({league, home, away, isInternational=f
   if(isInternational) {
     const homeFlag = await getFlags(homeTeam)
     const awayFlag = await getFlags(awayTeam)
-    response += `\r> ${homeFlag} **${homeTeam.name} :vs: ${awayTeam.name}** ${awayFlag}`
+    response += `\r> ${home === serverRoles.unknownTeam ? `<@&${home}>`:`${homeFlag} **${homeTeam.name}`} :vs: ${away === serverRoles.unknownTeam ? `<@&${away}>`:`${awayTeam.name}** ${awayFlag}`}`
   } else {
     response += `\r> ${homeTeam.flag} ${homeTeam.disqualified?':no_entry_sign: ':''}${homeTeam.emoji} <@&${homeTeam.id}> :vs: <@&${awayTeam.id}> ${awayTeam.emoji}${awayTeam.disqualified?':no_entry_sign: ':''} ${awayTeam.flag}`
   }

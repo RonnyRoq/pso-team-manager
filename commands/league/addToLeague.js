@@ -208,7 +208,7 @@ export const removeFromInterLeagueCmd = {
     required: true,
     choices: leagueChoices
   },{
-    type: 8,
+    type: 3,
     name: 'selection',
     description: 'Selection',
     autocomplete: true,
@@ -267,4 +267,4 @@ const updateTeamPenaltyPointsCmd = {
   }]
 }
 
-export default [updateTeamPenaltyPointsCmd, addToLeagueCmd, addToInterLeagueCmd, removeFromLeagueCmd, replaceTeamInLeagueCmd]
+export default [updateTeamPenaltyPointsCmd, addToLeagueCmd, addToInterLeagueCmd, removeFromLeagueCmd, removeFromInterLeagueCmd, replaceTeamInLeagueCmd]
