@@ -1,6 +1,6 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { serverChannels, serverRoles } from "../../config/psafServerConfig.js"
-import { msToTimestamp, postMessage, quickResponse, silentResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { isManager, msToTimestamp, postMessage, quickResponse, silentResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { editAMatchInternal, formatMatch, getMatchTeams, getMatchTeamsSync } from "../match.js"
 import { DiscordRequest } from "../../utils.js"
 import { ObjectId } from "mongodb"
@@ -14,7 +14,7 @@ const oneWeekMs = 604800016
 
 export const moveMatch = async ({interaction_id, token, application_id, dbClient, member, callerId}) => {
   await waitingMsg({interaction_id, token})
-  if(!(member.roles.includes(serverRoles.clubManagerRole) || member.roles.includes(serverRoles.nationalTeamCaptainRole))) {
+  if(!(isManager(member) || member.roles.includes(serverRoles.nationalTeamCaptainRole))) {
     return updateResponse({application_id, token, content: 'This command is restricted to managers'})
   }
   const season = getFastCurrentSeason()
@@ -29,7 +29,7 @@ export const moveMatch = async ({interaction_id, token, application_id, dbClient
     if(userSelection && member.roles.includes(serverRoles.nationalTeamCaptainRole)) {
       teamIds.push(userSelection.selection)
     }
-    if(userTeam && member.roles.includes(serverRoles.clubManagerRole)) {
+    if(userTeam && isManager(member)) {
       teamIds.push(userTeam.id)
     }
     const startOfDay = new Date()
@@ -213,7 +213,7 @@ export const moveMatchModalResponse = async ({interaction_id, token, callerId, c
 }
 
 export const listMatchMoves = async ({interaction_id, token, application_id, member, callerId, dbClient}) => {
-  if(!(member.roles.includes(serverRoles.clubManagerRole)||member.roles.includes(serverRoles.nationalTeamCaptainRole))) {
+  if(!(isManager(member)||member.roles.includes(serverRoles.nationalTeamCaptainRole))) {
     return silentResponse({interaction_id, token, content: 'Only Managers can list moves.'})
   }
   await waitingMsg({interaction_id, token})
@@ -224,7 +224,7 @@ export const listMatchMoves = async ({interaction_id, token, application_id, mem
     console.log(orArg)
     const team = await teams.findOne({$or: orArg, active: true})
     let teamIds = []
-    if(team && (member.roles.includes(serverRoles.clubManagerRole))) {
+    if(team && (isManager(member))) {
       teamIds.push(team.id)
     }
     const selection = await nationalContracts.findOne({season, playerId: callerId})

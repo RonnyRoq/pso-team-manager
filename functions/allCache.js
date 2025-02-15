@@ -35,6 +35,10 @@ export const getAllLeagues = async () => {
   return getCache(cacheKeys.leagues)
 }
 
+export const getActiveLeagues = async () => {
+  return getCache(cacheKeys.leagues).filter(league=> league.active)
+}
+
 export const getAllNationalities = async () => {
   return getCache(cacheKeys.nationalities)
 }

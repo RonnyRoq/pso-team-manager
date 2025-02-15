@@ -1,5 +1,5 @@
 import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
-import { getCurrentSeason, getPlayerNick, optionsToObject, postMessage, quickResponse, removePlayerPrefix, sleep, updateDiscordPlayer, updateResponse, waitingMsg } from "../functions/helpers.js"
+import { getCurrentSeason, getPlayerNick, isManager, isManagerRole, optionsToObject, postMessage, quickResponse, removePlayerPrefix, sleep, updateDiscordPlayer, updateResponse, waitingMsg } from "../functions/helpers.js"
 import { getAllPlayers } from "../functions/playersCache.js"
 import { DiscordRequest } from "../utils.js"
 
@@ -17,7 +17,7 @@ export const showNoContracts = async ({guild_id, interaction_id, token, applicat
   const allActiveTeamIds = allActiveTeams.map(({id})=> id)
   const allContractsPlayerIds = allContracts.map(({playerId})=> playerId)
   const playersWithATeamAndNoContract = totalPlayers.filter(player => {
-    const teamId = !player.roles.includes(serverRoles.clubManagerRole) && player.roles.find(role => allActiveTeamIds.includes(role))
+    const teamId = !isManager(player) && player.roles.find(role => allActiveTeamIds.includes(role))
     const hasContract = teamId ? allContractsPlayerIds.includes(player.user.id) : false
     return teamId && !hasContract
   })
@@ -42,7 +42,7 @@ export const showExpiringContracts = async ({guild_id, interaction_id, token, ap
   const allActiveTeamIds = allActiveTeams.map(({id})=> id)
   const allContractsPlayerIds = allContracts.map(({playerId})=> playerId)
   const playersWithATeamAndExpiringContract = totalPlayers.filter(player => {
-    const teamId = !player.roles.includes(serverRoles.clubManagerRole)
+    const teamId = !isManager(player)
      && !player.roles.includes(serverRoles.matchBlacklistRole)
      && !player.roles.includes(serverRoles.permanentlyBanned)
      && player.roles.find(role => allActiveTeamIds.includes(role))
@@ -77,7 +77,7 @@ export const emergencyOneSeasonContract = async ({guild_id, interaction_id, toke
     const allActiveTeamIds = allActiveTeams.map(({id})=> id)
     const allContractsPlayerIds = allContracts.map(({playerId})=> playerId)
     const contractsToInsert = totalPlayers.map(player => {
-      const teamId = !player.roles.includes(serverRoles.clubManagerRole) && player.roles.find(role => allActiveTeamIds.includes(role))
+      const teamId = !isManager(player) && player.roles.find(role => allActiveTeamIds.includes(role))
       const hasContract = teamId ? allContractsPlayerIds.includes(player.user.id) : false
       if(teamId && !hasContract)
         return {playerId: player.user.id, team: teamId, at, until: 4}
@@ -102,7 +102,7 @@ export const expireContracts = async ({dbClient, interaction_id, token, guild_id
     const allTeams = await teams.find({}).toArray()
     const allExpiringContracts = fullExpiringContracts.filter(({playerId})=> {
       const discPlayer = totalPlayers.find(({user})=> user.id === playerId)
-      return discPlayer && !discPlayer.roles.includes(serverRoles.clubManagerRole)
+      return discPlayer && !isManager(discPlayer)
     }).slice(0, 40)
     if(!dryrun) {
       await contracts.updateMany({playerId: {$in: allExpiringContracts.map(({playerId}) => playerId)}}, {$set: {endedAt: Date.now()}})
@@ -123,12 +123,12 @@ export const expireContracts = async ({dbClient, interaction_id, token, guild_id
     return await updateResponse({application_id, token, content: (teamPlayers.map(({nick})=>nick).join('\r') || '---')})
   }
   for await (const player of teamPlayers) {
-    if(player.user && !player.roles.includes(serverRoles.clubManagerRole)) {
+    if(player.user && !isManager(player)) {
       const playerName = getPlayerNick(player)
       let updatedPlayerName = removePlayerPrefix(allTeams.find(({id})=> id === player.team )?.shortName, playerName)
       const payload= {
         nick: updatedPlayerName,
-        roles: player.roles.filter(playerRole=> ![player.team, serverRoles.clubManagerRole, serverRoles.clubPlayerRole].includes(playerRole))
+        roles: player.roles.filter(playerRole=> ![player.team, serverRoles.clubManagerRole, serverRoles.pgManagerRole, serverRoles.clubPlayerRole].includes(playerRole))
       }
       await DiscordRequest(`guilds/${guild_id}/members/${player.playerId}`, {
         method: 'PATCH',
@@ -157,7 +157,7 @@ export const setCaptain = async ({interaction_id, token, guild_id, application_i
   const discPlayerResp = await DiscordRequest(`guilds/${guild_id}/members/${player}`)
   const discPlayer = await discPlayerResp.json()
   const body = {
-    roles: iscaptain ? [...new Set([...discPlayer.roles, serverRoles.clubManagerRole])] : [...new Set([...discPlayer.roles.filter(role=> role !== serverRoles.clubManagerRole)])]
+    roles: iscaptain ? [...new Set([...discPlayer.roles, serverRoles.pgManagerRole, serverRoles.clubManagerRole])] : [...new Set([...discPlayer.roles.filter(role=> !isManagerRole(role))])]
   }
   const content = await dbClient(async({players, contracts})=> {
     await Promise.all([

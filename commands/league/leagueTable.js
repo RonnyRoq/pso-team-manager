@@ -3,7 +3,6 @@ import { createCanvas } from 'canvas'
 import { NONE, currentSeason, elimMatchDaysSorted, serverChannels, serverRoles } from "../../config/psafServerConfig.js"
 import { followUpResponse, getCurrentSeason, getFlags, optionsToObject, quickResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { DiscordRequest} from '../../utils.js'
-import { leagueChoices } from '../../config/leagueData.js';
 import { getAllLeagues } from '../../functions/allCache.js';
 
 //Ensure this function doesnt crash if you ask for a league which doesnt have a table
@@ -137,7 +136,7 @@ export const internalElimTree = async ({dbClient, league}) => {
     const matchdayIndex = elimMatchDaysSorted.findIndex(elimMatchDay=>elimMatchDay === leagueMatch.matchday)
     const homeTeam = currentTeams.find(team=> team.id === leagueMatch.home)
     const awayTeam = currentTeams.find(team => team.id === leagueMatch.away)
-    console.log(matchdayIndex, homeTeam.name, awayTeam.name)
+    console.log(matchdayIndex, homeTeam?.name, awayTeam?.name)
     return {
       ...leagueMatch,
       homeTeam, 
@@ -167,7 +166,6 @@ export const internalElimTree = async ({dbClient, league}) => {
         currentMatchInMatchday = 0
         currentMatchDay = currentMatch.matchdayIndex
       }
-      //console.log(currentMatchDay)
       if(initialMatchDay === sortedMatches[i]?.matchdayIndex){
         const homeIndex = 2*i, awayIndex = 2*i+1
         lines[homeIndex]=`${formatTeamTree(currentMatch.homeTeam.name)} ${currentMatch.finished ? `${currentMatch.homeScore.padStart(2)}`: '  '}`
@@ -196,14 +194,15 @@ export const internalElimTree = async ({dbClient, league}) => {
 }
 
 export const apiLeagueTable = async ({dbClient, league}) => {
-  const leagueIds = leagueChoices.map(chan => chan.value)
+  const allLeagues = await getAllLeagues()
+  const leagueIds = allLeagues.filter(league=> !league.archived).map(chan => chan.value)
   if(leagueIds.includes(league)){
     return internalLeagueTable({dbClient, league})
   }
   return {}
 }
 
-export const imageLeagueTable = async ({interaction_id, token, application_id, dbClient, options}) => {
+const imageLeagueTable = async ({interaction_id, token, application_id, dbClient, options}) => {
   const {league} = optionsToObject(options)
   await waitingMsg({interaction_id, token})
   const sortedTeams = await internalLeagueTable({dbClient, league})
@@ -275,26 +274,6 @@ export const imageLeagueTable = async ({interaction_id, token, application_id, d
   stream.pipe(out)
   
   await new Promise(resolve => out.on("finish", resolve))
-
-  /*await DiscordUploadRequest(`/channels/${serverChannels.botTestingChannelId}/messages`, {
-    method: 'POST',
-    body: {
-      content: 'Standings'
-    }
-  }, [{
-    name: `${league}.png`,
-    path: `./${league}.png`
-  }],)*/
-  /*await DiscordUploadRequest(`/channels/${serverChannels.botTestingChannelId}/messages`, {
-    method: 'POST',
-    body: {
-      content: 'Standings'
-    }
-  }, [{
-    name: `${league}.png`,
-    data: canvas.toBuffer().toString(),
-    contentType: 'image/png',
-  }],)*/
   return updateResponse({application_id, token, content: `https://pso.shinmugen.net/site/images/league/${league}.png`})
 }
 
@@ -318,6 +297,9 @@ export const formatLeagueTree = async ({league, dbClient, short = false}) => {
 export const formatLeagueTable = async ({league, dbClient, short = false, season}) => {
   const allLeagues = await getAllLeagues()
   const leagueObj = allLeagues.find(currentLeague=> currentLeague.value === league)
+  if(!leagueObj) {
+    return `Can't find League ${league}`
+  }
   if(leagueObj.knockout){
     const res = await internalElimTree({dbClient, league})
     return res
@@ -339,7 +321,7 @@ export const formatLeagueTable = async ({league, dbClient, short = false, season
   }
 }
 
-export const leagueTable = async ({interaction_id, token, application_id, dbClient, options}) => {
+const leagueTable = async ({interaction_id, token, application_id, dbClient, options}) => {
   const {league, short, season} = optionsToObject(options)
   await waitingMsg({interaction_id, token})
   const content = await formatLeagueTable({league, dbClient, short, season})
@@ -374,22 +356,24 @@ export const updateLeagueTable = async ({league, dbClient, short = false}) => {
   })
 }
 
-export const postLeagueTable = async ({interaction_id, token, dbClient, options}) => {
+const postLeagueTable = async ({interaction_id, token, dbClient, options}) => {
   const {league, short} = optionsToObject(options)
   const content = await formatLeagueTable({league, dbClient, short})
   return quickResponse({interaction_id, token, content})
 }
 
-export const leagueTableCmd = {
+const leagueTableCmd = {
   type: 1,
   name: 'leaguetable',
   description: 'Show the league table',
+  psaf: true,
+  func: leagueTable,
   options: [{
     type: 3,
     name: 'league',
     description: 'League',
     required: true,
-    choices: leagueChoices
+    autocomplete: true,
   },{
     type: 5,
     name: 'short',
@@ -403,22 +387,26 @@ export const leagueTableCmd = {
   }]
 }
 
-export const postLeagueTableCmd = {
+const postLeagueTableCmd = {
   ...leagueTableCmd,
-  name: 'postleaguetable'
+  name: 'postleaguetable',
+  psaf: true,
+  func: postLeagueTable
 }
 
-export const imageLeagueTableCmd = {
+const imageLeagueTableCmd = {
   type: 1,
   name: 'imgleaguetable',
   description: 'Show the league table',
+  psaf: true,
+  func: imageLeagueTable,
   options: [{
     type: 3,
     name: 'league',
     description: 'League',
     required: true,
-    choices: leagueChoices
+    autocomplete: true,
   }]
 }
 
-export default [leagueTableCmd]
+export default [leagueTableCmd, imageLeagueTableCmd, postLeagueTableCmd]

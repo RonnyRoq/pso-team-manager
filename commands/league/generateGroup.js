@@ -1,13 +1,15 @@
-import { leagueChoices } from "../../config/leagueData.js";
 import { handleSubCommands, optionsToObject, updateResponse } from "../../functions/helpers.js"
 import { internalCreateMatch } from "../match.js";
 import { NONE, elimMatchDays, matchDays as matchDayRef, serverRoles } from "../../config/psafServerConfig.js"
 import { shuffleArray } from "../../functions/helpers.js"
 
-export const generateGroup = async ({application_id, token, dbClient, options}) => {
+const generateGroup = async ({application_id, token, dbClient, options}) => {
   const {league, homeaway} = optionsToObject(options)
   const content = await dbClient(async ({leagues, teams, matches, nationalTeams, seasonsCollect, leagueConfig})=> {
     const currentLeague = await leagueConfig.findOne({value: league})
+    if(!currentLeague){
+      return `Can't find League ${league}`
+    }
     const leagueTeams = await leagues.find({leagueId: league}).toArray()
     const teamsPerGroup = {
       'A': [],
@@ -66,11 +68,14 @@ export const generateGroup = async ({application_id, token, dbClient, options}) 
   return updateResponse({application_id, token, content})
 }
 
-export const generateElimTree = async ({application_id, token, dbClient, options}) => {
+const generateElimTree = async ({application_id, token, dbClient, options}) => {
   const {league} = optionsToObject(options)
   const content = await dbClient(async ({leagues, teams, matches, nationalTeams, seasonsCollect, leagueConfig})=> {
-    const leagueTeams = await leagues.find({leagueId: league}).sort({position: 1}).toArray()
     const leagueObj = await leagueConfig.findOne({value: league})
+    if(!leagueObj){
+      return `Can't find League ${league}`
+    }
+    const leagueTeams = await leagues.find({leagueId: league}).sort({position: 1}).toArray()
     const isCup = leagueTeams.every(team=> !Number.isNaN(Number.parseInt(team.position)))
     if(!isCup) {
       return 'This league is not a cup, please assign positions to every single team if you want to make it a cup.'
@@ -126,7 +131,7 @@ const generate = {
       name: 'league',
       description: 'League',
       required: true,
-      choices: leagueChoices
+      autocomplete: true,
     },{
       type: 5,
       name: 'homeaway',
@@ -142,7 +147,7 @@ const generate = {
       name: 'league',
       description: 'League',
       required: true,
-      choices: leagueChoices
+      autocomplete: true,
     },{
       type: 5,
       name: 'homeaway',

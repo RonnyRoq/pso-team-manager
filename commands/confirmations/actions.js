@@ -1,8 +1,8 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { innerRemoveConfirmation, innerRemoveDeal, innerRemoveRelease } from "../confirm.js"
 import { DiscordRequest } from "../../utils.js"
-import { serverChannels, serverRoles } from "../../config/psafServerConfig.js"
-import { getPlayerNick, postMessage, silentResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { serverChannels } from "../../config/psafServerConfig.js"
+import { getPlayerNick, isManager, postMessage, silentResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { seasonPhases } from "../season.js"
 import { twoWeeksMs } from "../../config/constants.js"
 import { ObjectId } from "mongodb"
@@ -40,7 +40,7 @@ export const removeLoan = async ({dbClient, message, interaction_id, token }) =>
 
 export const declineDealAction =  async ({member, application_id, interaction_id, token, dbClient, custom_id, callerId}) => {
   await waitingMsg({interaction_id, token})
-  if(!member.roles.includes(serverRoles.clubManagerRole)) {
+  if(!isManager(member)) {
     return updateResponse({application_id, token, content:"Only managers can approve deals"})
   }
   const dealId = custom_id.substr("decline_deal_".length)
@@ -64,7 +64,7 @@ export const declineDealAction =  async ({member, application_id, interaction_id
 
 export const declineLoanAction =  async ({member, application_id, interaction_id, token, dbClient, custom_id, callerId}) => {
   await waitingMsg({interaction_id, token})
-  if(!member.roles.includes(serverRoles.clubManagerRole)) {
+  if(!isManager(member)) {
     return updateResponse({application_id, token, content: "Only managers can approve deals"})
   }
   const loanId = custom_id.substr("decline_loan_".length)
@@ -89,7 +89,7 @@ export const declineLoanAction =  async ({member, application_id, interaction_id
 export const approveDealAction = async ({member, application_id, interaction_id, token, dbClient, custom_id, guild_id, callerId}) => {
   await waitingMsg({interaction_id, token})
   console.log(guild_id)
-  if(!member.roles.includes(serverRoles.clubManagerRole)) {
+  if(!isManager(member)) {
     return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
       method : 'PATCH',
       body: {
@@ -143,7 +143,7 @@ export const approveLoanAction = async ({member, application_id, interaction_id,
       }
     }
   })
-  if(!member.roles.includes(serverRoles.clubManagerRole)) {
+  if(!isManager(member)) {
     return DiscordRequest(`/webhooks/${application_id}/${token}/messages/@original`, {
       method : 'PATCH',
       body: {

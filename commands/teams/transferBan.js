@@ -18,7 +18,11 @@ const setTransferBan = async ({interaction_id, token, options, callerId, dbClien
 const leagueTransferBan = async ({interaction_id, token, options, callerId, dbClient}) => {
   const {action, league} = optionsToObject(options)
   const transferBan = (action === 'remove') ? transferBanStatus.free : action
-  const content = await dbClient(async ({teams, leagues})=> {
+  const content = await dbClient(async ({teams, leagues, leagueConfig})=> {
+    const leagueFound = await leagueConfig.findOne({leagueConfig})
+    if(!leagueFound) {
+      return `Can't find League ${league}`
+    }
     const leagueTeams = await leagues.find({leagueId: league}).toArray()
     const teamsId = leagueTeams.map(leagueTeam=> leagueTeam.team)
     await teams.updateMany({id: {$in: teamsId}}, {$set: {transferBan}})

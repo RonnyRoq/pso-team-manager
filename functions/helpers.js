@@ -1,6 +1,6 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions";
 import { serverChannels, serverRoles, transferBanStatus } from "../config/psafServerConfig.js";
-import { DiscordRequest } from "../utils.js";
+import { DiscordRequest, logSystemError } from "../utils.js";
 import { getAllNationalities } from "./allCache.js";
 
 export const isPSAF = (guild_id) => guild_id === process.env.GUILD_ID
@@ -123,13 +123,18 @@ export const isStaffRole = (role) => [serverRoles.presidentRole, serverRoles.eng
 
 export const isAdminRole = (role) => [serverRoles.presidentRole, serverRoles.engineerRole, serverRoles.adminRole].includes(role)
 export const isTopAdminRole = (role) => [serverRoles.presidentRole, serverRoles.engineerRole].includes(role)
+export const isManagerRole = (role) => [serverRoles.clubManagerRole, serverRoles.pgManagerRole].includes(role)
 
 
-export const isMemberAdmin = async (guildMember) => {
-  return ((guildMember?.roles || []).find(role => isAdminRole(role)))
+export const isMemberAdmin = (guildMember) => {
+  return ((guildMember?.roles || []).find(isAdminRole))
 }
-export const isMemberStaff = async (guildMember) => {
-  return ((guildMember?.roles || []).find(role => isStaffRole(role)))
+export const isMemberStaff = (guildMember) => {
+  return ((guildMember?.roles || []).find(isStaffRole))
+}
+
+export const isManager = (guildMember) => {
+  return (guildMember?.roles || []).some(isManagerRole)
 }
 const supportedServers = [process.env.GUILD_ID, process.env.WC_GUILD_ID]
 
@@ -311,19 +316,23 @@ export const deleteMessage = async ({channel_id, messageId}) =>
   })
 
 export const sendDM = async ({playerId, content}) => {
-  const userChannelResp = await DiscordRequest('/users/@me/channels', {
-    method: 'POST',
-    body:{
-      recipient_id: playerId
-    }
-  })
-  const userChannel = await userChannelResp.json()
-  await DiscordRequest(`/channels/${userChannel.id}/messages`, {
-    method: 'POST',
-    body: {
-      content
-    }
-  })
+  try {
+    const userChannelResp = await DiscordRequest('/users/@me/channels', {
+      method: 'POST',
+      body:{
+        recipient_id: playerId
+      }
+    })
+    const userChannel = await userChannelResp.json()
+    await DiscordRequest(`/channels/${userChannel.id}/messages`, {
+      method: 'POST',
+      body: {
+        content
+      }
+    })
+  } catch(e) {
+    await logSystemError(`<@${playerId}> blocked his DMs. Can't send him a message: ${content}`)
+  }
 }
 //stolen from stackoverflow
 export const isNumeric = (str) => {

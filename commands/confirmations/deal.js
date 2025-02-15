@@ -1,5 +1,5 @@
 import { DiscordRequest } from "../../utils.js"
-import { optionsToObject, transferMarketStatus, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { isManager, optionsToObject, transferMarketStatus, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { globalTransferBan, globalTransferBanMessage, globalTransferClosedMessage, serverChannels, serverRoles, transferBanStatus } from "../../config/psafServerConfig.js"
 import { seasonPhases } from "../season.js"
 
@@ -38,7 +38,7 @@ const preDealChecks = async({guild_id, player, member, contracts, teams, confirm
     return {message: `You cannot recruit <@${player}> as <@&${sourceTeam.id}> is banned from doing transfers.`}
   }
   
-  if(discPlayer.roles.includes(serverRoles.clubManagerRole)) {
+  if(isManager(discPlayer)) {
     return {message:`Cannot recruit <@${player}> ; Club Manager of ${sourceTeam.name}.`}
   }
   if(sourceTeam.id === destTeam.id) {

@@ -6,7 +6,6 @@ import { sleep } from "../functions/helpers.js";
 import { parseDate } from "./timestamp.js";
 import { formatDMLineup } from "./lineup/lineup.js";
 import { getAllPlayers } from "../functions/playersCache.js";
-import { leagueChoices } from "../config/leagueData.js";
 import { getAllLeagues, getAllNationalities } from "../functions/allCache.js";
 import { getFastCurrentSeason } from "./season.js";
 
@@ -195,6 +194,9 @@ export const formatDMMatch = async (league, homeTeam, awayTeam, match, homeLineu
 
 export const internalCreateMatch = async ({league, home, away, isInternational=false, dateTimestamp, matchday, teams, matches, nationalTeams, seasonsCollect, leagueConfig, group, order}) => {
   const currentLeague = await leagueConfig.findOne({value: league})
+  if(!currentLeague) {
+    return `Can't find League ${league}.`
+  }
   let response = `<${currentLeague.emoji}> **| ${currentLeague.name}${group? ` ${group}` : ' '} ${matchday}** - ${dateTimestamp ? `<t:${dateTimestamp}:F>` : 'No date'}`  
   const homeScore = '?'
   const awayScore = '?'
@@ -252,8 +254,7 @@ const createMatch = async ({application_id, token, options, dbClient, isInternat
   return updateResponse({application_id, token, content: response})
 }
 
-export const match = async ({interaction_id, application_id, token,  options, dbClient}) => {
-  await waitingMsg({interaction_id, token})
+export const match = async ({application_id, token,  options, dbClient}) => {
   return createMatch({application_id, token, options, dbClient})
 }
 
@@ -316,6 +317,9 @@ export const editAMatchInternal = async ({id, home, away, league, matchday, date
   }
   const leaguePick = league || match.league
   const currentLeague = await leagueConfig.findOne({value: leaguePick})
+  if(!currentLeague) {
+    return `League ${leaguePick} not found`
+  }
   const matchDayPick = matchday || match.matchday
   const orderInsert = order ? {order} : {}
   const payloadToSet = {
@@ -342,8 +346,8 @@ export const editAMatch = async ({application_id, token, options, callerId, dbCl
   return updateResponse({application_id, token, content: `Updated \r`+response})
 }
 
-export const editMatch = async ({interaction_id, application_id, token, options, callerId, dbClient}) => {
-  await waitingMsg({interaction_id, token})
+// keeping space for divergences down the line. If v11 force a copy paste, get rid of the duplicates
+export const editMatch = async ({application_id, token, options, callerId, dbClient}) => {
   return editAMatch({application_id, token, options, callerId, dbClient})
 }
 
@@ -513,14 +517,6 @@ export const internalEndMatchStats = async ({id, matchDetails, guild_id, callerI
   })
 }
 
-export const endMatch = async ({interaction_id, token, application_id, options, dbClient, callerId}) => {
-  const {id, homescore, awayscore, ff} = optionsToObject(options)
-  await waitingMsg({interaction_id, token})
-
-  const content = await internalEndMatch({id, homeScore:homescore, awayScore:awayscore, ff, dbClient, callerId})
-  return updateResponse({application_id, token, content})
-}
-
 export const resetMatch = async ({interaction_id, token, application_id, options, dbClient}) => {
   const {id} = optionsToObject(options)
   await waitingMsg({interaction_id, token})
@@ -551,7 +547,10 @@ export const resetMatch = async ({interaction_id, token, application_id, options
 }
 
 export const internalPublishMatch = async ({league, matchday, postping=true, seasonsCollect, teams, matches, nationalTeams, matchDays, leagueConfig}) => {
-  const currentLeague = await leagueConfig.findOne({value:league})
+  const currentLeague = await leagueConfig.findOne({value:league, active: true})
+  if(!currentLeague) {
+    return `Cannot find League ${currentLeague}. Please check if the league is active and you entered your choice correctly.`
+  }
   const channel = currentLeague.channel || currentLeague.value
   const season = await getCurrentSeason(seasonsCollect)
   const matchDay = await matchDays.findOne({league, season, matchday})
@@ -626,6 +625,9 @@ export const unpublishMatch = async ({member, interaction_id, token, application
   const {league, matchday} = optionsToObject(options)
   const content = await dbClient(async({matches, seasonsCollect, matchDays, leagueConfig})=> {
     const currentLeague = await leagueConfig.findOne({value: league})
+    if(!currentLeague) {
+      return `Cannot find the League ${league}`
+    }
     const channel = currentLeague.channel || currentLeague.value
     const season = await getCurrentSeason(seasonsCollect)
     const matchDay = await matchDays.findOne({league, season, matchday})
@@ -775,6 +777,7 @@ export const getMatchesOfDay = async ({date='today', finished=false, dbClient, f
       const headerLine = {content: `${matchesOfDay.length} match${matchesOfDay.length >1?'es':''} on <t:${startDateTimestamp}:d>.`}
       let response = [{matchToPush: headerLine, streamerMatch: headerLine}]
       for (const match of matchesOfDay) {
+        console.log(match)
         const [homeTeam, awayTeam] = getMatchTeamsSync(match.home, match.away, match.isInternational, allNationalTeams, allTeams)
         const channels = []
         if(homeTeam.channel){
@@ -1065,10 +1068,12 @@ export const matches = async ({interaction_id, token, application_id, options=[]
   });
 }
 
-export const matchCmd = {
+const matchCmd = {
   name: 'match',
   description: 'Enter a match',
   type: 1,
+  psaf: true,
+  func: match,
   options: [{
     type: 8,
     name: 'home',
@@ -1082,9 +1087,9 @@ export const matchCmd = {
   },{
     type: 3,
     name: 'league',
-    description: "Which league it is for",
-    choices: leagueChoices,
-    required: true
+    description: 'League',
+    required: true,
+    autocomplete: true,
   },{
     type: 3,
     name: 'matchday',
@@ -1126,8 +1131,16 @@ const selectionMatchSubCommands = {
   'edit': editInterMatch,
 }
 
+const clubMatchSubCommands = {
+  'create': match,
+  'edit': editMatch,
+}
+
 const selectionMatch = async (commandOptions) => 
   handleSubCommands(commandOptions, selectionMatchSubCommands)
+
+const clubMatch = async (commandOptions) => 
+  handleSubCommands(commandOptions, clubMatchSubCommands)
 
 const internationalMatchCmd = {
   name: 'intermatch',
@@ -1148,9 +1161,9 @@ const internationalMatchCmd = {
   },{
     type: 3,
     name: 'league',
-    description: "Which league it is for",
-    choices: leagueChoices,
-    required: true
+    description: 'League',
+    required: true,
+    autocomplete: true,
   },{
     type: 3,
     name: 'matchday',
@@ -1186,8 +1199,6 @@ const editMatchCmd = {
   name: 'editmatch',
   description: 'Update a match',
   type: 1,
-  psaf: true,
-  func: editMatch,
   options: [
     {
       type: 3,
@@ -1221,6 +1232,19 @@ const editInternationalMatchCmd = {
 }
 
 
+const resetMatchCmd = {
+  name: 'resetmatch',
+  description: 'Reset a match',
+  type: 1,
+  options: [
+    {
+      type: 3,
+      name: 'id',
+      description: "The Match ID to modify",
+      required: true
+    }
+  ]
+}
 const selectionMatchCmd = {
   name: 'selectionmatch',
   description: 'Commands for national selection matches',
@@ -1234,9 +1258,32 @@ const selectionMatchCmd = {
     {
       ...editInternationalMatchCmd,
       name: 'edit'
+    }, {
+      ...resetMatchCmd,
+      name: 'reset'
     }
   ]
 }
+
+const clubMatchCmd = {
+  name: 'clubmatch',
+  description: 'Commands for Club matches',
+  psaf: true,
+  func: clubMatch,
+  options: [
+    {
+      ...matchCmd,
+      name: 'create'
+    },{
+      ...editMatchCmd,
+      name: 'edit'
+    }, {
+      ...resetMatchCmd,
+      name: 'reset'
+    }
+  ]
+}
+
 const moveTheMatchCmd = {
   name: 'movethematch',
   description: 'Update a match date',
@@ -1275,62 +1322,19 @@ const moveTheMatchCmd = {
   ]
 }
 
-/*export const endMatchCmd = {
-  name: 'endmatch',
-  description: 'Finish a match',
-  type: 1,
-  options: [
-    {
-      type: 3,
-      name: 'id',
-      description: "The Match ID to modify",
-      required: true
-    },
-    {
-      type: 3,
-      name: 'homescore',
-      description: "The score for the home team",
-      required: true
-    },
-    {
-      type: 3,
-      name: 'awayscore',
-      description: "The score for the away team",
-      required: true
-    },
-    {
-      type: 5,
-      name: 'ff',
-      description: "Was the match a FF?"
-    }
-  ]
-}*/
-
-export const resetMatchCmd = {
-  name: 'resetmatch',
-  description: 'Reset a match',
-  type: 1,
-  options: [
-    {
-      type: 3,
-      name: 'id',
-      description: "The Match ID to modify",
-      required: true
-    }
-  ]
-}
-
-export const publishMatchCmd = {
+const publishMatchCmd = {
   name: 'publishmatch',
   description: 'Publish a matchday',
   type: 1,
+  psaf: true,
+  func: publishMatch,
   options: [
     {
       type: 3,
       name: 'league',
-      description: "Which league it is for",
-      choices: leagueChoices,
-      required: true
+      description: 'League',
+      required: true,
+      autocomplete: true,
     },{
       type: 3,
       name: 'matchday',
@@ -1344,17 +1348,20 @@ export const publishMatchCmd = {
     }
   ]
 }
-export const unPublishMatchCmd = {
+
+const unPublishMatchCmd = {
   name: 'unpublishmatch',
   description: 'Unpublish a matchday -- WARNING DON\'T TOUCH',
   type: 1,
+  psaf: true,
+  func: unpublishMatch, 
   options: [
     {
       type: 3,
       name: 'league',
-      description: "Which league it is for",
-      choices: leagueChoices,
-      required: true
+      description: 'League',
+      required: true,
+      autocomplete: true,
     },{
       type: 3,
       name: 'matchday',
@@ -1365,10 +1372,12 @@ export const unPublishMatchCmd = {
   ]
 }
 
-export const matchIdCmd = {
+const matchIdCmd = {
   name: 'matchid',
   description: 'Get a match\'s ID',
   type: 1,
+  psaf: true,
+  func: matchId,
   options: [{
     type: 8,
     name: 'home',
@@ -1382,10 +1391,12 @@ export const matchIdCmd = {
   }]
 }
 
-export const matchesCmd = {
+const matchesCmd = {
   name: 'matches',
   description: 'List the matches on a day',
   type: 1,
+  psaf: true,
+  func: matches,
   options: [
     {
       type: 3,
@@ -1400,10 +1411,17 @@ export const matchesCmd = {
   ]
 }
 
-export const pastMatchesCmd = {
+const pastMatchesCmd = {
   name: 'pastmatches',
+  psaf: true,
+  func: pastMatches,
   description: 'List all the unresolved past matches',
   type: 1
 }
 
-export default [selectionMatchCmd, moveTheMatchCmd, editMatchCmd]
+export default [
+  clubMatchCmd, selectionMatchCmd,
+  moveTheMatchCmd,
+  matchesCmd, pastMatchesCmd, matchIdCmd,
+  publishMatchCmd, unPublishMatchCmd
+]

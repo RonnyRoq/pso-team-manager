@@ -2,8 +2,7 @@ import { InteractionResponseFlags } from "discord-interactions"
 import { DiscordRequest } from "../../utils.js"
 import { msToTimestamp, quickResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { getAllPlayers } from "../../functions/playersCache.js"
-
-const clubManagerRole = '1072620773434462318'
+import { serverRoles } from "../../config/psafServerConfig.js"
 
 export const botChatListDeals = async({dbClient, interaction_id, token, application_id, user}) => {
   const allPlayers = await getAllPlayers(process.env.GUILD_ID)
@@ -12,7 +11,7 @@ export const botChatListDeals = async({dbClient, interaction_id, token, applicat
 }
 
 export const listDeals = async({dbClient, interaction_id, token, application_id, member}) => {
-  if(!member.roles.includes(clubManagerRole)) {
+  if(!member.roles.includes(serverRoles.clubManagerRole)) {
     return quickResponse({interaction_id, token, content:'Only Club Managers can list deals.', isEphemeral: true})
   }
   await waitingMsg({interaction_id, token})

@@ -389,6 +389,7 @@ export const currentSeason = 6
 
 export const serverRoles = {
   clubManagerRole: '1072620773434462318',
+  pgManagerRole: '1209230709542223912',
   matchBlacklistRole: '1095055617703543025',
   nationalTeamCaptainRole: '1103327640942809108',
   nationalTeamPlayerRole: '1103327647955685536',
@@ -408,6 +409,7 @@ export const serverRoles = {
   wcRegisteredRole: '1237110862645559337',
   wcNationalCoachRole: '1204035266050916372',
   steamVerified: '1301211697410867271',
+  turkishLanguage: '1084868316834824192',
 }
 
 export const serverChannels = {

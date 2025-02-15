@@ -1,4 +1,3 @@
-import { leagueChoices } from "../../config/leagueData.js"
 import { handleSubCommands, optionsToObject, postMessage, updateResponse } from "../../functions/helpers.js"
 import { getAllLeagues, refreshAllLeagues } from "../../functions/allCache.js"
 import { serverChannels } from "../../config/psafServerConfig.js"
@@ -15,6 +14,9 @@ export const editLeague = async ({dbClient, token, application_id, options}) => 
   const {name, channel, league, emoji='', logo, order, sorting} = optionsToObject(options)
   const content = await dbClient(async ({leagueConfig})=> {
     const currentLeague = await leagueConfig.findOne({value: league})
+    if(!currentLeague) {
+      return `Can't find League ${league}`
+    }
     const payload = {
       name: name || currentLeague.name,
       defaultImage: logo || currentLeague.defaultImage,
@@ -69,11 +71,14 @@ const updateLeagueStatus = async ({token, application_id, callerId, options, dbC
   }
   const content = await dbClient(async ({leagueConfig})=>{
     const selectedLeague = await leagueConfig.findOne({value: league})
+    if(!selectedLeague) {
+      return `Can't find League ${league}`
+    }
     await leagueConfig.updateOne({value: league}, {$set: {active}})
     await refreshAllLeagues(leagueConfig)
+    await postMessage({channel_id: serverChannels.botActivityLogsChannelId, content: `<@${callerId}> changed a league status:\r${content}`})
     return `${selectedLeague.name} is now ${active ? 'active': 'inactive'}`
-  })
-  postMessage({channel_id: serverChannels.botActivityLogsChannelId, content: `<@${callerId}> changed a league status:\r${content}`})
+  })  
   return updateResponse({application_id, token, content})
 }
 
@@ -149,46 +154,6 @@ const leagueCmd = {
       required: true,
       autocomplete: true,
     }]
-  }]
-}
-
-export const editLeagueCmd = {
-  type: 1,
-  name: 'editleague',
-  description: 'Update a league',
-  func: editLeague,
-  psaf: true,
-  options: [{
-    type: 3,
-    name: 'league',
-    description: 'League',
-    required: true,
-    choices: leagueChoices
-  },{
-    type: 3,
-    name: 'name',
-    description: 'League\'s name'
-  },{
-    type: 3,
-    name: 'logo',
-    description: 'Logo'
-  },{
-    type: 3,
-    name: 'channel',
-    description: 'League\'s channel'
-  },{
-    type: 3,
-    name: 'emoji',
-    description: 'League\'s emoji'
-  },{
-    type: 3,
-    name: 'sorting',
-    description: 'How to handle tie breakers',
-    choices: ['goaldiff', 'head2head'].map(value=> ({name:value, value}))
-  },{
-    type: 4,
-    name: 'order',
-    description: 'Which order in the list'
   }]
 }
 

@@ -1,16 +1,17 @@
-import { allLeagues, leagueChoices } from "../../config/leagueData.js"
-import { serverChannels, serverRoles } from "../../config/psafServerConfig.js"
+import { serverChannels } from "../../config/psafServerConfig.js"
 import { getAllSelectionsFromDbClient } from "../../functions/countriesCache.js"
-import { getCurrentSeason, optionsToObject, postMessage, quickResponse, silentResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { getCurrentSeason, handleSubCommands, isTopAdminRole, optionsToObject, postMessage, silentResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { getAllLeagues } from "../../functions/allCache.js"
 import { editAMatchInternal } from "../match.js"
 
 export const showLeagueTeam = (leagueObj, leagueTeam) => leagueObj.isInternational ? leagueTeam.team :`<@&${leagueTeam.team}>${leagueTeam.group? ` - Group ${leagueTeam.group}`: ''}${leagueTeam.position!==undefined? ` - Spot ${leagueTeam.position+1}`: ''}`
 
-export const addToLeague = async ({interaction_id, token, options, dbClient}) => {
+export const addToLeague = async ({application_id, token, options, dbClient}) => {
   const {league, team, selection, group, position} = optionsToObject(options)
   const allLeagues = await getAllLeagues()
   const leagueObj = allLeagues.find(leagueEntry => leagueEntry.value === league)
+  if(!leagueObj)
+    return updateResponse({application_id, token, content: `Cannot find League ${league}`})
   const content = await dbClient(async ({leagues, nationalTeams})=> {
     const autocompleteCountries = await getAllSelectionsFromDbClient(nationalTeams)
     if(leagueObj?.isInternational && !autocompleteCountries.some(country=> country.shortname === selection)){
@@ -31,10 +32,10 @@ export const addToLeague = async ({interaction_id, token, options, dbClient}) =>
     return `${leagueObj?.name} ${leagueTeams.length} teams:\r`
     + leagueTeams.map(leagueTeam => showLeagueTeam(leagueObj, leagueTeam)).join('\r')
   })
-  return quickResponse({interaction_id, token, content, isEphemeral:true})
+  return updateResponse({application_id, token, content})
 }
 
-export const removeFromLeague = async ({interaction_id, token, options, dbClient}) => {
+export const removeFromLeague = async ({application_id, token, options, dbClient}) => {
   const {league, team, selection} = optionsToObject(options)
   const allLeagues = await getAllLeagues()
   const leagueObj = allLeagues.find(leagueEntry => leagueEntry.value === league)
@@ -48,19 +49,21 @@ export const removeFromLeague = async ({interaction_id, token, options, dbClient
     return `${leagueObj?.name} ${leagueTeams.length} teams:\r`
     + leagueTeams.map(leagueTeam => showLeagueTeam(leagueObj, leagueTeam)).join('\r')
   })
-  return quickResponse({interaction_id, token, content, isEphemeral:true})
+  return updateResponse({application_id, token, content})
 }
 
 export const replaceTeamInLeague = async ({interaction_id, application_id, member, token, options, dbClient}) => {
-  if(!member.roles.includes(serverRoles.presidentRole)){
-    return silentResponse({interaction_id, token, content: 'Reserved to presidents'})
+  if(!member.roles.find(role => isTopAdminRole(role))){
+    return silentResponse({interaction_id, token, content: 'Reserved to presidents/engineers'})
   }
   await waitingMsg({interaction_id, token})
   const {removeteam, addteam, league} = optionsToObject(options)
   const content = await dbClient(async({leagues, leagueConfig, teams, matches, nationalTeams, seasonsCollect})=>{
     const leagueToUpdate = await leagueConfig.findOne({active: true, value: league})
     let result = ''
-    if(leagueToUpdate){
+    if(!leagueToUpdate){
+      return `Cannot find League ${league}. Did you make sure it's an active league ?`
+    } else {
       await leagues.updateOne({league, team:removeteam}, {$set: {team: addteam}})
       const season = await getCurrentSeason(seasonsCollect)
       const matchesToReplace = await matches.find({league, season, $or: [{home: removeteam }, {away: removeteam}]}).toArray()
@@ -92,127 +95,134 @@ const updateTeamPenaltyPoints = async ({interaction_id, application_id, token, c
 
 const groups = ['A', 'B', 'C', 'D']
 
-export const addToLeagueCmd = {
-  name: 'addtoleague',
-  description: 'Add a team to a league',
-  type: 1,
-  psaf: true,
-  func: addToLeague,
-  options: [{
-    type: 3,
-    name: 'league',
-    description: 'League',
-    required: true,
-    choices: allLeagues.filter(league=>!league.isInternational && league.active).map(({name, value})=> ({name, value}))
-  },{
-    type: 8,
-    name: 'team',
-    description: 'Team',
-    required: true
-  },{
-    type: 3,
-    name: 'group',
-    description: 'Which League group',
-    choices: groups.map(group=> ({name: group, value: group}))
-  },{
-    type: 4,
-    name: 'position',
-    description: 'Which position (elim cups only)',
-  }]
+const leagueTeam = async (commandOptions) => 
+  handleSubCommands(commandOptions, leagueTeamSubCommands)
+
+const leagueTeamSubCommands = {
+  'add club': addToLeague,
+  'add selection': addToLeague,
+  'remove club': removeFromLeague,
+  'remove selection': removeFromLeague,
 }
 
-
-export const addToCupCmd = {
-  name: 'addtocup',
-  description: 'Add a team to a cup',
-  type: 1,
-  options: [{
-    type: 3,
-    name: 'league',
-    description: 'Cup',
-    required: true,
-    choices: allLeagues.filter(league=>!league.isInternational && league.active).map(({name, value})=> ({name, value}))
-  },{
-    type: 8,
-    name: 'team',
-    description: 'Team',
-    required: true
-  },{
-    type: 4,
-    name: 'position',
-    description: 'Which position'
-  }]
-}
-
-
-export const addToInterLeagueCmd = {
-  name: 'addtointerleague',
-  description: 'Add a National Selection to an international league',
+const leagueTeamCmd = {
+  name: 'leagueteam',
+  description: 'League team',
   type: 1,
   psaf: true,
-  func: addToLeague,
+  func: leagueTeam,
   options: [{
-    type: 3,
-    name: 'league',
-    description: 'League',
-    required: true,
-    choices: allLeagues.filter(league=>league.isInternational && league.active).map(({name, value})=> ({name, value}))
+    name: "add",
+    description: "Add a team",
+    type: 2,
+    options: [{
+      name: "club",
+      description: "Add a club to a league",
+      type: 1,
+      options: [{
+        type: 3,
+        name: 'league',
+        description: 'League',
+        required: true,
+        autocomplete: true,
+      },{
+        type: 8,
+        name: 'team',
+        description: 'Team',
+        required: true
+      },{
+        type: 3,
+        name: 'group',
+        description: 'Which League group',
+        choices: groups.map(group=> ({name: group, value: group}))
+      },{
+        type: 4,
+        name: 'position',
+        description: 'Which position (elim cups only)',
+      }]
+    },{
+      name: "selection",
+      description: "Add a national selection to a league",
+      type: 1,
+      options: [{
+        type: 3,
+        name: 'league',
+        description: 'League',
+        required: true,
+        autocomplete: true,
+      },{
+        type: 3,
+        name: 'selection',
+        description: 'Selection',
+        autocomplete: true,
+        required: true,
+      },{
+        type: 3,
+        name: 'group',
+        description: 'Which League group',
+        choices: groups.map(group=> ({name: group, value: group}))
+      },{
+        type: 4,
+        name: 'position',
+        description: 'Which position (elim cups only)',
+      }]
+    }]
   },{
-    type: 3,
-    name: 'selection',
-    description: 'Selection',
-    autocomplete: true,
-    required: true,
-  },{
-    type: 3,
-    name: 'group',
-    description: 'Which League group',
-    choices: groups.map(group=> ({name: group, value: group}))
-  },{
-    type: 4,
-    name: 'position',
-    description: 'Which position (elim cups only)',
-  }]
-}
-
-export const removeFromLeagueCmd = {
-  name: 'removefromleague',
-  description: 'Remove a team from a league',
-  type: 1,
-  psaf: true,
-  func: removeFromLeague,
-  options: [{
-    type: 3,
-    name: 'league',
-    description: 'League',
-    required: true,
-    choices: leagueChoices
-  },{
-    type: 8,
-    name: 'team',
-    description: 'Team',
-    required: true
-  }]
-}
-
-export const removeFromInterLeagueCmd = {
-  name: 'removefrominterleague',
-  description: 'Remove a selection from a league',
-  type: 1,
-  psaf: true,
-  func: removeFromLeague,
-  options: [{
-    type: 3,
-    name: 'league',
-    description: 'League',
-    required: true,
-    choices: leagueChoices
-  },{
-    type: 3,
-    name: 'selection',
-    description: 'Selection',
-    autocomplete: true,
-    required: true
+    name: "remove",
+    description: "Remove a team",
+    type: 2,
+    options: [{
+      name: "club",
+      description: "Remove a club from a league",
+      type: 1,
+      options: [{
+        type: 3,
+        name: 'league',
+        description: 'League',
+        required: true,
+        autocomplete: true,
+      },{
+        type: 8,
+        name: 'team',
+        description: 'Team',
+        required: true
+      },{
+        type: 3,
+        name: 'group',
+        description: 'Which League group',
+        choices: groups.map(group=> ({name: group, value: group}))
+      },{
+        type: 4,
+        name: 'position',
+        description: 'Which position (elim cups only)',
+      }]
+    },{
+      name: "selection",
+      description: "Remove a national selection from a league",
+      type: 1,
+      options: [{
+        type: 3,
+        name: 'league',
+        description: 'League',
+        required: true,
+        autocomplete: true,
+      },{
+        type: 3,
+        name: 'selection',
+        description: 'Selection',
+        autocomplete: true,
+        required: true,
+      },{
+        type: 3,
+        name: 'group',
+        description: 'Which League group',
+        choices: groups.map(group=> ({name: group, value: group}))
+      },{
+        type: 4,
+        name: 'position',
+        description: 'Which position (elim cups only)',
+      }]
+    }]
   }]
 }
 
@@ -227,7 +237,7 @@ export const replaceTeamInLeagueCmd = {
     name: 'league',
     description: 'League',
     required: true,
-    choices: leagueChoices,
+    autocomplete: true,
   },{
     type: 8,
     name: 'removeteam',
@@ -252,7 +262,7 @@ const updateTeamPenaltyPointsCmd = {
     name: 'league',
     description: 'League',
     required: true,
-    choices: leagueChoices
+    autocomplete: true,
   },{
     type: 8,
     name: 'team',
@@ -267,4 +277,4 @@ const updateTeamPenaltyPointsCmd = {
   }]
 }
 
-export default [updateTeamPenaltyPointsCmd, addToLeagueCmd, addToInterLeagueCmd, removeFromLeagueCmd, removeFromInterLeagueCmd, replaceTeamInLeagueCmd]
+export default [updateTeamPenaltyPointsCmd, replaceTeamInLeagueCmd, leagueTeamCmd]

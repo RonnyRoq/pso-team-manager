@@ -2,7 +2,7 @@ import { InteractionResponseFlags, InteractionResponseType } from "discord-inter
 import { DiscordRequest } from "../utils.js"
 import { addPlayerPrefix, removePlayerPrefix, getCurrentSeason, getPlayerNick, optionsToObject, msToTimestamp, waitingMsg, updateResponse, silentResponse } from "../functions/helpers.js"
 import { innerRemoveConfirmation, innerRemoveRelease } from "./confirm.js"
-import { seasonPhases } from "./season.js"
+import { getFastCurrentSeason, seasonPhases } from "./season.js"
 import { getAllPlayers } from "../functions/playersCache.js"
 
 const logWebhook = process.env.WEBHOOK
@@ -223,14 +223,16 @@ export const setContract = async ({dbClient, guild_id, options, res, callerId}) 
 export const releaseAction = async ({interaction_id, token, application_id, guild_id, message, callerId, dbClient}) => {
   await waitingMsg({interaction_id, token})
 
-  const {done, content} = await dbClient(async ({teams, contracts, pendingReleases}) => {
+  const {done, content} = await dbClient(async ({teams, contracts, pendingReleases, transferHistory}) => {
     const release = await pendingReleases.findOne({adminMessage: message.id})
+    const currentSeason = getFastCurrentSeason()
     if(release) {
       console.log(release)
       const {playerId, team} = release
       const [dbTeam] = await Promise.all([
         teams.findOne({id: team}),
-        contracts.updateMany({playerId, endedAt: null}, {$set: {endedAt: Date.now()}})
+        contracts.updateMany({playerId, endedAt: null}, {$set: {endedAt: Date.now()}}),
+        transferHistory.insertOne({playerId, at: Date.now(), teamFrom: team, teamTo: 'Free Agent', transferAmount:0, length: 0, until: currentSeason, desc:'', isLoan: false}),
       ])
       if(!dbTeam) {
         return "No transfer happened"

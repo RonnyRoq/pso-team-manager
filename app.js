@@ -16,10 +16,9 @@ import { now } from './commands/now.js';
 import { timestamp } from './commands/timestamp.js';
 import { help, helpAdmin } from './commands/help.js';
 import { actionConfirmMigrate, allPlayers, autoCompleteNation, player, players } from './commands/player.js';
-import { endMatch, match, matchId, matches, pastMatches, publishMatch, resetMatch, unpublishMatch } from './commands/match.js';
 import { blacklistTeam, doubleContracts, emoji, expireThings, fixNames, initCountries, managerContracts, systemTeam } from './commands/system.js';
 import { addSelection, autoCompleteSelections, removeSelection } from './commands/nationalTeam.js';
-import { confirm, pendingConfirmations, register, releasePlayer } from './commands/confirm.js';
+import { confirm, pendingConfirmations, releasePlayer } from './commands/confirm.js';
 import { approveDealAction, approveLoanAction, declineDealAction, declineLoanAction, finishLoanRequest, removeConfirmation, removeDeal, removeLoan, removeRelease } from './commands/confirmations/actions.js';
 import commandsRegister from './commandsRegister.js';
 import { freePlayer, releaseAction, renew, setContract, teamTransfer, transfer, transferAction } from './commands/transfers.js';
@@ -37,9 +36,6 @@ import { voteAction } from './commands/nationalTeams/actions.js';
 import { client, uri } from './config/mongoConfig.js';
 import { getSite } from './site.js';
 import { addSteam, addSteamId, manualDoubleSteam, setName } from './commands/player/steamid.js';
-import { leagueTeams } from './commands/league/leagueTeams.js';
-import { imageLeagueTable, leagueTable, postLeagueTable } from './commands/league/leagueTable.js';
-import { generateMatchday, onetimeseason, publishNextMatches, randomMatchesDay, showMatchDay, updateMatchDayImage } from './commands/matches/matchday.js';
 import { setRating } from './commands/player/rating.js';
 import { approveMoveMatch, declineMoveMatch, listMatchMoves, moveMatch, moveMatchModalResponse, moveMatchPrompt } from './commands/matches/moveMatch.js';
 import { getApi } from './api.js';
@@ -303,9 +299,6 @@ function start() {
         }
 
         if(process.env.WC_GUILD_ID === guild_id) {
-          if(name === "register") {
-            return register(commandOptions)
-          }
           if(wcCommands.has(name)) {
             return wcCommands.get(name)(commandOptions)
           }
@@ -324,40 +317,8 @@ function start() {
             return allPlayers(commandOptions)
           }
 
-          if (name === "match") {
-            return match(commandOptions)
-          }
-
-          if (name === "endmatch") {
-            return endMatch(commandOptions)
-          }
-
-          if (name === "publishmatch") {
-            return publishMatch(commandOptions)
-          }
-
-          if (name === "unpublishmatch") {
-            return unpublishMatch(commandOptions)
-          }
-
           if (name === "expirethings") {
             return expireThings(commandOptions)
-          }
-
-          if (name === "matchid") {
-            return matchId(commandOptions)
-          }
-
-          if (name === "resetmatch") {
-            return resetMatch(commandOptions)
-          }
-
-          if (name === "matches") {
-            return matches(commandOptions)
-          }
-
-          if(name === "pastmatches") {
-            return pastMatches(commandOptions)
           }
 
           if(name === "addselection") {
@@ -474,18 +435,6 @@ function start() {
 
           if(name === "releaseplayer") {
             return releasePlayer(commandOptions)
-          }
-
-          if(name === "showmatchday") {
-            return showMatchDay(commandOptions)
-          }
-
-          if(name === "updatematchdayimage") {
-            return updateMatchDayImage(commandOptions)
-          }
-
-          if(name === "onetimeseason") {
-            return onetimeseason(commandOptions)
           }
 
           if (name === "fine") {
@@ -629,30 +578,6 @@ function start() {
             return addSteam(commandOptions)
           }
 
-          if(name === "leagueteams") {
-            return leagueTeams(commandOptions)
-          }
-
-          if(name === "leaguetable") {
-            return leagueTable(commandOptions)
-          }
-
-          if(name === "postleaguetable") {
-            return postLeagueTable(commandOptions)
-          }
-
-          if(name === "imgleaguetable") {
-            return imageLeagueTable(commandOptions)
-          }
-
-          if(name === "generatematchday") {
-            return generateMatchday(commandOptions)
-          }
-
-          if(name === "randommatchday") {
-            return randomMatchesDay(commandOptions)
-          }
-
           if(name === "systemteam") {
             return systemTeam(commandOptions)
           }
@@ -697,10 +622,6 @@ function start() {
             return editLeague(commandOptions)
           }
 
-          if(name === 'publishnextmatches') {
-            return publishNextMatches(commandOptions)
-          }
-
           if(name === 'checkdoublesteam') {
             return manualDoubleSteam(commandOptions)
           }
@@ -709,9 +630,6 @@ function start() {
             return arrangeDaySchedule(commandOptions)
           }
 
-          if(name === 'register') {
-            return register(commandOptions)
-          }
           if(name === 'adduniqueid') {
             return addUniqueId(commandOptions)
           }

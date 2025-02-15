@@ -2,15 +2,14 @@ import { InteractionResponseFlags, InteractionResponseType } from "discord-inter
 import { DiscordRequest, SteamRequest, SteamRequestTypes } from "../utils.js"
 import { countries } from '../config/countriesConfig.js'
 import { getAllPlayers } from "../functions/playersCache.js"
-import { addPlayerPrefix, batchesFromArray, getCurrentSeason, getPlayerNick, getRegisteredRole, optionsToObject, postMessage, quickResponse, removePlayerPrefix, sendDM, silentResponse, updateDiscordPlayer, updateResponse, waitingMsg } from "../functions/helpers.js"
+import { addPlayerPrefix, batchesFromArray, getCurrentSeason, getPlayerNick, getRegisteredRole, isManager, optionsToObject, postMessage, quickResponse, removePlayerPrefix, sendDM, silentResponse, updateDiscordPlayer, updateResponse, waitingMsg } from "../functions/helpers.js"
 import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
-import { allLeagues } from "../config/leagueData.js"
 import { getPSOSteamDetails, isSteamIdIncorrect } from "../functions/steamUtils.js"
 
 export const managerContracts = async ({interaction_id, token, application_id, dbClient, guild_id}) => {
   await waitingMsg({interaction_id, token})
   const allPlayers = await getAllPlayers(guild_id)
-  const managers = allPlayers.filter(player=> player.roles.includes(serverRoles.clubManagerRole))
+  const managers = allPlayers.filter(player=> isManager(player))
   const managersId = managers.map(manager=>manager.user.id)
   return dbClient(async ({players, contracts, seasonsCollect, teams})=> {
     const currentSeason = await getCurrentSeason(seasonsCollect)
@@ -105,33 +104,73 @@ export const innerFixNames = async ({guild_id, dbClient}) => {
   })
 }
 
-export const systemTeam = async ({interaction_id, token, options, guild_id,  dbClient})=> {
-  const [role] = options || []
+export const systemTeam = async ({interaction_id, application_id, token, options, guild_id,  dbClient})=> {
+  const {team:role} = optionsToObject(options)
+  await waitingMsg({interaction_id, token})
   let response = 'No team found'
-  await dbClient(async ({teams})=>{
-    const team = await teams.findOne({id: role.value}) || {}
-    const rolesResp = await DiscordRequest(`/guilds/${guild_id}/roles`, {})
-    const roles = await rolesResp.json()
-    const payload = {
-      active: team.active || false,
-      shortName: team.shortName || "",
-      displayName: team.displayName || "",
-      budget: team.budget || 0,
-      city: team.city || ""
+  response = await dbClient(async ({teams})=>{
+    let dbResponse
+    try {
+      const [team, teamRoleResp] = await Promise.all([
+        teams.findOne({id: role}),
+        DiscordRequest(`guilds/${guild_id}/roles/${role}`)
+      ])
+      const teamRole = await teamRoleResp.json()
+      console.log(team, teamRole)
+      const everyoneRoleResp = await DiscordRequest(`/guilds/${guild_id}/roles/${guild_id}`)
+      const everyoneRole = await everyoneRoleResp.json()
+      console.log(everyoneRole)
+      const payload = {
+        active: team?.active || false,
+        shortName: team?.shortName || "",
+        displayName: team?.displayName || "",
+        budget: team?.budget || 0,
+        city: team?.city || "",
+        isPG: !team?.shortName
+      }
+      const channelName = teamRole.name.toLowerCase().replaceAll(' ', '-')
+      if(!team?.channel) {
+        const channelCreateResponse = await DiscordRequest(`/guilds/${guild_id}/channels`, {
+          method: 'POST',
+          body: {
+            name: `⚪｜${channelName}`,
+            type: 0,
+            topic: `${teamRole.name}'s channel`,
+            permission_overwrites: [{
+              id: role,
+              type: 0,
+              allow: 0x40 | 0x400 | 0x800
+            }, {
+              id: serverRoles.psafManagementRole,
+              type: 0,
+              allow: 0x40 | 0x400 | 0x800
+            },{
+              id: everyoneRole.id,
+              type: 0,
+              deny: 0x400
+            }],
+            parent_id: '1237770362264092722', //TODO TO AUTOMATISE
+          }
+        })
+        const channelResponse = await channelCreateResponse.json()
+        payload.channel = channelResponse?.id
+      }
+      //const teamRole = roles.find(({id})=> id === role)
+      const res = await teams.updateOne({id: role}, {$set: {
+        ...payload,
+        ...teamRole,
+      }}, {upsert: true})
+      if(res.modifiedCount > 0) {
+        dbResponse = `${teamRole.name} updated`
+      } else {
+        dbResponse = `${teamRole.name} added`
+      }
+    } catch(e){
+      dbResponse = `Failed to set up team: ${e.message}\r Please send this error to a dev`.substring(0, 1999)
     }
-    const teamRole = roles.find(({id})=> id === role.value)
-    const res = await teams.updateOne({id: role.value}, {$set: {
-      ...payload,
-      ...teamRole,
-    }}, {upsert: true})
-    if(res.modifiedCount > 0) {
-      response = `${teamRole.name} updated`
-    } else {
-      response = `${teamRole.name} added`
-    }
-
-    return silentResponse({interaction_id, token, content: response})
+    return dbResponse
   })
+  return updateResponse({application_id, token, content: response})
 }
 
 export const doubleContracts = async ({interaction_id, token, application_id, dbClient}) => {
@@ -243,7 +282,7 @@ export const checkForPSO = async ({dbClient, playerIdsToPSOCheck=[]}) => {
         await updateDiscordPlayer(process.env.GUILD_ID, discPlayer.user.id, body)
         await sendDM({playerId: dbPlayer.id, content: `You have been Steam verified.\rPSO Hours: ${(psoSummary.playtime_forever || 0)/60}}.\rYou can now access transfers, and play matches.`})
       } else {
-        if(dbPlayer.steamVerified) { 
+        if(dbPlayer.steamVerified) {
           break
         }
         await players.updateOne({id: dbPlayer.id}, {$set: {steamValidation: psoSummary.message, hoursWhenChecked: psoSummary.playtime_forever}})
@@ -251,6 +290,8 @@ export const checkForPSO = async ({dbClient, playerIdsToPSOCheck=[]}) => {
           roles: discPlayer.roles.filter(role=> ![serverRoles.registeredRole, serverRoles.steamVerified].includes(role))
         }
         await updateDiscordPlayer(process.env.GUILD_ID, discPlayer.user.id, body)
+        const instructionsLink = discPlayer.roles.includes(serverRoles.turkishLanguage) ? 'https://discord.com/channels/1072193923100966992/1337844250867666954' : 'https://discord.com/channels/1072193923100966992/1307736737304412200'
+        await sendDM({playerId: dbPlayer.id, content: `You failed validation: ${psoSummary.message}\rPlease follow the instructions ${instructionsLink}`})
         unverifiedPlayers.push({id: discPlayer.user.id, ...psoSummary})
       }
     }
@@ -369,24 +410,26 @@ export const updateLeagues = async ({interaction_id, token, dbClient, callerId})
   if(callerId !== '269565950154506243'){
     return quickResponse({interaction_id, token, content: 'Forbidden', isEphemeral: true})
   }
-  const formattedLeagues = allLeagues.map(({name, value, emoji, pingRole, standingsMsg, channel, defaultImage, isInternational=false, active=false, players=6, order}, index)=>({
-    name,
-    value,
-    emoji,
-    pingRole,
-    standingsMsg,
-    channel,
-    defaultImage,
-    isInternational,
-    active,
-    players,
-    order: order || index
-  }))
-  await dbClient(async({leagueConfig})=> {
+  const content = await dbClient(async({leagueConfig})=> {
+    const allLeagues = await leagueConfig.find({}).toArray()
+    const formattedLeagues = allLeagues.map(({name, value, emoji, pingRole, standingsMsg, channel, defaultImage, isInternational=false, active=false, players=6, order}, index)=>({
+      name,
+      value,
+      emoji,
+      pingRole,
+      standingsMsg,
+      channel,
+      defaultImage,
+      isInternational,
+      active,
+      players,
+      order: order || index
+    }))  
     await leagueConfig.deleteMany({})
     await leagueConfig.insertMany(formattedLeagues)
+    return `${formattedLeagues.length} leagues updated`
   })
-  return quickResponse({interaction_id, token, content: `${formattedLeagues.length} leagues updated`, isEphemeral: true})
+  return silentResponse({interaction_id, token, content})
 }
 
 const system = async ({interaction_id, token, callerId, options, ...rest}) => {

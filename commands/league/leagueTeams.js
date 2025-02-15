@@ -1,10 +1,9 @@
 import { optionsToObject, silentResponse } from "../../functions/helpers.js"
-import { leagueChoices } from "../../config/leagueData.js"
 import { showLeagueTeam } from "./addToLeague.js"
 import { getAllLeagues } from "../../functions/allCache.js"
 
 
-export const leagueTeams = async ({options, dbClient, interaction_id, token}) => {
+const leagueTeams = async ({options, dbClient, interaction_id, token}) => {
   const {league} = optionsToObject(options)
   const teams = await dbClient(async ({leagues})=>{
     return leagues.find({leagueId: league}).toArray()
@@ -18,15 +17,19 @@ export const leagueTeams = async ({options, dbClient, interaction_id, token}) =>
   return silentResponse({interaction_id, token, content})
 }
 
-export const leagueTeamsCmd = {
+const leagueTeamsCmd = {
   name: 'leagueteams',
   description: 'Show the teams in a league',
   type: 1,
+  psaf: true,
+  func: leagueTeams,
   options: [{
     type: 3,
     name: 'league',
     description: 'League',
     required: true,
-    choices: leagueChoices
+    autocomplete: true,
   }]
 }
+
+export default [leagueTeamsCmd]

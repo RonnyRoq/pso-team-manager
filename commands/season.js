@@ -1,5 +1,5 @@
 import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
-import { getPlayerNick, optionsToObject, postMessage, removePlayerPrefix, sleep, updateResponse, waitingMsg } from "../functions/helpers.js"
+import { getPlayerNick, isManager, optionsToObject, postMessage, removePlayerPrefix, sleep, updateResponse, waitingMsg } from "../functions/helpers.js"
 import { getAllPlayers } from "../functions/playersCache.js"
 import { DiscordRequest } from "../utils.js"
 import { endLoan } from "./transfers.js"
@@ -54,8 +54,8 @@ export const replaySeasonPhaseProgression = async ({interaction_id, token, guild
       allTeams = await teams.find({}).toArray()
       allExpiringContracts = fullExpiringContracts.filter(({playerId})=> {
         const discPlayer = allPlayers.find(({user})=> user.id === playerId)
-        console.log(playerId, discPlayer?.nick, "manager:", discPlayer?.roles?.includes(serverRoles.clubManagerRole))
-        return discPlayer && !discPlayer?.roles?.includes(serverRoles.clubManagerRole)
+        console.log(playerId, discPlayer?.nick, "manager:", isManager(discPlayer))
+        return discPlayer && !isManager(discPlayer)
       })
 
       console.log(allExpiringContracts.length)
@@ -75,12 +75,12 @@ export const replaySeasonPhaseProgression = async ({interaction_id, token, guild
   console.log(teamPlayers.length)
   console.log(teamPlayers.map(player=>player.nick))
   for await (const player of teamPlayers) {
-    if(player.user && !player.roles.includes(serverRoles.clubManagerRole)) {
+    if(player.user && !isManager(player)) {
       const playerName = getPlayerNick(player)
       let updatedPlayerName = removePlayerPrefix(allTeams.find(({id})=> id === player.team )?.shortName, playerName)
       const payload= {
         nick: updatedPlayerName,
-        roles: player.roles.filter(playerRole=> ![player.team, serverRoles.clubManagerRole, serverRoles.clubPlayerRole].includes(playerRole))
+        roles: player.roles.filter(playerRole=> ![player.team, serverRoles.clubManagerRole, serverRoles.pgManagerRole, serverRoles.clubPlayerRole].includes(playerRole))
       }
       try {
         await DiscordRequest(`guilds/${guild_id}/members/${player.playerId}`, {
@@ -167,7 +167,7 @@ export const progressCurrentSeasonPhase = async ({interaction_id, token, guild_i
       console.log(fullExpiringContracts.length)
       allExpiringContracts = fullExpiringContracts.filter(({playerId})=> {
         const discPlayer = allPlayers.find(({user})=> user.id === playerId)
-        return discPlayer && !discPlayer.roles.includes(serverRoles.clubManagerRole)
+        return discPlayer && !isManager(discPlayer)
       }).slice(0, 60)
       
       await contracts.updateMany({playerId: {$in: allExpiringContracts.map(({playerId}) => playerId)}}, {$set: {endedAt: Date.now()}})
@@ -189,12 +189,12 @@ export const progressCurrentSeasonPhase = async ({interaction_id, token, guild_i
   console.log(teamPlayers.length)
   console.log(teamPlayers.map(player=>player.nick))
   for await (const player of teamPlayers) {
-    if(player.user && !player.roles.includes(serverRoles.clubManagerRole)) {
+    if(player.user && !isManager(player)) {
       const playerName = getPlayerNick(player)
       let updatedPlayerName = removePlayerPrefix(allTeams.find(({id})=> id === player.team )?.shortName, playerName)
       const payload= {
         nick: updatedPlayerName,
-        roles: player.roles.filter(playerRole=> ![player.team, serverRoles.clubManagerRole, serverRoles.clubPlayerRole].includes(playerRole))
+        roles: player.roles.filter(playerRole=> ![player.team, serverRoles.clubManagerRole, serverRoles.pgManagerRole, serverRoles.clubPlayerRole].includes(playerRole))
       }
       await DiscordRequest(`guilds/${guild_id}/members/${player.playerId}`, {
         method: 'PATCH',
@@ -241,7 +241,7 @@ export const internalRemoveRolesForExpiredContracts = async ({dbClient, guild_id
   console.log(allOngoingContracts.length, allClubPlayers.length)
   const nonContractPlayers = allClubPlayers.filter(player=> !allOngoingContracts.includes(player?.user?.id))
   for (const player of nonContractPlayers) {
-    if(player.user && !player.roles.includes(serverRoles.clubManagerRole)) {
+    if(player.user && !isManager(player)) {
       const playerId = player?.user?.id
       const playerName = getPlayerNick(player)
       const playerTeam = allTeams.find(({id})=> player.roles.includes(id))

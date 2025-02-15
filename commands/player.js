@@ -3,7 +3,7 @@ import {fileURLToPath} from 'url';
 import { InteractionResponseType } from "discord-interactions"
 import download from "image-downloader"
 import { DiscordRequest } from "../utils.js"
-import { getPlayerNick, msToTimestamp, optionsToObject, sleep, updateResponse, waitingMsg, isMemberStaff, postMessage, displayTeamName, updateDiscordPlayer } from "../functions/helpers.js"
+import { getPlayerNick, msToTimestamp, optionsToObject, sleep, updateResponse, waitingMsg, isMemberStaff, postMessage, displayTeamName, updateDiscordPlayer, isManager } from "../functions/helpers.js"
 import { getAllPlayers } from "../functions/playersCache.js"
 import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
 import { getFastCurrentSeason, seasonPhases } from "./season.js"
@@ -58,7 +58,7 @@ const showPlayer = (discPlayer={}, dbPlayer, allNationalities, isStaff, allTeams
     }
     if(playerContracts.length > 0){
       response += 'Known contracts:\r'
-      const contractsList = playerContracts.sort((a, b)=> b.at - a.at).map(({team, at, isLoan, phase, endedAt, until})=> `${displayTeamName(inGuild, team, allTeams)} from: <t:${msToTimestamp(at)}:F> ${endedAt ? `to: <t:${msToTimestamp(endedAt)}:F>`: (discPlayer.roles.includes(serverRoles.clubManagerRole) ? ' - :crown: Manager' : (isLoan ? `LOAN until season ${until}, beginning of ${seasonPhases[phase].desc}`: `until end of season ${until-1}`))}`)
+      const contractsList = playerContracts.sort((a, b)=> b.at - a.at).map(({team, at, isLoan, phase, endedAt, until})=> `${displayTeamName(inGuild, team, allTeams)} from: <t:${msToTimestamp(at)}:F> ${endedAt ? `to: <t:${msToTimestamp(endedAt)}:F>`: (isManager(discPlayer) ? ' - :crown: Manager' : (isLoan ? `LOAN until season ${until}, beginning of ${seasonPhases[phase].desc}`: `until end of season ${until-1}`))}`)
       response += contractsList.join('\r')
     }
     if(dbPlayer.profilePicture && isStaff) {
@@ -108,7 +108,7 @@ const innerPlayer = async ({playerId, guild_id, member, dbClient}) => {
       response += `PSO Steam validated: ${dbPlayer.steamVerified ? 'yes': dbPlayer.steamValidation}\r`
       if(playerContracts.length > 0){
         response += 'Known contracts:\r'
-        const contractsList = playerContracts.sort((a, b)=> b.at - a.at).map(({team, at, isLoan, phase, endedAt, until})=> `${displayTeamName(inGuild, team, allTeams)} from: <t:${msToTimestamp(at)}:F> ${endedAt ? `to: <t:${msToTimestamp(endedAt)}:F>`: (discPlayer.roles.includes(serverRoles.clubManagerRole) ? ' - :crown: Manager' : (isLoan ? `LOAN until season ${until}, beginning of ${seasonPhases[phase]?.desc || phase}`: `until end of season ${until-1}`))}`)
+        const contractsList = playerContracts.sort((a, b)=> b.at - a.at).map(({team, at, isLoan, phase, endedAt, until})=> `${displayTeamName(inGuild, team, allTeams)} from: <t:${msToTimestamp(at)}:F> ${endedAt ? `to: <t:${msToTimestamp(endedAt)}:F>`: (isManager(discPlayer) ? ' - :crown: Manager' : (isLoan ? `LOAN until season ${until}, beginning of ${seasonPhases[phase]?.desc || phase}`: `until end of season ${until-1}`))}`)
         response += contractsList.join('\r')
       }
       if(dbPlayer.profilePicture && isStaff) {
@@ -116,6 +116,8 @@ const innerPlayer = async ({playerId, guild_id, member, dbClient}) => {
       }
       response += `\rhttps://psafdb.com/players/${playerId}`
       return response
+    } else {
+      return `${response}\r<@${playerId}> is not registered in PSAF`
     }
   })
 }
@@ -282,7 +284,7 @@ const editSteamUrl = async ({options=[], callerId, guild_id, member, application
     const updatedPlayer = await players.findOne({id: player}) || {}
     const team = discPlayer.roles.find(role => allTeamIds.includes(role))
     const discResponse = await updateDiscordPlayer(guild_id, player, {
-      roles: [...new Set([...discPlayer.roles, serverRoles.steamVerified])]
+      roles: [...new Set([...discPlayer.roles, serverRoles.steamVerified, serverRoles.registeredRole])]
     })
     const updatedDiscPlayer = await discResponse.json()
     const playerContracts = await contracts.find({player}).toArray()
@@ -396,8 +398,8 @@ export const actionConfirmMigrate = async ({interaction_id, application_id, cust
     if(!dbOldPlayer && !dbNewPlayer){
       return `Players <@${oldPlayerId}> <@${newPlayerId}> not found in the database, please warn the bot developer. No changes happened.`
     } else if(dbOldPlayer && !dbNewPlayer) {
-      const {_id, knownAlts=[], ...playerData} = dbOldPlayer
-      const otherAlts = knownAlts.filter(alt=>alt.id !== newPlayerId)
+      const {_id, knownAlts, ...playerData} = dbOldPlayer
+      const otherAlts = (knownAlts||[]).filter(alt=>alt.id !== newPlayerId)
       const newPlayerResponse = await players.insertOne({...playerData, id: newPlayerId, lastDiscordChange: now, knownAlts: [...otherAlts, {_id, id: oldPlayerId}]})
       const activeContracts = await contracts.find({playerId: oldPlayerId, endedAt: null}).toArray()
       for await(const activeContract of activeContracts) {
@@ -431,7 +433,7 @@ export const actionConfirmMigrate = async ({interaction_id, application_id, cust
       ])
       return `Account Migrated. <@${oldPlayerId}> is now disabled. <@${newPlayerId}> was not previously registered. Please ensure the new account is steam verified - only the active contracts are transfered.`
     } else if(!dbOldPlayer && dbNewPlayer) {
-      await players.updateOne({id: newDiscPlayer.user.id},{$set:{knownAlts: [...dbNewPlayer.knownAlts, { id: oldPlayerId}]}})
+      await players.updateOne({id: newDiscPlayer.user.id},{$set:{knownAlts: [...(dbNewPlayer.knownAlts|| []), { id: oldPlayerId}]}})
       if(oldDiscPlayer) {
         await updateDiscordPlayer(guild_id, oldPlayerId, {
           roles: [...new Set([...oldDiscPlayer.roles, serverRoles.disabledRole])]
@@ -472,8 +474,8 @@ export const actionConfirmMigrate = async ({interaction_id, application_id, cust
 
 export const getPlayersList = async (totalPlayers, teamToList, displayCountries, players, contracts) => {
   const teamPlayers = totalPlayers.filter((player) => player.roles.includes(teamToList)).sort((playerA, playerB) => {
-    const aManager = playerA.roles.includes(serverRoles.clubManagerRole)
-    const bManager = playerB.roles.includes(serverRoles.clubManagerRole)
+    const aManager = isManager(playerA)
+    const bManager = isManager(playerB)
     if(aManager === bManager) {
       return getPlayerNick(playerA).localeCompare(getPlayerNick(playerB))
     } else if (aManager) {
@@ -491,7 +493,7 @@ export const getPlayersList = async (totalPlayers, teamToList, displayCountries,
       ...player,
       ...foundPlayer,
       contract,
-      isManager: player.roles.includes(serverRoles.clubManagerRole),
+      isManager: isManager(player),
       isBlackListed: player.roles.includes(serverRoles.matchBlacklistRole) || player.roles.includes(serverRoles.permanentlyBanned)
     })
   })

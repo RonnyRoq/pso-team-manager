@@ -216,7 +216,8 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
       }
     )
   ]]
-  cronJobs.forEach(([time, func])=> {
+  //todo
+  cronJobs.forEach(([name, time, func])=> {
     new CronJob(
       time,
       func,

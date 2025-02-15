@@ -1,7 +1,6 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { DiscordRequest } from "../utils.js"
 import { displayTeam, genericFormatMatch, getCurrentSeason, optionsToObject, updateResponse, waitingMsg } from "../functions/helpers.js"
-import { leagueChoices } from "../config/leagueData.js"
 import { getAllLeagues, getAllNationalities } from "../functions/allCache.js"
 import { getPlayersList } from "./player.js"
 import { getAllPlayers } from "../functions/playersCache.js"
@@ -18,7 +17,7 @@ export const team = async ({interaction_id, application_id, token, guild_id, opt
   }
   await waitingMsg({interaction_id, token})
   
-  const content = await dbClient(async ({teams, matches, seasonsCollect, contracts, players})=>{
+  const content = await dbClient(async ({teams, matches, seasonsCollect, contracts, players, leagueConfig})=>{
     const team = await teams.findOne({active:true, $or:roles})
     if(!team)
     {
@@ -32,6 +31,12 @@ export const team = async ({interaction_id, application_id, token, guild_id, opt
     const content = await getPlayersList(allPlayers, team.id, displayCountries, players, teamContracts )
     const finished = allmatches ? {} : {finished: null}
     const leagueCondition = league ? {league} : {}
+    if(league) {
+      const leagueSelected = await leagueConfig.findOne({value: league})
+      if(!leagueSelected) {
+        return `Failed to find League ${league}`
+      }
+    }
     const season = await getCurrentSeason(seasonsCollect)
     const teamsMatches = await matches.find({$or: [{home: team.id}, {away: team.id}], ...finished, ...leagueCondition, season }).sort({dateTimestamp: 1}).toArray()
     const allTeams = await teams.find({}).toArray()
@@ -107,7 +112,7 @@ export const teamCmd = {
     type: 3,
     name: 'league',
     description: 'League',
-    choices: leagueChoices
+    autocomplete: true,
   }]
 }
 

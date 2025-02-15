@@ -1,5 +1,5 @@
 import { serverChannels, serverRoles } from "../../config/psafServerConfig"
-import { getPlayerNick, postMessage, removePlayerPrefix, sleep, updateResponse } from "../../functions/helpers"
+import { getPlayerNick, isManager, postMessage, removePlayerPrefix, sleep } from "../../functions/helpers"
 import { getAllPlayers } from "../../functions/playersCache"
 import { DiscordRequest } from "../../utils"
 import { endLoan } from "../transfers"
@@ -34,7 +34,7 @@ export const releasePlayersFromTeam = async ({unblacklist, reimburseLoans, team,
       const fullExpiringContracts = await contracts.find({team, endedAt: null, isLoan: {$ne: true}}).toArray()
       allExpiringContracts = fullExpiringContracts.filter(({playerId})=> {
         const discPlayer = allPlayers.find(({user})=> user.id === playerId)
-        return discPlayer && !discPlayer.roles.includes(serverRoles.clubManagerRole)
+        return discPlayer && !isManager(discPlayer)
       })      
       await contracts.updateMany({playerId: {$in: allExpiringContracts.map(({playerId}) => playerId)}}, {$set: {endedAt: Date.now()}})
       await seasonsCollect.updateOne({endedAt: null}, {$set:{endedAt: Date.now()}})
@@ -53,12 +53,12 @@ export const releasePlayersFromTeam = async ({unblacklist, reimburseLoans, team,
   })
   
   for await (const player of teamPlayers) {
-    if(player.user && !player.roles.includes(serverRoles.clubManagerRole)) {
+    if(player.user && !isManager(player)) {
       const playerName = getPlayerNick(player)
       let updatedPlayerName = removePlayerPrefix(allTeams.find(({id})=> id === player.team )?.shortName, playerName)
       const payload= {
         nick: updatedPlayerName,
-        roles: player.roles.filter(playerRole=> ![player.team, serverRoles.clubManagerRole, serverRoles.clubPlayerRole].includes(playerRole))
+        roles: player.roles.filter(playerRole=> ![player.team, serverRoles.clubManagerRole, serverRoles.pgManagerRole, serverRoles.clubPlayerRole].includes(playerRole))
       }
       await DiscordRequest(`guilds/${guild_id}/members/${player.playerId}`, {
         method: 'PATCH',

@@ -3,10 +3,9 @@ import { InstallGlobalCommands, InstallGuildCommands } from './utils.js';
 import { nowCmd } from './commands/now.js';
 import { timestampCmd } from './commands/timestamp.js';
 import { helpCmd } from './commands/help.js';
-import { matchCmd, matchIdCmd, matchesCmd, pastMatchesCmd, publishMatchCmd, resetMatchCmd, unPublishMatchCmd } from './commands/match.js';
 import { blacklistTeamCmd, emojiCmd, expireThingsCmd, fixNamesCmd, managerContractsCmd, systemTeamCmd } from './commands/system.js';
 import { playerCmd } from './commands/player.js';
-import { confirmCmd, registerCmd, releaseCmd, updateConfirmCmd } from './commands/confirm.js';
+import { confirmCmd, releaseCmd, updateConfirmCmd } from './commands/confirm.js';
 import { dealCmd, loanCmd } from './commands/confirmations/deal.js';
 import { renewCmd, setContractCmd, teamTransferCmd, transferCmd } from './commands/transfers.js';
 import { postAllTeamsCmd, postTeamCmd, updateTeamPostCmd } from './commands/postTeam.js';
@@ -16,9 +15,6 @@ import { disbandTeamCmd } from './commands/disbandTeam.js';
 import { getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd } from './commands/season.js';
 import { testDMMatchCmd } from './commands/matches/notifyMatchStart.js';
 import { addSteamIdCmd, manualDoubleSteamCmd, setNameCmd } from './commands/player/steamid.js';
-import { leagueTeamsCmd } from './commands/league/leagueTeams.js';
-import { imageLeagueTableCmd, leagueTableCmd, postLeagueTableCmd } from './commands/league/leagueTable.js';
-import { generateMatchdayCmd, oneTimeSeasonCmd, publishNextMatchesCmd, randomMatchdayCmd, showMatchDayCmd, updateMatchDayImageCmd } from './commands/matches/matchday.js';
 import { setRatingCmd } from './commands/player/rating.js';
 import { listMovesCmd, moveMatchCmd } from './commands/matches/moveMatch.js';
 import { arrangeDayScheduleCmd } from './commands/matches/arrangeDaySchedule.js';
@@ -119,24 +115,19 @@ export const emojisCmd = {
 const ALL_COMMANDS = [nowCmd, timestampCmd, helpCmd];
 
 const GUILD_COMMANDS = [
-  matchCmd, publishMatchCmd, unPublishMatchCmd,
-  matchIdCmd, matchesCmd, resetMatchCmd,
   playerCmd,
-  confirmCmd, updateConfirmCmd, renewCmd, dealCmd, loanCmd, releaseCmd, registerCmd,
+  confirmCmd, updateConfirmCmd, renewCmd, dealCmd, loanCmd, releaseCmd, 
   transferCmd, teamTransferCmd, FREEPLAYER, FINE, BONUS, addUniqueIdCmd,
   emojiCmd, showBlacklistCmd, showNoContractsCmd,
   disbandTeamCmd, expireContractsCmd, addSteamIdCmd, setRatingCmd, setNameCmd,
-  leagueTeamsCmd, leagueTableCmd, imageLeagueTableCmd, postLeagueTableCmd, generateMatchdayCmd,
-  getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd, testDMMatchCmd, pastMatchesCmd, moveMatchCmd, listMovesCmd,
-  systemTeamCmd, postTeamCmd, postAllTeamsCmd, setContractCmd, updateTeamPostCmd, blacklistTeamCmd, showExpiringContractsCmd, expireThingsCmd, publishNextMatchesCmd,
-  manualDoubleSteamCmd, arrangeDayScheduleCmd, managerContractsCmd, randomMatchdayCmd, fixNamesCmd, showMatchDayCmd, updateMatchDayImageCmd, oneTimeSeasonCmd,
+  getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd, testDMMatchCmd, moveMatchCmd, listMovesCmd,
+  systemTeamCmd, postTeamCmd, postAllTeamsCmd, setContractCmd, updateTeamPostCmd, blacklistTeamCmd, showExpiringContractsCmd, expireThingsCmd,
+  manualDoubleSteamCmd, arrangeDayScheduleCmd, managerContractsCmd, fixNamesCmd,
 ]
 
 const {globalCommands, psafCommands, wcCommands} = mapToCmd(commandsRegister())
 
-const WC_GUILD_COMMANDS = [
-  registerCmd,
-]
+const WC_GUILD_COMMANDS = []
 const allCommands = [...ALL_COMMANDS, ...globalCommands]
 console.log(Object.fromEntries(allCommands.map((cmd,index) => [index, cmd.name])))
 InstallGlobalCommands(process.env.APP_ID, allCommands);

@@ -1,17 +1,16 @@
 import { matchDays, serverRoles } from "../../config/psafServerConfig.js"
-import { getCurrentSeason, isTopAdminRole, msToTimestamp, optionsToObject, quickResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { getCurrentSeason, isTopAdminRole, msToTimestamp, optionsToObject, quickResponse, silentResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { parseDate } from "../timestamp.js"
 import { editAMatchInternal, formatMatch, internalCreateMatch, internalPublishMatch } from "../match.js"
 import { shuffleArray } from "../../functions/helpers.js"
 import { getFastCurrentSeason } from "../season.js"
-import { leagueChoices } from "../../config/leagueData.js"
 import { getAllLeagues } from "../../functions/allCache.js"
 
 const thirtyMinutes = 30*60
 
-export const generateMatchday = async ({interaction_id, token, application_id, dbClient, member, options}) => {
+const generateMatchday = async ({interaction_id, token, application_id, dbClient, member, options}) => {
   if(!member.roles.find(role => isTopAdminRole(role))) {
-    return quickResponse({interaction_id, token, content: 'This command is only available to presidents.', isEphemeral:true})
+    return silentResponse({interaction_id, token, content: 'This command is only available to presidents.'})
   }
   const {league, matchday, date, image} = optionsToObject(options)
   const parsedDate = parseDate(date)
@@ -24,6 +23,9 @@ export const generateMatchday = async ({interaction_id, token, application_id, d
   const allLeagues = await getAllLeagues()
 
   const leagueObj = allLeagues.find(fixtureChan=> fixtureChan.value === league)
+  if(!leagueObj) {
+    return silentResponse({interaction_id, token, content: `Can't find League ${league}`})
+  }
   let currentTimestamp = startDateTimestamp
   await waitingMsg({interaction_id, token})
   let processedMatchesIds = []
@@ -47,14 +49,17 @@ export const generateMatchday = async ({interaction_id, token, application_id, d
   return await updateResponse({application_id, token, content})
 }
 
-export const randomMatchesDay = async ({interaction_id, token, application_id, member, options, dbClient}) => {
-  if(!member.roles.includes(serverRoles.presidentRole)) {
-    return quickResponse({interaction_id, token, content: 'This command is only available to presidents.', isEphemeral:true})
+const randomMatchesDay = async ({interaction_id, token, application_id, member, options, dbClient}) => {
+  if(!member.roles.find(role => isTopAdminRole(role))) {
+    return silentResponse({interaction_id, token, content: 'This command is only available to presidents/engineers.'})
   }
   const {league, matchday} = optionsToObject(options)
   
   const allLeagues = await getAllLeagues()
   const leagueObj = allLeagues.find(fixtureChan=> fixtureChan.value === league)
+  if(!leagueObj) {
+    return silentResponse({interaction_id, token, content: `Can't find League ${league}`})
+  }
   await waitingMsg({interaction_id, token})
   const content = await dbClient(async({matches, seasonsCollect, teams, leagues, nationalTeams, leagueConfig})=> {
     const currentSeason = await getCurrentSeason(seasonsCollect)
@@ -79,7 +84,7 @@ export const randomMatchesDay = async ({interaction_id, token, application_id, m
   return await updateResponse({application_id, token, content: content.substring(0, 1999)})
 }
 
-export const showMatchDay = async ({interaction_id, token, application_id, dbClient, options}) => {
+const showMatchDay = async ({interaction_id, token, application_id, dbClient, options}) => {
   await waitingMsg({interaction_id, token})
   const {league, matchday} = optionsToObject(options)
   const {
@@ -88,6 +93,9 @@ export const showMatchDay = async ({interaction_id, token, application_id, dbCli
     relatedTeams,
     leagueObj
   } = await showMatchDayInternal({dbClient, league, matchday})
+  if(!leagueObj) {
+    return updateResponse({application_id, token, content: `Can't find League ${league}`})
+  }
   let response = `${leagueObj.name}, ${matchday}\r`
   if(matchDay) {
     response += `${matchDay.image}\r<t:${matchDay.startDateTimestamp}:f> - <t:${matchDay.endDateTimestamp}:f>\r`
@@ -105,7 +113,7 @@ export const showMatchDay = async ({interaction_id, token, application_id, dbCli
 }
 
 export const showMatchDayInternal = async({dbClient, league, matchday, season})=> {
-  return dbClient(async ({teams, matches, matchDays, playerStats, lineups, leagueConfig})=> {
+  return dbClient(async ({teams, matches, matchDays, playerStats, nationalTeams, lineups, leagueConfig})=> {
     const seasonRequested = Number(season) || getFastCurrentSeason()
     const [matchDay, matchDayMatches, leagueObj] = await Promise.all([
       matchDays.findOne({league, matchday, season:seasonRequested}),
@@ -114,11 +122,13 @@ export const showMatchDayInternal = async({dbClient, league, matchday, season})=
     ])
     const matchIds = matchDayMatches.map(match=> match._id)
     const matchIdsStr = matchIds.map(matchId=> matchId.toString())
-    const [matchdayLineups, matchdayPlayerStats, relatedTeams] = await Promise.all([
+    const [matchdayLineups, matchdayPlayerStats, relatedClubs, relatedSelections] = await Promise.all([
       lineups.find({matchId: {$in: matchIdsStr}}).toArray(),
       playerStats.find({matchId: {$in: matchIds}}).toArray(),
-      teams.find({id: {$in: matchDayMatches.map(match=> [match.home, match.away]).flat()}}).toArray(),
+      teams.find({id: {$in: [...matchDayMatches.map(match=> [match.home, match.away]).flat(), serverRoles.unknownTeam]}}).toArray(),
+      nationalTeams.find({shortname: {$in: [...matchDayMatches.map(match=> [match.home, match.away]).flat(),  serverRoles.unknownTeam]}}).toArray()
     ])
+    const relatedTeams = [...relatedClubs, ...relatedSelections]
     const lastMatch = matchDayMatches.reduce((latestMatchTime, currentMatch) => Math.max(latestMatchTime, currentMatch.dateTimestamp), 0)
     const lastMatchDateTime = matchDay ? Math.max(matchDay.endDateTimestamp, lastMatch) : lastMatch
     return {
@@ -133,7 +143,7 @@ export const showMatchDayInternal = async({dbClient, league, matchday, season})=
   })
 }
 
-export const updateMatchDayImage = async({dbClient, interaction_id, token, options}) => {
+const updateMatchDayImage = async({dbClient, interaction_id, token, options}) => {
   const {image, league, matchday} = optionsToObject(options)
   const content = await dbClient(async({matchDays, leagueConfig})=> {
     try{
@@ -149,21 +159,7 @@ export const updateMatchDayImage = async({dbClient, interaction_id, token, optio
   quickResponse({interaction_id, token, content, isEphemeral:true})
 }
 
-export const onetimeseason = async ({interaction_id, token/*, dbClient*/}) => {
-  return quickResponse({interaction_id, token, content: 'disabled', isEphemeral: true})
-  /*await dbClient(({matchDays})=>{
-    return matchDays.updateMany({}, {$set: {season: 5}})
-  })
-  return quickResponse({interaction_id, token, content: 'done', isEphemeral:true})*/
-}
-
-export const oneTimeSeasonCmd = {
-  type: 1,
-  name: 'onetimeseason',
-  description: 'Dont touch'
-}
-
-export const publishNextMatches = async ({interaction_id, application_id, token, dbClient}) => {
+const publishNextMatches = async ({interaction_id, application_id, token, dbClient}) => {
   const now = msToTimestamp(Date.now())
   await waitingMsg({interaction_id, token})
   const content = await dbClient(async ({seasonsCollect, teams, matches, nationalTeams, matchDays, leagueConfig}) => {
@@ -268,16 +264,18 @@ export const autoPublish = async ({dbClient}) => {
   })
 }*/
 
-export const generateMatchdayCmd = {
+const generateMatchdayCmd = {
   type: 1,
   name: 'generatematchday',
   description: 'Generate the fixtures for a matchday',
+  psaf: true,
+  func: generateMatchday,
   options: [{
     type: 3,
     name: 'league',
     description: 'League',
     required: true,
-    choices: leagueChoices
+    autocomplete: true,
   },{
     type: 3,
     name: 'matchday',
@@ -299,13 +297,15 @@ export const generateMatchdayCmd = {
 export const randomMatchdayCmd = {
   type: 1,
   name: 'randommatchday',
+  psaf: true, 
+  func: randomMatchesDay,
   description: 'Generate random oppositions for a matchday',
   options: [{
     type: 3,
     name: 'league',
     description: 'League',
     required: true,
-    choices: leagueChoices
+    autocomplete: true,
   },{
     type: 3,
     name: 'matchday',
@@ -315,16 +315,18 @@ export const randomMatchdayCmd = {
   }]
 }
 
-export const showMatchDayCmd = {
+const showMatchDayCmd = {
   type: 1,
   name: 'showmatchday',
   description: 'Show the details of a matchday',
+  psaf: true,
+  func: showMatchDay,
   options: [{
     type: 3,
     name: 'league',
     description: 'League',
     required: true,
-    choices: leagueChoices
+    autocomplete: true,
   },{
     type: 3,
     name: 'matchday',
@@ -333,16 +335,18 @@ export const showMatchDayCmd = {
     required: true
   }]
 }
-export const updateMatchDayImageCmd = {
+const updateMatchDayImageCmd = {
   type: 1,
   name: 'updatematchdayimage',
+  func: updateMatchDayImage,
+  psaf: true,
   description: 'Update the image for a matchday',
   options: [{
     type: 3,
     name: 'league',
     description: 'League',
     required: true,
-    choices: leagueChoices
+    autocomplete: true,
   },{
     type: 3,
     name: 'matchday',
@@ -356,8 +360,12 @@ export const updateMatchDayImageCmd = {
   }]
 }
 
-export const publishNextMatchesCmd = {
+const publishNextMatchesCmd = {
   type: 1,
   name: 'publishnextmatches',
+  psaf: true,
+  func: publishNextMatches,
   description: 'publish the next matchday'
 }
+
+export default [generateMatchdayCmd, publishNextMatchesCmd, updateMatchDayImageCmd, showMatchDayCmd, randomMatchdayCmd]
