@@ -1,0 +1,5 @@
+ReferenceError: api is not defined
+    at getWeb (file:///D:/dev/pso-team-manager/web.js:43:3)
+    at start (file:///D:/dev/pso-team-manager/app.js:132:19)
+    at file:///D:/dev/pso-team-manager/app.js:775:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:194:25)
