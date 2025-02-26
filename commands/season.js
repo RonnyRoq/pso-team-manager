@@ -162,15 +162,18 @@ export const progressCurrentSeasonPhase = async ({interaction_id, token, guild_i
     let allExpiringContracts = []
     let allTeams
     if(newSeason) {
-      const fullExpiringContracts = await contracts.find({until: {$lte : seasonObj.season}, endedAt: null, isLoan: {$ne: true}, isManager: null}, {limit: 100}).toArray()
-      allTeams = await teams.find({}).toArray()
-      console.log(fullExpiringContracts.length)
-      allExpiringContracts = fullExpiringContracts.filter(({playerId})=> {
-        const discPlayer = allPlayers.find(({user})=> user.id === playerId)
-        return discPlayer && !isManager(discPlayer)
-      }).slice(0, 60)
-      
-      await contracts.updateMany({playerId: {$in: allExpiringContracts.map(({playerId}) => playerId)}}, {$set: {endedAt: Date.now()}})
+      let fullExpiringContracts = []
+      do {
+        fullExpiringContracts = await contracts.find({until: {$lte : seasonObj.season}, endedAt: null, isLoan: {$ne: true}, isManager: null}, {limit: 100}).toArray()
+        allTeams = await teams.find({}).toArray()
+        console.log(fullExpiringContracts.length)
+        allExpiringContracts.concat(fullExpiringContracts.filter(({playerId})=> {
+          const discPlayer = allPlayers.find(({user})=> user.id === playerId)
+          return discPlayer && !isManager(discPlayer)
+        }))
+        
+        await contracts.updateMany({playerId: {$in: allExpiringContracts.map(({playerId}) => playerId)}}, {$set: {endedAt: Date.now()}})
+      } while(fullExpiringContracts.length > 0)
       await seasonsCollect.updateOne({endedAt: null}, {$set:{endedAt: Date.now()}})
       await seasonsCollect.insertOne({phase, season, startedAt: Date.now(), phaseStartedAt: Date.now()})
     } else {
@@ -208,13 +211,20 @@ export const progressCurrentSeasonPhase = async ({interaction_id, token, guild_i
     ...teamPlayers.map(discPlayer => `<@${discPlayer.playerId}>`),
     `*from <@${callerId}>*`
   ]
-  await DiscordRequest(logWebhook, {
-    method: 'POST',
-    body: {
-      content: log.join('\r')
+  let response = ""
+  let messagesPosted = 0
+  for await (const line of log) {
+    if(response.length + line.length > 1999) {
+      await postMessage({channel_id: serverChannels.logsChannelId, content: response})
+      messagesPosted++
+      response = ""
     }
-  })
-  console.log(content)
+    response += line + '\r'
+  }
+  await postMessage({channel_id: serverChannels.logsChannelId, content: response})
+  messagesPosted++
+  
+  console.log(`${content}\rPosted ${messagesPosted} messages`)
   await updateResponse({application_id, token, content})
 }
 

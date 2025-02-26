@@ -1,6 +1,6 @@
-import { isValidHttpUrl } from "../utils.js"
-import { displayTeam, handleSubCommands, isNumeric, optionsToObject, updateResponse } from "../functions/helpers.js"
-import { serverRoles } from "../config/psafServerConfig.js"
+import { DiscordRequest, isValidHttpUrl } from "../utils.js"
+import { displayTeam, handleSubCommands, isNumeric, optionsToObject, updateResponse, waitingMsg } from "../functions/helpers.js"
+import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
 import { releaseTeamPlayers } from "./transfers.js"
 
 export const editTeam = async ({application_id, token, options, dbClient}) => {
@@ -75,11 +75,46 @@ const releasePlayers = async ({member, token, guild_id, application_id, options,
   return updateResponse({application_id, token, content})
 }
 
+const acceptTeam = async ({dbClient, options, interaction_id, token, guild_id, application_id}) => {
+  await waitingMsg({interaction_id, token})
+  const {team} = optionsToObject(options)
+  const content = await dbClient(async ({teams})=>{
+    const [dbTeam, teamRoleResp] = await Promise.all([
+      teams.findOne({id: team}),
+      DiscordRequest(`guilds/${guild_id}/roles/${team}`)
+    ])
+    const teamRole = await teamRoleResp.json()
+    if(!dbTeam) {
+      return `Can't find team ${team}`
+    }
+    const channelResp = await DiscordRequest(`/channels/${dbTeam.channelId}`)
+    const channel = await channelResp.json()
+    if(channel.guild_id !== dbTeam.guildId) {
+      return `Channel ${dbTeam.channelId} not found in guild ${dbTeam.guildId}`
+    }
+    if(channel.parent_id !== serverChannels.pgCategory) {
+      return `Team's Channel ${dbTeam.channelId} not in PG category`
+    }
+    if(!teamRole) {
+      return `Can't find role ${team}`
+    }
+    await DiscordRequest(`/channels/${dbTeam.channelId}`, {
+      method: 'PATCH',
+      body: {
+        parent_id: serverChannels.clubsCategory,
+      }
+    })
+    return 'No errors'
+  })
+  return updateResponse({application_id, token, content})
+}
+
 const editTeamSubCommands = {
   'details': editTeam,
   'activate': activateTeam,
   'disable': disableTeam,
   'releaseplayers': releasePlayers,
+  'accept': acceptTeam, 
 }
 
 const editTeamGroup = (commandOptions) => 

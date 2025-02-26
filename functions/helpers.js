@@ -97,7 +97,6 @@ export const genericInterFormatMatch = (nations, nationalSelections, match, allL
 
 export const handleSubCommands = async ({interaction_id, token, options, ...rest}, subCommands) => {
   const subCommand = options[0]
-  console.log(interaction_id, token)
   await waitingMsg({interaction_id, token})
   if(subCommands[subCommand?.name]) {
     return subCommands[subCommand?.name]({...rest, token, options: subCommand.options})

@@ -7,7 +7,6 @@ import createMongoStore from 'connect-mongodb-session'
 const MongoDBStore = createMongoStore(session);
 
 import { getMatch, getMatchesOfDay, saveMatchStats } from './commands/match.js';
-import { authUser, getGuildMember, hasSession, isMemberStaff, isStaff } from './site/siteUtils.js';
 import { mockMatch } from './site/mockMatch.js';
 import mockMatches from './site/mockMatches.js';
 import { getAllTeams } from './commands/teams/getTeam.js';

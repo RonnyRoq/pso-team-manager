@@ -7,7 +7,8 @@ import { editAMatchInternal } from "../match.js"
 export const showLeagueTeam = (leagueObj, leagueTeam) => leagueObj.isInternational ? leagueTeam.team :`<@&${leagueTeam.team}>${leagueTeam.group? ` - Group ${leagueTeam.group}`: ''}${leagueTeam.position!==undefined? ` - Spot ${leagueTeam.position+1}`: ''}`
 
 export const addToLeague = async ({application_id, token, options, dbClient}) => {
-  const {league, team, selection, group, position} = optionsToObject(options)
+  const {options:subOptions} = options[0]
+  const {league, team, selection, group, position} = optionsToObject(subOptions)
   const allLeagues = await getAllLeagues()
   const leagueObj = allLeagues.find(leagueEntry => leagueEntry.value === league)
   if(!leagueObj)
@@ -36,7 +37,8 @@ export const addToLeague = async ({application_id, token, options, dbClient}) =>
 }
 
 export const removeFromLeague = async ({application_id, token, options, dbClient}) => {
-  const {league, team, selection} = optionsToObject(options)
+  const {options:subOptions} = options[0]
+  const {league, team, selection} = optionsToObject(subOptions)
   const allLeagues = await getAllLeagues()
   const leagueObj = allLeagues.find(leagueEntry => leagueEntry.value === league)
   const content = await dbClient(async ({leagues, nationalTeams})=> {
@@ -99,10 +101,8 @@ const leagueTeam = async (commandOptions) =>
   handleSubCommands(commandOptions, leagueTeamSubCommands)
 
 const leagueTeamSubCommands = {
-  'add club': addToLeague,
-  'add selection': addToLeague,
-  'remove club': removeFromLeague,
-  'remove selection': removeFromLeague,
+  'add': addToLeague,
+  'remove': removeFromLeague,
 }
 
 const leagueTeamCmd = {

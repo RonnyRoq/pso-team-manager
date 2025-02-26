@@ -2,9 +2,10 @@ import { InteractionResponseFlags, InteractionResponseType } from "discord-inter
 import { DiscordRequest, SteamRequest, SteamRequestTypes } from "../utils.js"
 import { countries } from '../config/countriesConfig.js'
 import { getAllPlayers } from "../functions/playersCache.js"
-import { addPlayerPrefix, batchesFromArray, getCurrentSeason, getPlayerNick, getRegisteredRole, isManager, optionsToObject, postMessage, quickResponse, removePlayerPrefix, sendDM, silentResponse, updateDiscordPlayer, updateResponse, waitingMsg } from "../functions/helpers.js"
+import { addPlayerPrefix, batchesFromArray, followUpResponse, getCurrentSeason, getPlayerNick, getRegisteredRole, isManager, optionsToObject, postMessage, quickResponse, removePlayerPrefix, sendDM, silentResponse, updateDiscordPlayer, updateResponse, waitingMsg } from "../functions/helpers.js"
 import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
 import { getPSOSteamDetails, isSteamIdIncorrect } from "../functions/steamUtils.js"
+import { getCronJob } from "../cronjobs.js"
 
 export const managerContracts = async ({interaction_id, token, application_id, dbClient, guild_id}) => {
   await waitingMsg({interaction_id, token})
@@ -544,34 +545,62 @@ const validateSteamId = async ({dbClient, application_id, token}) => {
 
 export const detectSteamAlts = async ({dbClient}) => (
   dbClient(async({players})=> {
-    const playersWithAlts = await players.aggregate([
-      {
-        '$match': {
-          'steam': {
-            '$ne': null
-          }
-        }
-      }, {
-        '$group': {
-          '_id': '$steam', 
-          'playerIds': {
-            '$push': {
-              id: '$id',
-              name: '$name'
-            }
-          }
-        }
-      }, {
-        '$match': {
-          'playerIds.1': {
-            '$exists': true
-          }
-        }
-      }
+    const duplicateSteamIds = await players.aggregate([{
+      $group:
+        {
+          _id: "$steamId",
+          steamCount: {
+            $sum: 1,
+          },
+        },
+    },{
+      $match: {
+        _id: {
+          $ne: null,
+        },
+        steamCount: {
+          $gt: 1,
+        },
+      },
+    },{
+      $project: {
+        name: "$_id",
+        _id: 0,
+      },
+    },
     ]).toArray()
+    const arrayOfSteamIds = duplicateSteamIds.map(({name})=> name)
+    console.log(arrayOfSteamIds)
+    
+    const playersWithAlts = await players.aggregate([{
+      $match: {steamId: {$in: arrayOfSteamIds}}
+    },{
+      $lookup: {
+        from: "Contracts",
+        localField: "id",
+        foreignField: "playerId",
+        as: "contracts",
+      }
+    }]).toArray()
     const discPlayers = await getAllPlayers(process.env.GUILD_ID)
-    const realAlts = playersWithAlts.filter(playerWithAlts => {
-      const playersWithtoutFlag = playerWithAlts.playerIds.filter(playerId => {
+    console.log(playersWithAlts.map(player=> `${player.name} ${player.steamId}`))
+    const realAlts = playersWithAlts.map(playerWithAlts => {
+      const discPlayer = discPlayers.find(player=> player.user.id === playerWithAlts.id)
+      if(discPlayer && discPlayer.roles.includes(serverRoles.disabledRole)) {
+        return {...playerWithAlts, name: `:no_entry: ${playerWithAlts.name}`}
+      }
+      return playerWithAlts
+    }).sort((a,b)=> a.steamId.localeCompare(b.steamId))
+    const groupedAlts = new Map()
+    for(const player of realAlts) {
+      if(!groupedAlts.has(player.steamId)) {
+        groupedAlts.set(player.steamId, [])
+      }
+      groupedAlts.get(player.steamId).push(player)
+    }
+    console.log(groupedAlts)
+    /*const realAlts = playersWithAlts.filter(playerWithAlts => {
+      const playersWithtoutFlag = (playerWithAlts.playerIds||[]).filter(playerId => {
         const discPlayer = discPlayers.find(player=> player.user.id === playerId.id)
         if(discPlayer) {
           return !discPlayer.roles.includes(serverRoles.disabledRole)
@@ -581,14 +610,24 @@ export const detectSteamAlts = async ({dbClient}) => (
       return playersWithtoutFlag.length > 1
     })
     let content = '# Players with Alts: \r' +
-      realAlts.map(playerWithAlts=> playerWithAlts.playerIds.map(playerId=> `<@${playerId.id}> (${playerId.name})`).join(' ') + ' ' + playerWithAlts._id).join('\r')
-    while(content.length >= 2000) {
-      const lastCutIndex = content.lastIndexOf('\r', 1999)
-      const content1 = content.substring(0, lastCutIndex)
-      content = content.substring(lastCutIndex)
-      await postMessage({channel_id: serverChannels.botTestingChannelId, content: content1})
-    }
+      playersWithAlts.map(playerWithAlts=> playerWithAlts.playerIds.map(playerId=> `<@${playerId.id}> (${playerId.name})`).join(' ') + ' ' + playerWithAlts._id).join('\r')*/
+    let content = '# Players with Alts: \r'
     await postMessage({channel_id: serverChannels.botTestingChannelId, content})
+    const altsItemized = Array.from(groupedAlts.entries()).map(groupedAlt=>
+      `${groupedAlt[0]}:\r${groupedAlt[1].map(playerWithAlts=> 
+        `<@${playerWithAlts.id}> (${playerWithAlts.id} ${playerWithAlts.name}) Contracts:${(playerWithAlts.contracts||[]).map(contract=> 
+          `<@&${contract.team}> > ${contract.until}`).join(' - ')
+        }`).join('\r')}`
+      )
+    const chunkSize = 5;
+    const chunks = []
+    for (let i = 0; i < altsItemized.length; i += chunkSize) {
+        chunks.push(altsItemized.slice(i, i + chunkSize))
+    }
+    for await(const chunk of chunks) {
+      await postMessage({channel_id: serverChannels.botTestingChannelId, content: '\r'+chunk.join('\r---\r')})
+    }
+    //await postMessage({channel_id: serverChannels.botTestingChannelId, content})
   })
 )
 
@@ -676,6 +715,23 @@ export const updateRegister = async ({application_id, token, guild_id, dbClient,
   const {dryrun} = optionsToObject(options)
   const content = await internalUpdateRegister({dryrun, guild_id, dbClient})
   return updateResponse({application_id, token, content})
+}
+
+const runCronJob = async ({options, interaction_id, application_id, token, callerId}) => {
+  const {job} = optionsToObject(options)
+  const cronRequested = getCronJob(job)
+  if(callerId!=="269565950154506243") {
+    return silentResponse({interaction_id, token, content: 'Forbidden'})
+  }
+
+  if(!cronRequested) {
+    return silentResponse({interaction_id, token, content: 'Job not found'})
+  } else {
+    const [jobName, jobRecurrence, jobFunction] = cronRequested
+    await silentResponse({interaction_id, token, content: `Manually starting ${jobName}, usually with recurrence ${jobRecurrence}`})
+    await jobFunction()
+    await followUpResponse({application_id, token, content: `${job} completed`})
+  }
 }
 
 export const systemTeamCmd = {
@@ -805,4 +861,17 @@ const transferMarketCmd = {
   }]
 }
 
-export default [systemCmd, updateLeaguesCmd, manualSteamVerificationCmd, transferMarketCmd]
+const runCronJobCmd = {
+  name: 'runcronjob',
+  description: 'Run a cron job',
+  psaf: true,
+  func: runCronJob,
+  options: [{
+    type: 3,
+    name:'job',
+    description: 'Job to run',
+    required: true,
+  }]
+}
+
+export default [systemCmd, updateLeaguesCmd, manualSteamVerificationCmd, transferMarketCmd, runCronJobCmd]
