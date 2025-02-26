@@ -160,26 +160,42 @@ export const progressCurrentSeasonPhase = async ({interaction_id, token, guild_i
       }
     }
     let allExpiringContracts = []
+    let allManagerExtensions = []
     let allTeams
     if(newSeason) {
       let fullExpiringContracts = []
+      let i=0
+      let playersNotFoundCount = 0
+      const batchSize = 100
       do {
-        fullExpiringContracts = await contracts.find({until: {$lte : seasonObj.season}, endedAt: null, isLoan: {$ne: true}, isManager: null}, {limit: 100}).toArray()
+        console.log("batch:", batchSize, playersNotFoundCount)
+        fullExpiringContracts = await contracts.find({until: {$lte : seasonObj.season}, endedAt: null, isLoan: {$ne: true}}, {limit: batchSize, skip:playersNotFoundCount}).toArray()
         allTeams = await teams.find({}).toArray()
-        console.log(fullExpiringContracts.length)
-        allExpiringContracts.concat(fullExpiringContracts.filter(({playerId})=> {
+        const managerContracts = fullExpiringContracts.filter(({playerId})=> {
+          const discPlayer = allPlayers.find(({user})=> user.id === playerId)
+          return discPlayer && isManager(discPlayer)
+        })
+        const contractsToRemove = fullExpiringContracts.filter(({playerId})=> {
           const discPlayer = allPlayers.find(({user})=> user.id === playerId)
           return discPlayer && !isManager(discPlayer)
-        }))
-        
-        await contracts.updateMany({playerId: {$in: allExpiringContracts.map(({playerId}) => playerId)}}, {$set: {endedAt: Date.now()}})
-      } while(fullExpiringContracts.length > 0)
+        })
+        const contractIds = contractsToRemove.map(({playerId}) => playerId)
+        console.log(contractIds)
+        allManagerExtensions.concat(managerContracts)
+        allExpiringContracts.concat(contractsToRemove)
+        playersNotFoundCount+= batchSize-managerContracts.length-contractsToRemove.length
+        await contracts.updateMany({playerId: {$in: managerContracts.map(({playerId})=>playerId)}}, {$set: {until: seasonObj.season+1}})
+        console.log("managers updated")
+        await contracts.updateMany({playerId: {$in: contractIds}}, {$set: {endedAt: Date.now()}})
+        console.log("contracts ended")
+        i+=batchSize
+      } while(fullExpiringContracts.length > 0 && i < 3000)
       await seasonsCollect.updateOne({endedAt: null}, {$set:{endedAt: Date.now()}})
       await seasonsCollect.insertOne({phase, season, startedAt: Date.now(), phaseStartedAt: Date.now()})
     } else {
       await seasonsCollect.updateOne({endedAt: null}, {$set:{phase, season, phaseStartedAt: Date.now()}})
     }
-    return {allExpiringContracts, allTeams, content: await getCurrentSeasonPhaseDb({seasonsCollect})}
+    return {allExpiringContracts, allManagerExtensions, allTeams, content: await getCurrentSeasonPhaseDb({seasonsCollect})}
     
   })
   const teamPlayers = allExpiringContracts.map((contract)=>{
