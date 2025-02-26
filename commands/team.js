@@ -94,6 +94,7 @@ export const team = async ({interaction_id, application_id, token, guild_id, opt
   })
 }
 
+
 export const teamCmd = {
   name: 'team',
   description: 'List team details',

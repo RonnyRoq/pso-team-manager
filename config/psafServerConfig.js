@@ -441,6 +441,8 @@ export const serverChannels = {
   wcNationalSelectionsChannelId: '1203368179389169685',
   wcNationalTeamsPostsChannelId: '1246184390568968253',
   wcLineupsChannelId: '1248376149520683139',
+  pgCategory: '1237770362264092722',
+  clubsCategory: '1186998502010671134',
 }
 
 export const serverRegions = [

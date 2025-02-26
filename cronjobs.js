@@ -1,5 +1,5 @@
 import { CronJob } from "cron"
-import { getMatchesOfDay, getMatchesSummary, remindMissedMatches } from "./commands/match.js"
+import { getMatchesOfDay, getMatchesSummary, getRefStatsLeaderboard, remindMissedMatches } from "./commands/match.js"
 import { innerUpdateTeam } from "./commands/postTeam.js"
 import { notifyMatchStart } from "./commands/matches/notifyMatchStart.js"
 import { DiscordRequest, logSystemError } from "./utils.js"
@@ -31,6 +31,10 @@ let currentTeamIndex = 0
 let currentSelectionIndex = 0
 let playerIdsToPSOCheck = []
 let cronJobs
+
+export const getCronJob = (name) => {
+  return cronJobs.find(([cronName]) => cronName === name)
+}
 export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, allLeagues}) => {
   cronJobs = [[
     'postMatchesOfDay',
@@ -120,20 +124,26 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
         await detectSteamAlts({dbClient})
       }
     ),
-  /*],[
+  ],[
+    'ref stats leaderboard',
     '11 22 * * *',
     async function() {
       const refs = await getRefStatsLeaderboard({dbClient})
       console.log(refs)
-      await postMessage({channel_id: serverChannels.botTestingChannelId, content: 'Match result stats:'+refs.map(ref=> `<@${ref._id}>: ${ref.finishedCount}`).join('\r')})
-    }*/
+      await postMessage({channel_id: serverChannels.botTestingChannelId, content: 'Match result stats:\r'+refs.map(ref=> `<@${ref._id}>: ${ref.finishedCount}`).join('\r')})
+    }
   ],[
     'update league table',
     '35 22 * * *',
     callCronJob('update league table', 
       async function() {
         for await (const league of allLeagues) {
+          try {
           await updateLeagueTable({dbClient, league})
+          } catch (e) {
+            console.error(e)
+            await logSystemError(`Failed to update league table ${league.value} ${league.name}:` + JSON.stringify(e))
+          }
         }
       }
     ),

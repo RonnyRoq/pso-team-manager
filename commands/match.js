@@ -708,6 +708,7 @@ export const getRefStatsLeaderboard = async ({dbClient}) => {
     const refs = await matches.aggregate([
       {
         $match: {
+          season: getFastCurrentSeason(),
           finished: true, 
           finishedBy: {
             '$ne': null

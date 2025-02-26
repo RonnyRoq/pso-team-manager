@@ -115,7 +115,7 @@ const register = async ({member, callerId, interaction_id, guild_id, application
     await players.updateOne({id: callerId}, {$set: updatedPlayer}, {upsert: true})
     const payload = {
       nick,
-      roles: [...new Set([...member.roles, getRegisteredRole(guild_id), currentTeam? currentTeam.id : getRegisteredRole(guild_id)])]
+      roles: [...new Set([...member.roles, getRegisteredRole(guild_id), currentTeam? [...currentTeam.id, serverRoles.clubPlayerRole] : getRegisteredRole(guild_id)])]
     }
     if(psoSummary.validated) {
       payload.roles.push(serverRoles.steamVerified)

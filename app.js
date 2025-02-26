@@ -122,9 +122,9 @@ function start() {
   const PORTHTTPS = process.env.PORTHTTPS || 8443;
   
   // Parse request body and verifies incoming requests using discord-interactions package
-  if(online){
-    app.use(express.json({ verify: VerifyDiscordRequest(process.env.PUBLIC_KEY) }));
-  }
+  /*if(online){
+    app.use();
+  }*/
   
   //app.use(pinoHttp)
   app.use('/site', getSite(!online, uri, dbClient))
@@ -133,7 +133,7 @@ function start() {
   /**
    * Interactions endpoint URL where Discord will send HTTP requests
    */
-  app.post('/interactions', async function (req, res) {
+  app.post('/interactions', express.json({ verify: VerifyDiscordRequest(process.env.PUBLIC_KEY) }), async function (req, res) {
     // Interaction type and data
     const { type, member, id:interaction_id, application_id, channel_id, token, data, guild_id, user } = req.body;
 
@@ -148,6 +148,8 @@ function start() {
         let optionChanged = data.options.find(option=> option.focused)
         if(!optionChanged)
           optionChanged = data.options?.[0]?.options.find(option => option.focused)
+        if(!optionChanged)
+          optionChanged = data.options?.[0]?.options?.[0]?.options.find(option => option.focused)
         if(data.name==="editplayer"){
           return autoCompleteNation(optionChanged, dbClient, res)
         }
@@ -157,16 +159,16 @@ function start() {
         if(data.name === "selectionmatch"){
           return autoCompleteSelections(optionChanged, dbClient, res)
         }
-        if(optionChanged.name === "selection") {
+        if(optionChanged?.name === "selection") {
           return autoCompleteSelections(optionChanged, dbClient, res, member)
         }
-        if(optionChanged.name === "eligiblenationality") {
+        if(optionChanged?.name === "eligiblenationality") {
           return autoCompleteNation(optionChanged, dbClient, res)
         }
-        if(optionChanged.name === "nationality") {
+        if(optionChanged?.name === "nationality") {
           return autoCompleteNation(optionChanged, dbClient, res)
         }
-        if(optionChanged.name === "league") {
+        if(optionChanged?.name === "league") {
           return autoCompleteLeague(optionChanged, dbClient, res)
         }
         if(optionChanged) {
@@ -679,13 +681,13 @@ function start() {
       }
     })
   });
-  app.use((err, req, res, next) => {
-    console.error(req)
+  /*app.use((err, req, res, next) => {
+    //console.error(req)
     console.error(err.stack)
     
-    res.status(500).send('Server error!')
+    //res.status(500).send('Server error!')
     next()
-  })
+  })*/
 
   let allActiveTeams = []
   let allNationalSelections = []

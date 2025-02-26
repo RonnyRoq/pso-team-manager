@@ -15,11 +15,14 @@ import { getLft, getTransferList } from './commands/transfers/transferList.js'
 import { getSelection } from './commands/nationalTeams/nationalTeamManagement.js'
 import { buildPlayerSearch } from './commands/search/buildSearchIndexes.js'
 import { globalSearch } from './commands/search/search.js'
+import { patchTeam } from './commands/teams/api.js'
+import { getLeagueConfig } from './commands/league/api.js'
 
 export const getApi = (localdev=false, dbClient={}) =>{
   const api = express() // the API app
   //api.use(pinoHttp)
   api.use(express.json())
+  api.use(express.urlencoded({extended: true}))
   //api.use(bodyParser.urlencoded({extended: true}))
   api.use((req, res, next) => {
     if(global.isConnected) {
@@ -52,7 +55,6 @@ export const getApi = (localdev=false, dbClient={}) =>{
   api.put('/teamstatus', async (req, res) => {
     const team = req.body.team
     const active = req.body.active
-    console.log(active)
     const response = await updateTeamStatus({team, active, dbClient})
     return res.json(response)
   })
@@ -65,6 +67,13 @@ export const getApi = (localdev=false, dbClient={}) =>{
     const response = await getTeam({id: req.query.id, dbClient})
     return res.json(response)
   })
+
+  api.put('/team/:id', async (req, res) => {
+    console.log('/team POST', req.params.id, req.body, req.headers)
+    const response = await patchTeam({id: req.params.id, dbClient, payload: req.body, userId: req.headers.userid})
+    return res.json(response)
+  })
+
   api.get('/teamplayers', async (req, res) => {
     const response = await getTeamAndPlayers({id: req.query.id, dbClient, guild_id: process.env.GUILD_ID})
     return res.json(response)
@@ -116,12 +125,29 @@ export const getApi = (localdev=false, dbClient={}) =>{
   })
 
   api.get('/league', async (req,res)=> {
-    //console.log(req.url)
-    //console.log(req.query)
     if(!req.query?.league) {
       return res.status(400).send({ error: { code: 400, message: "Please document an league" } });
     } else {
       const response = await apiLeagueTable({league: req.query?.league, dbClient})
+      return res.json(response)
+    }
+  })
+
+  api.get('/leaguetable', async (req,res)=> {
+    if(!req.query?.league) {
+      return res.status(400).send({ error: { code: 400, message: "Please document an league" } });
+    } else {
+      const response = await apiLeagueTable({league: req.query?.league, dbClient})
+      return res.json(response)
+    }
+  })
+
+  
+  api.get('/leagueconfig', async (req,res)=> {
+    if(!req.query?.league) {
+      return res.status(400).send({ error: { code: 400, message: "Please document an league" } });
+    } else {
+      const response = await getLeagueConfig({leagueId: req.query?.league, dbClient})
       return res.json(response)
     }
   })
@@ -200,7 +226,6 @@ export const getApi = (localdev=false, dbClient={}) =>{
   });
 
   api.get('/', async function (req, res) {
-    console.log('main', req.session)
     return res.send('<p>no thank you</p>')
   })
 

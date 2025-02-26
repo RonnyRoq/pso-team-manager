@@ -26,7 +26,7 @@ export const editLeague = async ({dbClient, token, application_id, options}) => 
       sorting: sorting || currentLeague.sorting,
     }
     await leagueConfig.updateOne({value: league}, { $set: payload})
-    refreshAllLeagues(leagueConfig)
+    await refreshAllLeagues(leagueConfig)
     return `Updated:\r${JSON.stringify({...currentLeague, ...payload}, undefined, 2)}`
   })
   return updateResponse({application_id, token, content})
@@ -54,7 +54,7 @@ export const apiUpdateLeague = async (options, dbClient) => {
       active,
     }
     const updatedLeague = await leagueConfig.findOneAndUpdate({value: league}, { $set: payload},  {returnDocument: ReturnDocument.AFTER})
-    refreshAllLeagues(leagueConfig)
+    await refreshAllLeagues(leagueConfig)
     return updatedLeague
   })
 }
@@ -76,9 +76,10 @@ const updateLeagueStatus = async ({token, application_id, callerId, options, dbC
     }
     await leagueConfig.updateOne({value: league}, {$set: {active}})
     await refreshAllLeagues(leagueConfig)
+    const content = `${selectedLeague.name} is now ${active ? 'active': 'inactive'}`
     await postMessage({channel_id: serverChannels.botActivityLogsChannelId, content: `<@${callerId}> changed a league status:\r${content}`})
-    return `${selectedLeague.name} is now ${active ? 'active': 'inactive'}`
-  })  
+    return content
+  })
   return updateResponse({application_id, token, content})
 }
 
