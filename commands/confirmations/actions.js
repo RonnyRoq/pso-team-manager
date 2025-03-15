@@ -4,7 +4,7 @@ import { DiscordRequest } from "../../utils.js"
 import { serverChannels } from "../../config/psafServerConfig.js"
 import { getPlayerNick, isManager, postMessage, silentResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { seasonPhases } from "../season.js"
-import { twoWeeksMs } from "../../config/constants.js"
+import { TWO_WEEKS_MS } from "../../config/constants.js"
 import { ObjectId } from "mongodb"
 
 export const removeConfirmation = async ({dbClient, interaction_id, token, message }) => {
@@ -188,7 +188,7 @@ export const finishLoanRequest = async ({member, channel_id, application_id, int
     const pendingLoan = pendingLoansPlayer.find(loan => loan.destTeam === team.id)
     let currentPhaseIndex = seasonPhases.findIndex(({name})=> seasonObj.phase === name)
     const phasesCount = seasonPhases.length
-    if(seasonObj.phaseStartedAt + (twoWeeksMs/2) < Date.now()) {
+    if(seasonObj.phaseStartedAt + (TWO_WEEKS_MS/2) < Date.now()) {
       currentPhaseIndex = (currentPhaseIndex+1) % phasesCount
     }
     const targetSeason = season ? season : ((phase <= currentPhaseIndex) ? seasonObj.season+1 : seasonObj.season)

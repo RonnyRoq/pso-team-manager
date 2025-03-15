@@ -2,9 +2,7 @@ import { DiscordRequest } from "../../utils.js"
 import { isManager, optionsToObject, transferMarketStatus, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { globalTransferBan, globalTransferBanMessage, globalTransferClosedMessage, serverChannels, serverRoles, transferBanStatus } from "../../config/psafServerConfig.js"
 import { seasonPhases } from "../season.js"
-
-
-const twoWeeksMs = 1209600033
+import { TWO_WEEKS_MS } from "../../config/constants.js"
 
 const preDealChecks = async({guild_id, player, member, contracts, teams, confirmations, config}) => {
   if(!member.roles.includes(serverRoles.clubManagerRole)) {
@@ -89,7 +87,7 @@ export const deal = async ({dbClient, options, guild_id, interaction_id, token, 
       teamFrom: sourceTeam.id,
       destTeam: destTeam.id,
       amount,
-      expiresOn: Date.now()+twoWeeksMs,
+      expiresOn: Date.now()+TWO_WEEKS_MS,
       messageId: dealPost.id,
       adminMessage: adminPost.id
     })
@@ -127,7 +125,7 @@ export const loan = async ({interaction_id, guild_id, application_id, token, mem
         teamFrom: sourceTeam.id,
         destTeam: destTeam.id,
         amount,
-        expiresOn: Date.now()+twoWeeksMs,
+        expiresOn: Date.now()+TWO_WEEKS_MS,
       }
     }, {upsert: true})
     const seasonObj = await seasonsCollect.findOne({endedAt: null})
@@ -135,7 +133,7 @@ export const loan = async ({interaction_id, guild_id, application_id, token, mem
     let targetPhaseIndex = currentSeasonPhase
     let targetSeason = seasonObj.season
     const phasesCount = seasonPhases.length
-    if(seasonObj.phaseStartedAt + (twoWeeksMs) < Date.now()) {
+    if(seasonObj.phaseStartedAt + (TWO_WEEKS_MS) < Date.now()) {
       console.log('increasing')
       targetSeason += Math.floor((targetPhaseIndex+1) / phasesCount)
       targetPhaseIndex = (targetPhaseIndex+1) % phasesCount

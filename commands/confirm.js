@@ -1,12 +1,9 @@
 import { DiscordRequest } from "../utils.js"
-import { msToTimestamp, getPlayerNick, sleep, waitingMsg, optionsToObject, updateResponse, quickResponse, addPlayerPrefix, getRegisteredRole, transferMarketStatus, isManager, sendDM } from "../functions/helpers.js"
+import { msToTimestamp, getPlayerNick, sleep, waitingMsg, optionsToObject, updateResponse, quickResponse, transferMarketStatus, isManager } from "../functions/helpers.js"
 import { globalTransferBan, globalTransferBanMessage, globalTransferClosedMessage, serverChannels, serverRoles, transferBanStatus } from "../config/psafServerConfig.js"
-import commandsRegister from "../commandsRegister.js"
 import { seasonPhases } from "./season.js"
 import { getAllNationalities } from "../functions/allCache.js"
-
-const twoWeeksMs = 1209600033
-
+import { TWO_WEEKS_MS } from "../config/constants.js"
 
 const getConfirmTransferComponents = ({isValidated, isActive}={}) => ({
   components: [{
@@ -58,7 +55,7 @@ const getDealComponents = ({isActive}={}) => ({
   }]
 })
 
-export const confirm = async ({member, callerId, interaction_id, application_id, guild_id, channel_id, token, options, dbClient}) => {
+const confirm = async ({member, callerId, interaction_id, application_id, guild_id, channel_id, token, options, dbClient}) => {
   await waitingMsg({interaction_id, token})
   const {team, seasons} = optionsToObject(options)
   
@@ -158,7 +155,7 @@ export const confirm = async ({member, callerId, interaction_id, application_id,
       team,
       teamName: teamToJoin.name,
       seasons,
-      expiresOn: Date.now()+twoWeeksMs,
+      expiresOn: Date.now()+TWO_WEEKS_MS,
       messageId: message.id,
       adminMessage: adminMessage.id
     })
@@ -235,7 +232,7 @@ export const releasePlayer = async ({member, callerId, interaction_id, applicati
       playerName: getPlayerNick(discPlayer),
       team,
       teamName: dbTeam.name,
-      expiresOn: Date.now()+twoWeeksMs,
+      expiresOn: Date.now()+TWO_WEEKS_MS,
       messageId: message.id,
       adminMessage: adminMessage.id
     })
@@ -374,13 +371,12 @@ export const pendingConfirmations = (async ({interaction_id, guild_id, token, ap
   return updateResponse({application_id, token, content: `Updated ${updatedConfs} confirmations`})
 })
 
-commandsRegister.confirm = confirm
-commandsRegister.updateconfirm = pendingConfirmations
-
-export const confirmCmd = {
+const confirmCmd = {
   name: 'confirm',
   description: 'Join a team',
   type: 1,
+  psaf: true,
+  func: confirm,
   options: [{
     type: 8,
     name: 'team',
@@ -391,12 +387,12 @@ export const confirmCmd = {
     name: 'seasons',
     description: 'How many seasons',
     required: true,
-    min_value: 2,
-    max_value: 4
+    min_value: 1,
+    max_value: 3
   }]
 }
 
-export const releaseCmd = {
+const releaseCmd = {
   name: 'releaseplayer',
   description: 'Release a player from your team',
   type: 1,
@@ -420,8 +416,4 @@ export const releaseCmd = {
   }]
 }
 
-export const updateConfirmCmd = {
-  name: 'updateconfirm',
-  description: 'debug',
-  type: 1
-}
+export default [confirmCmd, releaseCmd]

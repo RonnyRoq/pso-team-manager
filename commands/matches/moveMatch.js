@@ -1,11 +1,11 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
 import { serverChannels, serverRoles } from "../../config/psafServerConfig.js"
-import { isManager, msToTimestamp, postMessage, quickResponse, silentResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { isManager, msToTimestamp, postMessage, silentResponse, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { editAMatchInternal, formatMatch, getMatchTeams, getMatchTeamsSync } from "../match.js"
 import { DiscordRequest } from "../../utils.js"
 import { ObjectId } from "mongodb"
 import { parseDate } from "../timestamp.js"
-import { twoWeeksMs } from "../../config/constants.js"
+import { TWO_WEEKS_MS } from "../../config/constants.js"
 import { getAllLeagues } from "../../functions/allCache.js"
 import { getFastCurrentSeason } from "../season.js"
 import { getAllSelectionsFromDbClient } from "../../functions/countriesCache.js"
@@ -120,12 +120,12 @@ export const moveMatchPrompt = async ({interaction_id, token, custom_id, dbClien
   })
 }
 
-export const moveMatchModalResponse = async ({interaction_id, token, callerId, custom_id, components, dbClient}) => {
+export const moveMatchModalResponse = async ({interaction_id, token, application_id, callerId, custom_id, components, dbClient}) => {
   const [,,,id] = custom_id.split('_')
   const entries = components.map(({components})=> components[0])
   const {match_time, timezone='UK'} = Object.fromEntries(entries.map(entry=> [entry.custom_id, entry.value.trim()]))
+  await waitingMsg({interaction_id, token})
   let timezoneOption
-  //await waitingMsg({interaction_id, token})
   switch(timezone.toLowerCase()) {
     case 'turkey':
     case 'turkiye':
@@ -151,10 +151,11 @@ export const moveMatchModalResponse = async ({interaction_id, token, callerId, c
     dateTimestamp = msToTimestamp(Date.parse(suggestedTime))
   }
   const timeOfTheRequest = Date.now()
-  const expiryTime = Date.now() + twoWeeksMs
+  const expiryTime = Date.now() + TWO_WEEKS_MS
   
   if(!numberRegExp.test(dateTimestamp)) {
-    return quickResponse({interaction_id, token, content: `${match_time} was interpreted as <t:${dateTimestamp}:F> which is not a valid option. Try again`, isEphemeral: true})
+    console.log(`${match_time} was interpreted as <t:${dateTimestamp}:F> which is not a valid option. Try again`)
+    return updateResponse({application_id, token, content: `${match_time} was interpreted as <t:${dateTimestamp}:F> which is not a valid option. Try again`})
   }
   const content = await dbClient(async ({moveRequest, matches, contracts, nationalContracts, nationalTeams, matchDays})=> {
     const matchId = new ObjectId(id)
@@ -209,7 +210,8 @@ export const moveMatchModalResponse = async ({interaction_id, token, callerId, c
     await moveRequest.updateOne({id, requesterTeam, destinationTeam}, {$set: {message: message.id}})
     return `Request posted`
   })
-  return quickResponse({interaction_id, token, content, isEphemeral: true})
+  console.log(content)
+  return updateResponse({application_id, token, content})
 }
 
 export const listMatchMoves = async ({interaction_id, token, application_id, member, callerId, dbClient}) => {

@@ -3,7 +3,7 @@ import { displayTeam, handleSubCommands, isNumeric, optionsToObject, updateRespo
 import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
 import { releaseTeamPlayers } from "./transfers.js"
 
-export const editTeam = async ({application_id, token, options, dbClient}) => {
+const editTeam = async ({application_id, token, options, dbClient}) => {
   let response = "No teams found"
   const {team, palmares, emoji, city, flag, shortname, name, logo, channel} = Object.fromEntries(options.map(({name, value})=> [name, value]))
   const roles = [{id: team}]
@@ -120,7 +120,7 @@ const editTeamSubCommands = {
 const editTeamGroup = (commandOptions) => 
   handleSubCommands(commandOptions, editTeamSubCommands)
 
-export const editTeamCmd =  {
+const editTeamCmd =  {
   name: 'details',
   description: 'Edit team details',
   type: 1,
@@ -201,7 +201,7 @@ const releasePlayersCmd = {
   }]
 }
 
-export const teamCmd = {
+const teamCmd = {
   name: 'editteam',
   description: 'Edit a team',
   func: editTeamGroup,

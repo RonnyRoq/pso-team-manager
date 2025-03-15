@@ -90,10 +90,10 @@ export const formatGenericLineup = (lineup, admin = false) => {
   const subsEntries = lineupEntries.filter(([key])=> subsOrder.includes(key)).sort(([a], [b])=> subsOrder.indexOf(a)- subsOrder.indexOf(b))
   let response = ''
   if(lineup?.gk?.id) {
-    response = entries.map(([key, value])=> `**${positionsOrder[key]}:** <@${value.id}> ${value.registered ? steam: ''}${value.ingamename ? ` (${value.ingamename})`: ''}${admin && value.steam ? ' '+value.steam:''}`).join('\r')
+    response = entries.map(([key, value])=> `**${positionsOrder[key]}:** <@${value.id}> ${value.registered ? steam: ''}${value.ingamename ? ` (${value.ingamename.replaceAll(/(\*|_|~)/g, "\\$1")})`: ''}${admin && value.steam ? ' '+value.steam:''}`).join('\r')
     if(subsEntries.length>0)
       response += "\rSubs: "
-      response += subsEntries.map(([, value])=> `<@${value.id}> ${value.registered ? steam : ''}${value.ingamename ? ` (${value.ingamename})`: ''}${admin && value.steam ? ' '+value.steam:''}`).join(', ')
+      response += subsEntries.map(([, value])=> `<@${value.id}> ${value.registered ? steam : ''}${value.ingamename ? ` (${value.ingamename.replaceAll(/(\*|_|~)/g, "\\$1")})`: ''}${admin && value.steam ? ' '+value.steam:''}`).join(', ')
   } else {
     response = entries.map(([key, value])=> `**${positionsOrder[key]}:** <@${value}>\r`).join('\r')
     if(subsEntries.length>0) {
@@ -105,110 +105,6 @@ export const formatGenericLineup = (lineup, admin = false) => {
     response += `> Lineup ID: ${lineup.publicId}`
   }
   return response
-}
-
-export const formatLineup = ({gk, lb, rb, cm, lw, rw, sub1, sub2, sub3, sub4, sub5, admin}) => {
-  if(gk && gk.id) {
-    let response = `**GK:** <@${gk.id}> ${gk.registered ? steam: ''}${gk.ingamename ? ` (${gk.ingamename})`: ''}${admin && gk.steam ? ' '+gk.steam:''}\r`;
-    response += `**LB:** <@${lb.id}> ${lb.registered ? steam : ''}${lb.ingamename ? ` (${lb.ingamename})`: ''}${admin && lb.steam ? ' '+lb.steam:''}\r`;
-    response += `**RB:** <@${rb.id}> ${rb.registered ? steam : ''}${rb.ingamename ? ` (${rb.ingamename})`: ''}${admin && rb.steam ? ' '+rb.steam:''}\r`;
-    response += `**CM:** <@${cm.id}> ${cm.registered ? steam : ''}${cm.ingamename ? ` (${cm.ingamename})`: ''}${admin && cm.steam ? ' '+cm.steam:''}\r`;
-    response += `**LW:** <@${lw.id}> ${lw.registered ? steam : ''}${lw.ingamename ? ` (${lw.ingamename})`: ''}${admin && lw.steam ? ' '+lw.steam:''}\r`;
-    response += `**RW:** <@${rw.id}> ${rw.registered ? steam : ''}${rw.ingamename ? ` (${rw.ingamename})`: ''}${admin && rw.steam ? ' '+rw.steam:''}`;
-    if(sub1) {
-      response += `\r**Subs:** <@${sub1.id}> ${sub1.registered ? steam : ''}${sub1.ingamename ? ` (${sub1.ingamename})`: ''}${admin && sub1.steam ? ' '+sub1.steam:''}\r`;
-    }
-    if(sub2) {
-      response += `, <@${sub2.id}> ${sub2.registered ? steam : ''}${sub2.ingamename ? ` (${sub2.ingamename})`: ''}${admin && sub2.steam ? ' '+sub2.steam:''}\r`;
-    }
-    if(sub3) {
-      response += `, <@${sub3.id}> ${sub3.registered ? steam : ''}${sub3.ingamename ? ` (${sub3.ingamename})`: ''}${admin && sub3.steam ? ' '+sub3.steam:''}\r`;
-    }
-    if(sub4) {
-      response += `, <@${sub4.id}> ${sub4.registered ? steam : ''}${sub4.ingamename ? ` (${sub4.ingamename})`: ''}${admin && sub4.steam ? ' '+sub4.steam:''}\r`;
-    }
-    if(sub5) {
-      response += `, <@${sub5.id}> ${sub5.registered ? steam : ''}${sub5.ingamename ? ` (${sub5.ingamename})`: ''}${admin && sub5.steam ? ' '+sub5.steam:''}\r`;
-    }
-    return response
-  } else {
-    let response = `**GK:** <@${gk}>\r`;
-    response += `**LB:** <@${lb}>\r`;
-    response += `**RB:** <@${rb}>\r`;
-    response += `**CM:** <@${cm}>\r`;
-    response += `**LW:** <@${lw}>\r`;
-    response += `**RW:** <@${rw}>`;
-    if(sub1) {
-      response += `\r**Subs:** <@${sub1}>`;
-    }
-    if(sub2) {
-      response += `, <@${sub2}>`;
-    }
-    if(sub3) {
-      response += `, <@${sub3}>`;
-    }
-    if(sub4) {
-      response += `, <@${sub4}>`;
-    }
-    if(sub5) {
-      response += `, <@${sub5}>`;
-    }
-    return response
-  }
-}
-
-export const formatEightLineup = ({gk, lb, cb, rb, lcm, rcm, lst, rst, sub1, sub2, sub3, sub4, sub5, admin}) => {
-  if(gk && gk.id) {
-    let response = `**GK:** <@${gk.id}> ${gk.registered ? steam : ''}${gk.ingamename ? ` (${gk.ingamename})`: ''}${admin && gk.steam ? ' '+gk.steam:''}\r`;
-    response += `**LB:** <@${lb.id}> ${lb.registered ? steam : ''}${lb.ingamename ? ` (${lb.ingamename})`: ''}${admin && lb.steam ? ' '+lb.steam:''}\r`;
-    response += `**CB:** <@${cb.id}> ${cb.registered ? steam : ''}${cb.ingamename ? ` (${cb.ingamename})`: ''}${admin && cb.steam ? ' '+cb.steam:''}\r`;
-    response += `**RB:** <@${rb.id}> ${rb.registered ? steam : ''}${rb.ingamename ? ` (${rb.ingamename})`: ''}${admin && rb.steam ? ' '+rb.steam:''}\r`;
-    response += `**LCM:** <@${lcm.id}> ${lcm.registered ? steam : ''}${lcm.ingamename ? ` (${lcm.ingamename})`: ''}${admin && lcm.steam ? ' '+lcm.steam:''}\r`;
-    response += `**RCM:** <@${rcm.id}> ${rcm.registered ? steam : ''}${rcm.ingamename ? ` (${rcm.ingamename})`: ''}${admin && rcm.steam ? ' '+rcm.steam:''}\r`;
-    response += `**LST:** <@${lst.id}> ${lst.registered ? steam : ''}${lst.ingamename ? ` (${lst.ingamename})`: ''}${admin && lst.steam ? ' '+lst.steam:''}\r`;
-    response += `**RST:** <@${rst.id}> ${rst.registered ? steam : ''}${rst.ingamename ? ` (${rst.ingamename})`: ''}${admin && rst.steam ? ' '+rst.steam:''}`;
-    if(sub1) {
-      response += `\r**Subs:** <@${sub1.id}> ${sub1.registered ? steam : ''}${sub1.ingamename ? ` (${sub1.ingamename})`: ''}${admin && sub1.steam ? ' '+sub1.steam:''}\r`;
-    }
-    if(sub2) {
-      response += `, <@${sub2.id}> ${sub2.registered ? steam : ''}${sub2.ingamename ? ` (${sub2.ingamename})`: ''}${admin && sub2.steam ? ' '+sub2.steam:''}\r`;
-    }
-    if(sub3) {
-      response += `, <@${sub3.id}> ${sub3.registered ? steam : ''}${sub3.ingamename ? ` (${sub3.ingamename})`: ''}${admin && sub3.steam ? ' '+sub3.steam:''}\r`;
-    }
-    if(sub4) {
-      response += `, <@${sub4.id}> ${sub4.registered ? steam : ''}${sub4.ingamename ? ` (${sub4.ingamename})`: ''}${admin && sub4.steam ? ' '+sub4.steam:''}\r`;
-    }
-    if(sub5) {
-      response += `, <@${sub5.id}> ${sub5.registered ? steam : ''}${sub5.ingamename ? ` (${sub5.ingamename})`: ''}${admin && sub5.steam ? ' '+sub5.steam:''}\r`;
-    }
-    return response
-  } else {
-    let response = `GK: <@${gk}>\r`;
-    response += `LB: <@${lb}>\r`;
-    response += `CB: <@${cb}>\r`;
-    response += `RB: <@${rb}>\r`;
-    response += `LCM: <@${lcm}>\r`;
-    response += `RCM: <@${rcm}>\r`;
-    response += `LST: <@${lst}>\r`;
-    response += `RST: <@${rst}>`;
-    if(sub1) {
-      response += `\rSubs: <@${sub1}>`;
-    }
-    if(sub2) {
-      response += `, <@${sub2}>`;
-    }
-    if(sub3) {
-      response += `, <@${sub3}>`;
-    }
-    if(sub4) {
-      response += `, <@${sub4}>`;
-    }
-    if(sub5) {
-      response += `, <@${sub5}>`;
-    }
-    return response
-  }
 }
 
 const saveLineup = async ({dbClient, callerId, lineup, objLineup={}, playerTeam, member, guild_id, channel_id }) => {

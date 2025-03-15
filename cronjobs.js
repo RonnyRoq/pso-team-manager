@@ -1,5 +1,5 @@
 import { CronJob } from "cron"
-import { getMatchesOfDay, getMatchesSummary, getRefStatsLeaderboard, remindMissedMatches } from "./commands/match.js"
+import { getMatchesOfDay, getMatchesSummary, remindMissedMatches, updateCurrentRefStatsPost } from "./commands/match.js"
 import { innerUpdateTeam } from "./commands/postTeam.js"
 import { notifyMatchStart } from "./commands/matches/notifyMatchStart.js"
 import { DiscordRequest, logSystemError } from "./utils.js"
@@ -128,9 +128,7 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
     'ref stats leaderboard',
     '11 22 * * *',
     async function() {
-      const refs = await getRefStatsLeaderboard({dbClient})
-      console.log(refs)
-      await postMessage({channel_id: serverChannels.botTestingChannelId, content: 'Match result stats:\r'+refs.map(ref=> `<@${ref._id}>: ${ref.finishedCount}`).join('\r')})
+      await updateCurrentRefStatsPost({dbClient})
     }
   ],[
     'update league table',

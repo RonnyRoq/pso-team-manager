@@ -403,7 +403,8 @@ export const actionConfirmMigrate = async ({interaction_id, application_id, cust
       const newPlayerResponse = await players.insertOne({...playerData, id: newPlayerId, lastDiscordChange: now, knownAlts: [...otherAlts, {_id, id: oldPlayerId}]})
       const activeContracts = await contracts.find({playerId: oldPlayerId, endedAt: null}).toArray()
       for await(const activeContract of activeContracts) {
-        const {_id, ...activeContractData} = activeContract
+        const {...activeContractData} = activeContract
+        delete activeContractData._id
         await contracts.insertOne({...activeContractData, playerId: newPlayerId})
       }
       const futureRoles = []
@@ -419,7 +420,8 @@ export const actionConfirmMigrate = async ({interaction_id, application_id, cust
       }
       const activeNationalContract = await nationalContracts.findOne({season, playerId:oldPlayerId})
       if(activeNationalContract) {
-        const {_id, ...activeNationalContractData} = activeNationalContract
+        const {...activeNationalContractData} = activeNationalContract
+        delete activeNationalContractData._id
         await nationalContracts.insertOne({...activeNationalContractData, playerId: newPlayerId})
         futureRoles.push(serverRoles.nationalTeamPlayerRole)
       }
@@ -449,14 +451,16 @@ export const actionConfirmMigrate = async ({interaction_id, application_id, cust
       const activeContracts = await contracts.find({playerId: oldPlayerId, endedAt: null}).toArray()
       await contracts.updateMany({playerId: newPlayerId, endedAt: null}, {$set: {endedAt: now}})
       for await(const activeContract of activeContracts) {
-        const {_id, ...activeContractData} = activeContract
+        const {...activeContractData} = activeContract
+        delete activeContractData._id
         await contracts.insertOne({...activeContractData, playerId: newPlayerId})
       }
       const futureRoles = oldDiscPlayer.roles.filter(role=> ![serverRoles.registeredRole, serverRoles.steamVerified].includes(role))
       const activeNationalContract = await nationalContracts.findOne({season, playerId:oldPlayerId})
       if(activeNationalContract) {
         await nationalContracts.deleteOne({season, playerId:newPlayerId})
-        const {_id, ...activeNationalContractData} = activeNationalContract
+        const {...activeNationalContractData} = activeNationalContract
+        delete activeNationalContractData._id
         await nationalContracts.insertOne({...activeNationalContractData, playerId: newPlayerId})
       }
       await Promise.all([
@@ -579,32 +583,16 @@ export const players = async ({guild_id, interaction_id, application_id, token, 
   })
 }
 
-export const playerCmd = {
+const playerCmd = {
   name: 'player',
   description: 'Show player details',
   type: 1,
+  psaf: true,
+  func: player,
   options: [{
     type: 6,
     name: 'player',
     description: 'Player'
-  }]
-}
-
-export const allPlayersCmd = {
-  name: 'allplayers',
-  description: 'Debug',
-  type: 1
-}
-
-export const playersCmd = {
-  name: 'players',
-  description: 'List players for this team',
-  type: 1,
-  options: [{
-    type: 8,
-    name: 'team',
-    description: 'Team',
-    required: true
   }]
 }
 
@@ -755,4 +743,4 @@ const playerUser = {
   func: playerUserCmd
 }
 
-export default [playerUser, playerBot, updatePlayerCmd]
+export default [playerUser, playerBot, playerCmd, updatePlayerCmd]

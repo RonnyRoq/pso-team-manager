@@ -8,6 +8,8 @@ import { getAllLeagues } from "../../functions/allCache.js"
 
 const thirtyMinutes = 30*60
 
+const oneDayInMs = 24*60*60*1000
+
 const generateMatchday = async ({interaction_id, token, application_id, dbClient, member, options}) => {
   if(!member.roles.find(role => isTopAdminRole(role))) {
     return silentResponse({interaction_id, token, content: 'This command is only available to presidents.'})
@@ -26,27 +28,32 @@ const generateMatchday = async ({interaction_id, token, application_id, dbClient
   if(!leagueObj) {
     return silentResponse({interaction_id, token, content: `Can't find League ${league}`})
   }
-  let currentTimestamp = startDateTimestamp
   await waitingMsg({interaction_id, token})
-  let processedMatchesIds = []
   const content = await dbClient(async({matches, matchDays, seasonsCollect, teams, nationalTeams, leagueConfig})=> {
     const season = await getCurrentSeason(seasonsCollect)
     const matchesOfDay = await matches.find({season, league, matchday, finished: null}).toArray()
-    shuffleArray(matchesOfDay)
-    for await (const match of matchesOfDay) {
-      await matches.updateOne({_id: match._id}, {$set: {dateTimestamp: currentTimestamp}})
-      processedMatchesIds.push(match._id.toString())
-      currentTimestamp = (parseInt(currentTimestamp) + thirtyMinutes).toString()
-      if(currentTimestamp > endDateTimestamp) {
-        currentTimestamp = startDateTimestamp
-      }
-    }
-    await Promise.allSettled(processedMatchesIds.map(id => editAMatchInternal({id, teams, nationalTeams, matches, leagueConfig})))
+    const matchGeneratedCount = await generateMatchesForMatchDay({matchesOfDay, startDateTimestamp, endDateTimestamp, teams, nationalTeams, leagueConfig, matches})
     await matchDays.updateOne({league, matchday, season}, {$set: {league, matchday, season, startDateTimestamp, endDateTimestamp, image}}, {upsert: true})
-    return `${leagueObj.name} ${matchday}: ${processedMatchesIds.length} matches set between <t:${startDateTimestamp}:F> and <t:${endDateTimestamp}:F>`
+    return `${leagueObj.name} ${matchday}: ${matchGeneratedCount} matches set between <t:${startDateTimestamp}:F> and <t:${endDateTimestamp}:F>`
   })
 
   return await updateResponse({application_id, token, content})
+}
+
+const generateMatchesForMatchDay = async({matchesOfDay, startDateTimestamp, endDateTimestamp, matches, teams, nationalTeams, leagueConfig}) =>{
+  let processedMatchesIds = []
+  let currentTimestamp = startDateTimestamp
+  shuffleArray(matchesOfDay)
+  for await (const match of matchesOfDay) {
+    await matches.updateOne({_id: match._id}, {$set: {dateTimestamp: currentTimestamp}})
+    processedMatchesIds.push(match._id.toString())
+    currentTimestamp = (parseInt(currentTimestamp) + thirtyMinutes).toString()
+    if(currentTimestamp > endDateTimestamp) {
+      currentTimestamp = startDateTimestamp
+    }
+  }
+  await Promise.allSettled(processedMatchesIds.map(id => editAMatchInternal({id, teams, nationalTeams, matches, leagueConfig})))
+  return processedMatchesIds.length
 }
 
 const randomMatchesDay = async ({interaction_id, token, application_id, member, options, dbClient}) => {
@@ -207,6 +214,78 @@ export const autoPublish = async ({dbClient}) => {
   })
 }
 
+const arrangeLeagueMatchDays = async ({interaction_id, token, application_id, dbClient, member, options}) => {
+  if(!member.roles.find(role => isTopAdminRole(role))) {
+    return silentResponse({interaction_id, token, content: 'This command is only available to presidents/engineers.'})
+  }
+  const {league, date, daysgap=7} = optionsToObject(options)
+  await waitingMsg({interaction_id, token})
+  const parsedDate = parseDate(date)
+  const startOfDay = new Date(parsedDate)
+  startOfDay.setHours(17,0,0,0)
+  const endOfDay = new Date(parsedDate)
+  endOfDay.setHours(20,30,0,0)
+  const startDate = Date.parse(startOfDay)
+  const endDate = Date.parse(endOfDay)
+  const startDateTimestamp = msToTimestamp(startDate)
+  const endDateTimestamp = msToTimestamp(endDate)
+  const season = getFastCurrentSeason()
+
+  const content = await dbClient(async ({matchDays, matches, leagues, teams, nationalTeams, leagueConfig, matchDayConfig})=> {
+    const leagueObj = await leagueConfig.findOne({value: league})
+    if(!leagueObj) {
+      return `Can't find League ${league}`
+    }
+    //const leagueTeams = await leagues.find({leagueId: league}).sort({position: 1}).toArray()
+    const matchDayMatches = await matches.aggregate([{
+      $match:{
+        league,
+        season,
+      }
+    },{
+      $group:
+        {
+          _id: "$matchday",
+          matchDayCount: {
+            $sum: 1,
+          },
+        },
+    },{
+      $match: {
+        _id: {
+          $ne: null,
+        },
+        matchDayCount: {
+          $gt: 1,
+        },
+      },
+    },{
+      $project: {
+        name: "$_id",
+        _id: 0,
+      },
+    },
+    ]).sort({name: 1}).toArray()
+    const matchDaysArray = matchDayMatches.map(matchDay=> matchDay.name)
+    console.log(matchDaysArray)
+    let totalMatchRearrangedCount = 0
+    let i = 0
+    for await (const matchDay of matchDaysArray) {
+      const dayConfig = await matchDayConfig.findOne({league, matchDay})
+      const matchesOfDay = await matches.find({season, league, matchday:matchDay, finished: null}).toArray()
+      const startMatchDayTimestamp = msToTimestamp(startDate + (oneDayInMs*daysgap * i))
+      const endMatchDayTimestamp = msToTimestamp(endDate + (oneDayInMs*daysgap * i))
+      const matchRearrangedCount = await generateMatchesForMatchDay({matchesOfDay, startDateTimestamp: startMatchDayTimestamp, endDateTimestamp: endMatchDayTimestamp, teams, nationalTeams, leagueConfig, matches})
+      console.log("matches rearranged: ", matchRearrangedCount)
+      await matchDays.updateOne({league, matchday: matchDay, season}, {$set: {league, matchday: matchDay, season, startDateTimestamp: startMatchDayTimestamp, endDateTimestamp: endMatchDayTimestamp, image: dayConfig?.image}}, {upsert: true})
+      totalMatchRearrangedCount += matchRearrangedCount
+      i++
+    }
+    return `Matches rearranged: ${totalMatchRearrangedCount}`
+  })
+  return updateResponse({application_id, token, content})
+}
+
 /*export const matchDay = async ({interaction_id, token, dbClient}) => {
   const {allTeams} = await dbClient(({teams})=> {
     return teams.find({active:true}).toArray()
@@ -267,7 +346,7 @@ export const autoPublish = async ({dbClient}) => {
 const generateMatchdayCmd = {
   type: 1,
   name: 'generatematchday',
-  description: 'Generate the fixtures for a matchday',
+  description: 'Arrange the date for a matchday',
   psaf: true,
   func: generateMatchday,
   options: [{
@@ -368,4 +447,29 @@ const publishNextMatchesCmd = {
   description: 'publish the next matchday'
 }
 
-export default [generateMatchdayCmd, publishNextMatchesCmd, updateMatchDayImageCmd, showMatchDayCmd, randomMatchdayCmd]
+const arrangeLeagueMatchDaysCmd = {
+  type: 1,
+  name: 'arrangeleaguematchdays',
+  psaf: true,
+  func: arrangeLeagueMatchDays,
+  description: 'Arrange the matchdays for a league',
+  options: [{
+    type: 3,
+    name: 'league',
+    description: 'League',
+    required: true,
+    autocomplete: true,
+  },{
+    type: 3,
+    name: 'date',
+    description: "The day you're looking for (UK timezone)",
+    required: true
+  },{
+    type: 4,
+    name: 'daysgap',
+    description: "How many days between each (default 7, one a week)",
+    min_value: 1,
+  }]
+}
+
+export default [generateMatchdayCmd, publishNextMatchesCmd, updateMatchDayImageCmd, showMatchDayCmd, randomMatchdayCmd, arrangeLeagueMatchDaysCmd]

@@ -135,11 +135,12 @@ export const progressCurrentSeasonPhase = async ({interaction_id, token, guild_i
       seasonObj.phase = seasonPhases[index+1].name
     }
     const untilPhase = seasonPhases.findIndex(({name})=> name === seasonObj.phase).toString()
-    console.log(seasonObj)
     const {phase, season} = seasonObj
+    console.log(untilPhase, season)
     const loanSearchObj = {endedAt: null, isLoan: true, phase: untilPhase, until: season}
     console.log(loanSearchObj)
     const loansSearch = await contracts.find(loanSearchObj).toArray()
+    console.log('Loans to end:')
     console.log(loansSearch.map(loan=> loan.playerId))
     const initialContracts = await contracts.find({endedAt: null, playerId: {$in: loansSearch.map(loan=> loan.playerId)}}).toArray()
     console.log(initialContracts)

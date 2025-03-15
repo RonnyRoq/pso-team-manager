@@ -4,9 +4,10 @@ import { addPlayerPrefix, removePlayerPrefix, getCurrentSeason, getPlayerNick, o
 import { innerRemoveConfirmation, innerRemoveRelease } from "./confirm.js"
 import { getFastCurrentSeason, seasonPhases } from "./season.js"
 import { getAllPlayers } from "../functions/playersCache.js"
+import { serverRoles } from "../config/psafServerConfig.js"
+import { SEVEN_DAYS_MS } from "../config/constants.js"
 
 const logWebhook = process.env.WEBHOOK
-const clubPlayerRole = '1072620805600592062'
 
 const innerTransferAction = async ({teams, contracts, seasonsCollect, players, guild_id, playerId, team, seasons, desc, callerId, amount=0, pendingLoan, transferHistory}) => {
   const [dbTeam, playerResp] = await Promise.all([
@@ -26,7 +27,7 @@ const innerTransferAction = async ({teams, contracts, seasonsCollect, players, g
   const updatedPlayerName = addPlayerPrefix(dbTeam.shortName, displayName)
   const payload = {
     nick: updatedPlayerName.substring(0, 31),
-    roles: [...new Set([...playerTransfer.roles.filter(role => !(role === clubPlayerRole || role === teamFrom?.id)), team, clubPlayerRole])]
+    roles: [...new Set([...playerTransfer.roles.filter(role => !(role === serverRoles.clubPlayerRole || role === teamFrom?.id)), team, serverRoles.clubPlayerRole])]
   }
   const loanDetails = pendingLoan ? {phase: pendingLoan.phase, until: pendingLoan.until, originalTeam: teamFrom?.id} : {}
   await Promise.all([
@@ -92,7 +93,7 @@ export const transferAction = async ({interaction_id, token, application_id, mes
   return updateResponse({application_id, token, content})
 }
 
-export const transfer = async ({options, guild_id, application_id, interaction_id, token, dbClient, callerId}) => {
+const transfer = async ({options, guild_id, application_id, interaction_id, token, dbClient, callerId}) => {
   await waitingMsg({interaction_id, token})
   const {player: playerId, team, seasons, desc} = Object.fromEntries(options.map(({name, value})=> [name, value]))
   const content = await dbClient(async ({teams, contracts, players, seasonsCollect, transferHistory})=> (
@@ -107,7 +108,7 @@ export const transfer = async ({options, guild_id, application_id, interaction_i
   return updateResponse({application_id, token, content})
 }
 
-export const teamTransfer = async ({options, guild_id, interaction_id, token, dbClient, callerId, application_id}) => {
+const teamTransfer = async ({options, guild_id, interaction_id, token, dbClient, callerId, application_id}) => {
   await waitingMsg({interaction_id, token})
   const {player:playerId, team, amount, seasons, desc} = optionsToObject(options)
   const content = await dbClient(async ({teams, contracts, players, seasonsCollect, transferHistory})=> (
@@ -128,8 +129,7 @@ export const teamTransfer = async ({options, guild_id, interaction_id, token, db
   })
 }
 
-const SEVENDAYSMS = 604800000
-export const renew = async ({dbClient, member, callerId, options, res}) => {
+const renew = async ({dbClient, member, callerId, options, res}) => {
   const {seasons} = optionsToObject(options)
   const name = getPlayerNick(member)
   return await dbClient(async({contracts, seasonsCollect, players, teams})=>{
@@ -148,7 +148,7 @@ export const renew = async ({dbClient, member, callerId, options, res}) => {
       })
     }
     const lastContractUpdate = currentContract?.updatedAt || currentContract?.at || currentSeasonObj.startedAt
-    if(lastContractUpdate+SEVENDAYSMS > Date.now() && currentContract.until > (currentSeasonObj.season + 1)) {
+    if(lastContractUpdate+SEVEN_DAYS_MS > Date.now() && currentContract.until > (currentSeasonObj.season + 1)) {
       return res.send({
         type : InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
@@ -183,7 +183,7 @@ export const renew = async ({dbClient, member, callerId, options, res}) => {
   })
 }
 
-export const setContract = async ({dbClient, guild_id, options, res, callerId}) => {
+const setContract = async ({dbClient, guild_id, options, res, callerId}) => {
   const {player, seasons} = optionsToObject(options)
   const playerResp = await DiscordRequest(`/guilds/${guild_id}/members/${player}`, {})
   const discPlayer = await playerResp.json()
@@ -245,7 +245,7 @@ export const releaseAction = async ({interaction_id, token, application_id, guil
         let updatedPlayerName = removePlayerPrefix(dbTeam.shortName, playerName)
         const payload= {
           nick: updatedPlayerName,
-          roles: discPlayer.roles.filter(playerRole=> ![team, clubPlayerRole].includes(playerRole))
+          roles: discPlayer.roles.filter(playerRole=> ![team, serverRoles.clubPlayerRole].includes(playerRole))
         }
         await DiscordRequest(`guilds/${guild_id}/members/${playerId}`, {
           method: 'PATCH',
@@ -291,7 +291,7 @@ export const releaseTeamPlayers = async ({team, guild_id, callerId, dbClient}) =
       let updatedPlayerName = removePlayerPrefix(dbTeam.shortName, playerName)
       const payload= {
         nick: updatedPlayerName,
-        roles: discPlayer.roles.filter(playerRole=> ![team, clubPlayerRole].includes(playerRole))
+        roles: discPlayer.roles.filter(playerRole=> ![team, serverRoles.clubPlayerRole].includes(playerRole))
       }
       return {
         id: discPlayer.user.id,
@@ -315,7 +315,7 @@ export const releaseTeamPlayers = async ({team, guild_id, callerId, dbClient}) =
   })
 }
 
-export const freePlayer = async ({interaction_id, token, guild_id, callerId, options, dbClient}) => {
+const freePlayer = async ({interaction_id, token, guild_id, callerId, options, dbClient}) => {
   const {player, team} = optionsToObject(options)
   const content = await dbClient(async ({teams, contracts})=>{
     const [dbTeam, playerResp] = await Promise.all([
@@ -332,7 +332,7 @@ export const freePlayer = async ({interaction_id, token, guild_id, callerId, opt
     let updatedPlayerName = removePlayerPrefix(dbTeam.shortName, playerName)
     const payload= {
       nick: updatedPlayerName,
-      roles: discPlayer.roles.filter(playerRole=> ![team, clubPlayerRole].includes(playerRole))
+      roles: discPlayer.roles.filter(playerRole=> ![team, serverRoles.clubPlayerRole].includes(playerRole))
     }
     await DiscordRequest(`guilds/${guild_id}/members/${player}`, {
       method: 'PATCH',
@@ -358,7 +358,7 @@ export const endLoan = async ({callerId, guild_id, player, playerId, teamToRetur
   if(player) {
     const payload = {
       nick: updatedPlayerName,
-      roles: [...new Set([...player.roles.filter(role => !(role ===clubPlayerRole || role === endLoanTeam?.id)), teamToReturn?.id, clubPlayerRole])]
+      roles: [...new Set([...player.roles.filter(role => !(role ===serverRoles.clubPlayerRole || role === endLoanTeam?.id)), teamToReturn?.id, serverRoles.clubPlayerRole])]
     }
     playerUpdatePromise = DiscordRequest(`guilds/${guild_id}/members/${playerId}`, {
       method: 'PATCH',
@@ -431,10 +431,12 @@ export const getTransfers = async ({getParams, dbClient}) => {
   return dbClient(({transferHistory})=>(transferHistory.find(query, {limit, skip, sort: {at: -1}}).toArray()))
 }
 
-export const transferCmd = {
+const transferCmd = {
   name: 'transfer',
   description: 'Transfer a free agent to a team',
   type: 1,
+  psaf: true,
+  func: transfer,
   options: [{
     type: 6,
     name: 'player',
@@ -459,10 +461,12 @@ export const transferCmd = {
   }]
 }
 
-export const teamTransferCmd = {
+const teamTransferCmd = {
   name: 'teamtransfer',
   description: 'Transfer a player from his team to another',
   type: 1,
+  psaf: true,
+  func: teamTransfer,
   options: [{
     type: 6,
     name: 'player',
@@ -493,10 +497,12 @@ export const teamTransferCmd = {
   }]
 }
 
-export const renewCmd = {
+const renewCmd = {
   name: 'renew',
   description: 'Renew a contract for your team. Once every 7 days.',
   type: 1,
+  psaf: true,
+  func: renew,
   options: [{
     type: 4,
     name: 'seasons',
@@ -506,10 +512,12 @@ export const renewCmd = {
     required: true
   }]
 }
-export const setContractCmd = {
+const setContractCmd = {
   name: 'setcontract',
   description: 'Set a player\'s contract',
   type: 1,
+  psaf: true,
+  func: setContract,
   options: [{
     type: 6,
     name: 'player',
@@ -524,3 +532,24 @@ export const setContractCmd = {
     required: true
   }]
 }
+
+const freePlayerCmd = {
+  name: 'freeplayer',
+  description: 'Release a player from a team',
+  type: 1,
+  psaf: true,
+  func: freePlayer,
+  options: [{
+    type: 6,
+    name: 'player',
+    description: 'Player',
+    required: true
+  },{
+    type: 8,
+    name: 'team',
+    description: 'Team',
+    required: true
+  }]
+}
+
+export default [transferCmd, teamTransferCmd, setContractCmd, renewCmd, freePlayerCmd]

@@ -195,6 +195,14 @@ export const waitingMsg = async ({interaction_id, token}) =>
     }
   })
 
+export const postWaiting = async({interaction_id, token}) => 
+  await DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
+    method: 'POST',
+    body: {
+      type : InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
+    }
+  })
+
 export const quickResponse = async ({interaction_id, token, content, isEphemeral}) =>
   DiscordRequest(`/interactions/${interaction_id}/${token}/callback`, {
     method: 'POST',
@@ -226,25 +234,37 @@ export const updateResponse = async ({application_id, token, content, embeds, co
   }
 }
 
-export const followUpResponse = async ({application_id, token, content, embeds, components}) => 
-  DiscordRequest(`/webhooks/${application_id}/${token}`, {
-    method: 'POST',
-    body: {
-      content,
-      embeds,
-      components,
-      flags: InteractionResponseFlags.EPHEMERAL
-    }
-  })
-export const publicFollowUpResponse = async ({application_id, token, content, embeds, components}) => 
-  DiscordRequest(`/webhooks/${application_id}/${token}`, {
-    method: 'POST',
-    body: {
-      content,
-      embeds,
-      components,
-    }
-  })
+export const followUpResponse = async ({application_id, token, content, embeds, components}) => {
+  try{
+    const resp = await DiscordRequest(`/webhooks/${application_id}/${token}`, {
+      method: 'POST',
+      body: {
+        content,
+        embeds,
+        components,
+        flags: InteractionResponseFlags.EPHEMERAL
+      }
+    })
+    return resp
+  } catch (e) {
+    logSystemError(JSON.stringify(e))
+  }
+}
+export const publicFollowUpResponse = async ({application_id, token, content, embeds, components}) => {
+  try{
+    const resp = await DiscordRequest(`/webhooks/${application_id}/${token}`, {
+      method: 'POST',
+      body: {
+        content,
+        embeds,
+        components,
+      }
+    })
+    return resp
+  } catch (e) {
+    logSystemError(JSON.stringify(e))
+  }
+}
 
 export const postMessage = async({channel_id, content='', components = [], attachments = [], embeds = []}) => {
   const messages = []
@@ -274,7 +294,7 @@ export const postMessage = async({channel_id, content='', components = [], attac
       break
     }
   }
-  return DiscordRequest(`channels/${channel_id}/messages`, 
+  return await DiscordRequest(`channels/${channel_id}/messages`, 
   {
     method: 'POST',
     body: {

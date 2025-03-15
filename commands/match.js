@@ -1,6 +1,6 @@
 import { ObjectId, ReturnDocument } from "mongodb";
 import { elimMatchDaysSorted, matchDays, serverChannels, serverRoles } from "../config/psafServerConfig.js";
-import { deleteMessage, followUpResponse, getCurrentSeason, getFlags, getPlayerNick, handleSubCommands, isTopAdminRole, msToTimestamp, optionsToObject, postMessage, publicFollowUpResponse, quickResponse, silentResponse, updatePost, updateResponse, waitingMsg } from "../functions/helpers.js";
+import { deleteMessage, followUpResponse, getCurrentSeason, getFlags, getPlayerNick, handleSubCommands, isTopAdminRole, msToTimestamp, optionsToObject, postMessage, postWaiting, publicFollowUpResponse, quickResponse, silentResponse, updatePost, updateResponse, waitingMsg } from "../functions/helpers.js";
 import { DiscordRequest } from "../utils.js";
 import { sleep } from "../functions/helpers.js";
 import { parseDate } from "./timestamp.js";
@@ -341,9 +341,14 @@ export const editAMatch = async ({application_id, token, options, callerId, dbCl
   const optionsObj = optionsToObject(options)
   await postMessage({channel_id: serverChannels.botActivityLogsChannelId, content: `<@${callerId}> edited match ${optionsObj.id} : ${JSON.stringify(optionsObj)}`})
   const response = await dbClient(async ({teams, matches, nationalTeams, leagueConfig}) => {
-    return await editAMatchInternal({...optionsObj, teams, matches, nationalTeams, leagueConfig})
+    return editAMatchInternal({...optionsObj, teams, matches, nationalTeams, leagueConfig})
   })
   return updateResponse({application_id, token, content: `Updated \r`+response})
+}
+
+export const moveMatch = async ({interaction_id, application_id, token, options, callerId, dbClient}) => {
+  await waitingMsg({interaction_id, token})
+  return editMatch({application_id, token, options, callerId, dbClient})
 }
 
 // keeping space for divergences down the line. If v11 force a copy paste, get rid of the duplicates
@@ -517,9 +522,8 @@ export const internalEndMatchStats = async ({id, matchDetails, guild_id, callerI
   })
 }
 
-export const resetMatch = async ({interaction_id, token, application_id, options, dbClient}) => {
+export const resetMatch = async ({token, application_id, options, dbClient}) => {
   const {id} = optionsToObject(options)
-  await waitingMsg({interaction_id, token})
 
   const matchId = new ObjectId(id)
   const content = await dbClient(async ({teams, matches, nationalTeams, leagueConfig}) => {
@@ -697,18 +701,40 @@ export const getMatchesSummary = async({dbClient}) => {
   return messages
 }
 
-export const getRefStatsLeaderboard = async ({dbClient}) => {
+const postRefStats = async ({options, channel_id, interaction_id, token, dbClient}) => {
+  const {season} = optionsToObject(options)
+  const content = await getRefStatsPost({season, dbClient})
+  await silentResponse({interaction_id, token, content:'Posting...'})
+  return postMessage({channel_id, content})
+}
+
+export const updateCurrentRefStatsPost = async ({dbClient}) => {
+  const {content, msgRefStats} = await getRefStatsPost({dbClient})
+  if(msgRefStats) {
+    await updatePost({channel_id: serverChannels.seasonStats, messageId: msgRefStats, content})
+  }
+}
+
+export const getRefStatsPost = async ({season, dbClient}) => {
+  const {refs, msgRefStats, seasonReturned} = await getRefStatsLeaderboard({season, dbClient})
+  return {content: `## Season ${seasonReturned}\rMatch result stats:\r`+refs.map(ref=> `<@${ref._id}>: ${ref.finishedCount}`).join('\r'), msgRefStats}
+}
+
+export const getRefStatsLeaderboard = async ({season, dbClient}) => {
   /*const parsedDate = parseDate('Today')
   const startOfDay = new Date(parsedDate)
   const endParsedDate = parseDate('7 days ago')
   const endOfDay = new Date(endParsedDate)
   const startDateTimestamp = msToTimestamp(Date.parse(startOfDay))
   const endDateTimestamp = msToTimestamp(Date.parse(endOfDay))*/
-  return dbClient(async ({matches}) => {
+  return dbClient(async ({matches, seasonsCollect}) => {
+    let seasonToFind = season || getFastCurrentSeason()
+    let selectedSeason = await seasonsCollect.findOne({season: seasonToFind})
+
     const refs = await matches.aggregate([
       {
         $match: {
-          season: getFastCurrentSeason(),
+          season: seasonToFind,
           finished: true, 
           finishedBy: {
             '$ne': null
@@ -728,8 +754,7 @@ export const getRefStatsLeaderboard = async ({dbClient}) => {
         }
       }
     ]).toArray()
-    console.log(refs)
-    return refs
+    return {refs, msgRefStats: selectedSeason?.msgRefStats, seasonReturned: seasonToFind}
   })
 }
 
@@ -778,7 +803,6 @@ export const getMatchesOfDay = async ({date='today', finished=false, dbClient, f
       const headerLine = {content: `${matchesOfDay.length} match${matchesOfDay.length >1?'es':''} on <t:${startDateTimestamp}:d>.`}
       let response = [{matchToPush: headerLine, streamerMatch: headerLine}]
       for (const match of matchesOfDay) {
-        console.log(match)
         const [homeTeam, awayTeam] = getMatchTeamsSync(match.home, match.away, match.isInternational, allNationalTeams, allTeams)
         const channels = []
         if(homeTeam.channel){
@@ -1031,42 +1055,34 @@ export const pastMatches = async ({interaction_id, token, application_id, dbClie
 export const matches = async ({interaction_id, token, application_id, options=[], dbClient}) => {
   const {date = "today", post} = optionsToObject(options)
   const response = await getMatchesOfDay({date, dbClient})
-  if(response.length>0) {
+  /*if(response.length===0) {
     await quickResponse({interaction_id, token, content: response[0].content, isEphemeral: !post})
+  }*/
+  if(post) {
+    await postWaiting({interaction_id, token})
+  } else {
+    await waitingMsg({interaction_id, token})
   }
-  await response.forEach(async ({content, matchId}, index) => {
+  let index = 0
+  for await (const matchContent of response) {
+    const {matchToPush} = matchContent
+    const {content, components} = matchToPush
+    console.log(content, components)
     if(index>0) {
-      const components = [{
-        type: 1,
-        components: [{
-          type: 2,
-          label: `Referee`,
-          style: 1,
-          custom_id: `referee_${matchId}`
-        }, {
-          type: 2,
-          label: `Enter Result`,
-          style: 1,
-          custom_id: `match_result_${matchId}`
-        }, {
-          type: 2,
-          label: `Enter stats`,
-          style: 3,
-          custom_id: `match_stats_${matchId}`
-        }, {
-          type: 2,
-          label: `Streamer`,
-          style: 1,
-          custom_id: `streamer_${match._id}`
-        }]
-      }]
       if(post) {
         await publicFollowUpResponse({application_id, token, content, components })
       } else {
         await followUpResponse({application_id, token, content, components})
       }
+    } else {
+      if(post) {
+        await publicFollowUpResponse({application_id, token, content, components })
+      } else {
+        await updateResponse({application_id, token, content, components})
+      }
     }
-  });
+    index++
+  }
 }
 
 const matchCmd = {
@@ -1135,6 +1151,7 @@ const selectionMatchSubCommands = {
 const clubMatchSubCommands = {
   'create': match,
   'edit': editMatch,
+  'reset': resetMatch,
 }
 
 const selectionMatch = async (commandOptions) => 
@@ -1290,7 +1307,7 @@ const moveTheMatchCmd = {
   description: 'Update a match date',
   type: 1,
   psaf: true,
-  func: editMatch,
+  func: moveMatch,
   options: [
     {
       type: 3,
@@ -1420,9 +1437,25 @@ const pastMatchesCmd = {
   type: 1
 }
 
+const postRefStatsCmd = {
+  name: 'postrefstats',
+  description: 'Post the referee stats',
+  type: 1,
+  psaf: true,
+  func: postRefStats,
+  options: [{
+    type: 4,
+    name: 'season',
+    description: "The season to post the stats for",
+    required: true,
+    min_value: 1,
+    max_value: 20
+  }]
+}
+
 export default [
   clubMatchCmd, selectionMatchCmd,
   moveTheMatchCmd,
   matchesCmd, pastMatchesCmd, matchIdCmd,
-  publishMatchCmd, unPublishMatchCmd
+  publishMatchCmd, unPublishMatchCmd, postRefStatsCmd
 ]

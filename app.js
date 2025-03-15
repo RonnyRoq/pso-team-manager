@@ -15,13 +15,12 @@ import mongoClient from './functions/mongoClient.js';
 import { now } from './commands/now.js';
 import { timestamp } from './commands/timestamp.js';
 import { help, helpAdmin } from './commands/help.js';
-import { actionConfirmMigrate, allPlayers, autoCompleteNation, player, players } from './commands/player.js';
-import { blacklistTeam, doubleContracts, emoji, expireThings, fixNames, initCountries, managerContracts, systemTeam } from './commands/system.js';
+import { actionConfirmMigrate, allPlayers, autoCompleteNation, player } from './commands/player.js';
+import { blacklistTeam, expireThings, fixNames, initCountries, managerContracts, systemTeam } from './commands/system.js';
 import { addSelection, autoCompleteSelections, removeSelection } from './commands/nationalTeam.js';
-import { confirm, pendingConfirmations, releasePlayer } from './commands/confirm.js';
 import { approveDealAction, approveLoanAction, declineDealAction, declineLoanAction, finishLoanRequest, removeConfirmation, removeDeal, removeLoan, removeRelease } from './commands/confirmations/actions.js';
 import commandsRegister from './commandsRegister.js';
-import { freePlayer, releaseAction, renew, setContract, teamTransfer, transfer, transferAction } from './commands/transfers.js';
+import { releaseAction, transferAction } from './commands/transfers.js';
 import { postAllTeams, postTeam, updateTeamPost } from './commands/postTeam.js';
 import { sleep } from './functions/helpers.js';
 import { deal, loan } from './commands/confirmations/deal.js';
@@ -331,24 +330,8 @@ function start() {
             return removeSelection(commandOptions)
           }
 
-          if(name === "confirm") {
-            return confirm(commandOptions)
-          }
-
-          if(name === "updateconfirm") {
-            return pendingConfirmations(commandOptions)
-          }
-
-          if(name === "renew") {
-            return renew(commandOptions)
-          }
-
           if(name === "postteam") {
             return postTeam(commandOptions)
-          }
-
-          if(name === "setcontract") {
-            return setContract(commandOptions)
           }
 
           if(name === "blacklistteam") {
@@ -419,24 +402,8 @@ function start() {
             return 
           }
 
-          if (name === "transfer") {
-            return transfer(commandOptions)
-          }
-
-          if(name === "teamtransfer") {
-            return teamTransfer(commandOptions)
-          }
-
-          if(name === "freeplayer") {
-            return freePlayer(commandOptions)
-          }
-
           if(name === "deal") {
             return deal(commandOptions)
-          }
-
-          if(name === "releaseplayer") {
-            return releasePlayer(commandOptions)
           }
 
           if (name === "fine") {
@@ -594,18 +561,6 @@ function start() {
 
           if(name === "initcountries") {
             return initCountries(commandOptions)
-          }
-
-          if (name === "players") {
-            return players(commandOptions)
-          }
-
-          if(name === "doublecontracts") {
-            return doubleContracts(commandOptions)
-          }
-
-          if(name === 'emoji') {
-            return emoji(commandOptions)
           }
 
           if(name === 'testdmmatch') {

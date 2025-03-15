@@ -1,4 +1,5 @@
 import player from "./commands/player.js"
+import confirm from "./commands/confirm.js"
 import editLeague from "./commands/league/editLeague.js"
 import getTeam from "./commands/teams/getTeam.js"
 import nationalTeam from "./commands/nationalTeam.js"
@@ -21,12 +22,15 @@ import contracts from "./commands/contracts.js"
 import team from "./commands/team.js"
 import search from "./commands/search/search.js"
 import register from "./commands/register.js"
+import transfers from "./commands/transfers.js"
 
 export default function() {
   return [
     ...player,
+    ...confirm,
     ...editLeague,
     ...getTeam,
+    ...transfers,
     ...nationalTeam,
     ...nationalTeamManagement,
     ...system,

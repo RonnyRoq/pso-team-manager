@@ -38,6 +38,7 @@ const mongoClient = (client) => {
         searchPlayers: psoDb.collection("searchPlayers"),
         searchTeams: psoDb.collection("searchTeams"),
         searchNationalSelections: psoDb.collection("searchNationalSelections"),
+        matchDayConfig: psoDb.collection("MatchDayConfig"),
       }
       return await callback(collections)
     }

@@ -39,6 +39,8 @@ export const getApi = (localdev=false, dbClient={}) =>{
       let api_key = req.header("x-api-key")
       if(process.env.PSAF_API_KEY === api_key) {
         next()
+      } else if(process.env.BRYLOS_API_KEY === api_key) {
+        next()
       } else if(req.header('sec-fetch-mode') === 'cors' && req.header('sec-fetch-site') === 'same-origin' ) {
         next()
       } else {

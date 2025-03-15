@@ -3,11 +3,8 @@ import { InstallGlobalCommands, InstallGuildCommands } from './utils.js';
 import { nowCmd } from './commands/now.js';
 import { timestampCmd } from './commands/timestamp.js';
 import { helpCmd } from './commands/help.js';
-import { blacklistTeamCmd, emojiCmd, expireThingsCmd, fixNamesCmd, managerContractsCmd, systemTeamCmd } from './commands/system.js';
-import { playerCmd } from './commands/player.js';
-import { confirmCmd, releaseCmd, updateConfirmCmd } from './commands/confirm.js';
+import { blacklistTeamCmd, expireThingsCmd, fixNamesCmd, managerContractsCmd, systemTeamCmd } from './commands/system.js';
 import { dealCmd, loanCmd } from './commands/confirmations/deal.js';
-import { renewCmd, setContractCmd, teamTransferCmd, transferCmd } from './commands/transfers.js';
 import { postAllTeamsCmd, postTeamCmd, updateTeamPostCmd } from './commands/postTeam.js';
 import { showBlacklistCmd } from './commands/blacklist.js';
 import { expireContractsCmd, showExpiringContractsCmd, showNoContractsCmd } from './commands/contracts.js';
@@ -43,23 +40,6 @@ const mapToCmd = (map) => {
     psafCommands,
     wcCommands
   }
-}
-
-const FREEPLAYER = {
-  name: 'freeplayer',
-  description: 'Release a player from a team',
-  type: 1,
-  options: [{
-    type: 6,
-    name: 'player',
-    description: 'Player',
-    required: true
-  },{
-    type: 8,
-    name: 'team',
-    description: 'Team',
-    required: true
-  }]
 }
 
 const FINE =  {
@@ -115,13 +95,12 @@ export const emojisCmd = {
 const ALL_COMMANDS = [nowCmd, timestampCmd, helpCmd];
 
 const GUILD_COMMANDS = [
-  playerCmd,
-  confirmCmd, updateConfirmCmd, renewCmd, dealCmd, loanCmd, releaseCmd, 
-  transferCmd, teamTransferCmd, FREEPLAYER, FINE, BONUS, addUniqueIdCmd,
-  emojiCmd, showBlacklistCmd, showNoContractsCmd,
+  dealCmd, loanCmd, 
+  FINE, BONUS, addUniqueIdCmd,
+  showBlacklistCmd, showNoContractsCmd,
   disbandTeamCmd, expireContractsCmd, addSteamIdCmd, setRatingCmd, setNameCmd,
   getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd, testDMMatchCmd, moveMatchCmd, listMovesCmd,
-  systemTeamCmd, postTeamCmd, postAllTeamsCmd, setContractCmd, updateTeamPostCmd, blacklistTeamCmd, showExpiringContractsCmd, expireThingsCmd,
+  systemTeamCmd, postTeamCmd, postAllTeamsCmd, updateTeamPostCmd, blacklistTeamCmd, showExpiringContractsCmd, expireThingsCmd,
   manualDoubleSteamCmd, arrangeDayScheduleCmd, managerContractsCmd, fixNamesCmd,
 ]
 
@@ -129,10 +108,10 @@ const {globalCommands, psafCommands, wcCommands} = mapToCmd(commandsRegister())
 
 const WC_GUILD_COMMANDS = []
 const allCommands = [...ALL_COMMANDS, ...globalCommands]
-console.log(Object.fromEntries(allCommands.map((cmd,index) => [index, cmd.name])))
+console.log(Object.fromEntries(allCommands.map((cmd,index) => [index, `${cmd.name}${cmd.options ? ' - '+cmd.options.map(opt => opt.name).join(' ') : ''}`])))
 InstallGlobalCommands(process.env.APP_ID, allCommands);
 const guildCommands = [...GUILD_COMMANDS, ...psafCommands]
-console.log(Object.fromEntries(guildCommands.map((cmd,index) => [index, cmd.name])))
+console.log(Object.fromEntries(guildCommands.map((cmd,index) => [index, `${cmd.name}${cmd.options ? ' - '+cmd.options.map(opt => opt.name).join(' ') : ''}`])))
 InstallGuildCommands(process.env.APP_ID, process.env.GUILD_ID, guildCommands)
 const wcGuildCommands = [...WC_GUILD_COMMANDS, ...wcCommands]
 InstallGuildCommands(process.env.APP_ID, process.env.WC_GUILD_ID, wcGuildCommands)

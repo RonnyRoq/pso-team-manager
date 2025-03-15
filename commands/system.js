@@ -299,7 +299,9 @@ export const checkForPSO = async ({dbClient, playerIdsToPSOCheck=[]}) => {
     await mongoCache.updateOne({name: 'unregisteredPlayers'}, {$set: {ids: remainingIdsToCheck}}, {upsert: true})
     return remainingIdsToCheck
   })
-  await postMessage({channel_id:serverChannels.botTestingChannelId, content: `Tested ${PSOBATCHSIZE} players, following not passing validation:\r${unverifiedPlayers.map(player=> `<@${player.id}>: ${JSON.stringify(player)}`).join('\r')}\r${remainingIdsToCheck?.length} players to check in list`})
+  if(unverifiedPlayers.length > 0 && remainingIdsToCheck?.length > 0) {
+    await postMessage({channel_id:serverChannels.botTestingChannelId, content: `Tested ${PSOBATCHSIZE} players, following not passing validation:\r${unverifiedPlayers.map(player=> `<@${player.id}>: ${JSON.stringify(player)}`).join('\r')}\r${remainingIdsToCheck?.length} players to check in list`})
+  }
   return remainingIdsToCheck
 }
 
@@ -380,7 +382,7 @@ export const blacklistTeam = async ({interaction_id, application_id, token, guil
   })
 }
 
-export const emoji = async({interaction_id, token, guild_id, options}) => {
+const emoji = async({interaction_id, token, guild_id, options}) => {
   const {emoji} = optionsToObject(options)
   const emojisResp = await DiscordRequest(`/guilds/${guild_id}/emojis`, { method: 'GET' })
   const emojis = await emojisResp.json()
@@ -746,12 +748,6 @@ export const systemTeamCmd = {
   }]
 }
 
-export const doubleContractsCmd = {
-  name: 'doublecontracts',
-  description: 'Show players having more than 1 active contract',
-  type: 1
-}
-
 export const updateLeaguesCmd = {
   name: 'updateleagues',
   description: 'system',
@@ -772,10 +768,12 @@ export const blacklistTeamCmd = {
   }]
 }
 
-export const emojiCmd = {
+const emojiCmd = {
   name: 'emoji',
   description: 'Find details for one emoji',
   type: 1,
+  psaf:true,
+  func: emoji,
   options: [{
     type: 3,
     name: 'emoji',
@@ -806,13 +804,13 @@ const subCommands = {
   'updateregister': updateRegister,
   'validatesteamid' : validateSteamId,
   'initcountries': initCountries,
+  'doublecontracts': doubleContracts,
 }
 
 const systemCmd = {
   name: 'system',
   description: 'System',
   psaf: true,
-  wc: true,
   func: system,
   options: [{
     type: 1,
@@ -831,6 +829,10 @@ const systemCmd = {
     type: 1,
     name: 'initcountries',
     description: 'Update the countries list in DB'
+  },{
+    name: 'doublecontracts',
+    description: 'Show players having more than 1 active contract',
+    type: 1
   }]
 }
 
@@ -874,4 +876,4 @@ const runCronJobCmd = {
   }]
 }
 
-export default [systemCmd, updateLeaguesCmd, manualSteamVerificationCmd, transferMarketCmd, runCronJobCmd]
+export default [systemCmd, updateLeaguesCmd, manualSteamVerificationCmd, transferMarketCmd, runCronJobCmd, emojiCmd]

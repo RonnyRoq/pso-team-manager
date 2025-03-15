@@ -492,7 +492,6 @@ export const addSelectionCmd = {
   type: 1,
   func: addSelection,
   psaf: true,
-  wc: true,
   options: [{
     type: 6,
     name: 'player',
@@ -531,7 +530,6 @@ export const selectionCmd = {
   name: 'selection',
   description: 'Handle national selections',
   psaf: true,
-  wc: true,
   func: selection,
   options: [{
     type: 1,
