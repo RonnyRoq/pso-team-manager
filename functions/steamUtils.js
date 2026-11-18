@@ -24,6 +24,7 @@ export const getSteamIdFromSteamUrl = async (steamUrl) => {
     const [,vanityurl] = cleanedUrl.match(/steamcommunity.com\/id\/(.+)\//)
     const vanityResp = await SteamRequest(SteamRequestTypes.VanityUrl, {vanityurl})
     const vanityProfile = await vanityResp.json()
+    console.log('Vanity URL response:')
     console.log(vanityProfile)
     if(vanityProfile?.response?.steamid) {
       steamid = vanityProfile.response.steamid

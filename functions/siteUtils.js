@@ -15,7 +15,7 @@ export const hasSession = (req) => req?.session?.userId
 export const authUser = async (req, res, next) => {
   if(req.query.code) {
     console.log('code', req.query.code)
-    console.log(req.session)
+    //console.log(req.session)
     const authResp = await oauth.tokenRequest({
       clientId: process.env.APP_ID,
       code: req.query.code,
@@ -74,6 +74,7 @@ export const isMemberAdmin = (guildMember) => {
 
 export const isStaff = async (req) => {
   if(!req?.session?.access_token) {
+    console.log('isStaff')
     console.log(req?.session?.access_token)
     return false
   }

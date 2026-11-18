@@ -14,18 +14,6 @@ export const timestampToMs = (timestamp) => {
   return Number(timestamp) * 1000
   
 }
-
-export const optionToTimezoneStr = (option = 0) => {
-  switch (option) {
-    case 1:
-      return "CET";
-    case 2:
-      return "EEST";
-    default:
-      return "GMT";
-  }
-}
-
 export const getPlayerNick = (player) => 
   player?.nick || player?.user?.global_name || player?.user?.username || 'NO NAME'
 
@@ -146,10 +134,7 @@ export const isLineupChannel = (guild_id, channel_id) =>
 
 export const getRegisteredRole = (guild_id) => {
   if(guild_id === process.env.GUILD_ID) {
-    return serverRoles.registeredRole
-  }
-  if(guild_id === process.env.WC_GUILD_ID) {
-    return serverRoles.wcRegisteredRole
+    return serverRoles.steamVerified
   }
   throw new Error('Server unsupported')
 }
@@ -158,18 +143,12 @@ export const getNationalCaptainRole = (guild_id) => {
   if(guild_id === process.env.GUILD_ID) {
     return serverRoles.nationalTeamCaptainRole
   }
-  if(guild_id === process.env.WC_GUILD_ID) {
-    return serverRoles.wcNationalCoachRole
-  }
   throw new Error('Server unsupported')
 }
 
 export const getNationalSelectionChannel = (guild_id) => {
   if(guild_id === process.env.GUILD_ID) {
     return serverChannels.nationalSelectionsChannelId
-  }
-  if(guild_id === process.env.WC_GUILD_ID) {
-    return serverChannels.wcNationalSelectionsChannelId
   }
   throw new Error('Server unsupported')
 }

@@ -47,7 +47,9 @@ const register = async ({member, callerId, interaction_id, guild_id, application
       let steamUrl = dbPlayer?.steam || ""
       if(!steamUrl || !(steamUrl.includes("steamcommunity.com/profiles/") || steamUrl.includes("steamcommunity.com/id/"))) {
         console.log(`New user ( ${steamUrl} - ${steam} ), using the steam profile entered with the command`)
-        steamUrl = steam.endsWith('/') ? steam : `${steam}/`
+        const steamlessSuffix = steam.endsWith('edit/info') ? steam.substring(0, steam.length - 'edit/info'.length) : steam
+        steamUrl = steamlessSuffix.endsWith('/') ? steamlessSuffix : `${steamlessSuffix}/`
+        console.log(`Using steam profile: ${steamUrl}`)
       } else {
         console.log("Keeping the steam ID already registered")
       }

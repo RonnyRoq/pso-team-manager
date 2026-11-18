@@ -114,9 +114,10 @@ export const allLeagues = [
     "channel": "1156513002552573953",
     "defaultImage": null,
     "isInternational": false,
-    "active": true,
+    "active": false,
     "players": 6,
-    "order": 19
+    "order": 19,
+    "currentMatchDay": "Day 5"
   },
   {
     "_id": "667a746e951c2249cdbc9425",
@@ -193,7 +194,7 @@ export const allLeagues = [
     "channel": null,
     "defaultImage": null,
     "isInternational": true,
-    "active": true,
+    "active": false,
     "players": 6,
     "order": 5,
     "currentMatchDay": "Day 1"
@@ -248,11 +249,11 @@ export const allLeagues = [
     "value": "1177013563974500513",
     "emoji": ":___EL1:1230281191307874375",
     "pingRole": "1177014748856991755",
-    "standingsMsg": "1279542871271407657",
+    "standingsMsg": "1344427872357716110",
     "channel": null,
     "defaultImage": "https://cdn.discordapp.com/attachments/1229588014032879656/1234582939166183535/E1stuff_12.png",
     "isInternational": false,
-    "active": true,
+    "active": false,
     "players": 8,
     "order": 16,
     "standingsChannel": "1231309257257783306",
@@ -265,11 +266,11 @@ export const allLeagues = [
     "value": "1227943696067072111",
     "emoji": ":___EL2:1230281230206107831",
     "pingRole": "1177014748856991755",
-    "standingsMsg": "1279542913419972770",
+    "standingsMsg": "1344428153937989775",
     "channel": null,
     "defaultImage": "https://cdn.discordapp.com/attachments/1229588057276026954/1234582920128237618/E2stuff_14.png",
     "isInternational": false,
-    "active": true,
+    "active": false,
     "players": 8,
     "order": 18,
     "standingsChannel": "1231309257257783306",
@@ -328,7 +329,7 @@ export const allLeagues = [
     "channel": "1202650816197034025",
     "defaultImage": null,
     "isInternational": false,
-    "active": false,
+    "active": true,
     "players": 6,
     "order": 37,
     "currentMatchDay": "Day 3",
@@ -351,17 +352,19 @@ export const allLeagues = [
   },
   {
     "_id": "667a746e951c2249cdbc9421",
-    "name": "D2 Playoffs",
+    "name": "CD Playoffs",
     "value": "1226988421579407563-p",
-    "emoji": ":___D2:1226321221239701584",
+    "emoji": ":___ConferenceDivision:1275832776779628605",
     "pingRole": null,
     "standingsMsg": null,
-    "channel": "1090959034963742781",
-    "defaultImage": "https://cdn.discordapp.com/attachments/1119948866519834651/1227017507320107048/D1stuff.png",
+    "channel": "1341955092382748742",
+    "defaultImage": "https://cdn.discordapp.com/attachments/1275833308860907533/1341452287297458287/D1stuff_11.png",
     "isInternational": false,
     "active": false,
     "players": 6,
-    "order": 20
+    "order": 20,
+    "sorting": "goaldiff",
+    "currentMatchDay": "Day 3"
   },
   {
     "_id": "667a746e951c2249cdbc9410",
@@ -373,7 +376,7 @@ export const allLeagues = [
     "channel": null,
     "defaultImage": null,
     "isInternational": false,
-    "active": true,
+    "active": false,
     "players": 6,
     "order": 3,
     "continental": true,
@@ -428,7 +431,7 @@ export const allLeagues = [
     "_id": "667a746e951c2249cdbc941e",
     "name": "EL1 Playoffs",
     "value": "1177013563974500513-k",
-    "emoji": ":__PSAF:1095732362400247838",
+    "emoji": ":___EL1:1230281191307874375",
     "pingRole": "1177014748856991755",
     "standingsMsg": "1185330583514132550",
     "channel": "1177013563974500513",
@@ -436,7 +439,9 @@ export const allLeagues = [
     "isInternational": false,
     "active": false,
     "players": 8,
-    "order": 17
+    "order": 17,
+    "sorting": null,
+    "currentMatchDay": "Qualifiers"
   },
   {
     "_id": "667a746e951c2249cdbc9423",
@@ -448,7 +453,7 @@ export const allLeagues = [
     "channel": "1101999952483328140",
     "defaultImage": null,
     "isInternational": false,
-    "active": true,
+    "active": false,
     "players": 6,
     "order": 22,
     "continental": true,
@@ -541,7 +546,7 @@ export const allLeagues = [
     "channel": null,
     "defaultImage": null,
     "isInternational": false,
-    "active": true,
+    "active": false,
     "players": 6,
     "order": 32,
     "currentMatchDay": "Day 5",
@@ -557,7 +562,7 @@ export const allLeagues = [
     "channel": "1249776996636954734",
     "defaultImage": null,
     "isInternational": false,
-    "active": true,
+    "active": false,
     "players": 8,
     "order": 33,
     "currentMatchDay": "Day 4"
@@ -572,7 +577,7 @@ export const allLeagues = [
     "channel": "1101999929171394653",
     "defaultImage": null,
     "isInternational": false,
-    "active": true,
+    "active": false,
     "players": 6,
     "order": 34,
     "continental": true,
@@ -587,7 +592,7 @@ export const allLeagues = [
     "value": "1248423396153495552",
     "isInternational": false,
     "players": 8,
-    "active": false,
+    "active": true,
     "order": 35,
     "emoji": ":___EuropeanCup:1253547689585541261",
     "pingRole": "1177014748856991755",
@@ -595,7 +600,9 @@ export const allLeagues = [
     "continental": true,
     "knockout": true,
     "standingsChannel": "1258316753851646023",
-    "standingsMsg": "1258316922727043123"
+    "standingsMsg": "1258316922727043123",
+    "channel": null,
+    "defaultImage": null
   },
   {
     "_id": "66a6b9d4df8682c08b6ffee1",
@@ -607,7 +614,7 @@ export const allLeagues = [
     "channel": "1156513002552573953",
     "defaultImage": null,
     "isInternational": false,
-    "active": true,
+    "active": false,
     "players": 8,
     "order": 19
   },
@@ -617,11 +624,11 @@ export const allLeagues = [
     "value": "1275897629418459136",
     "emoji": ":___PremierLeague:1275832778587377674",
     "pingRole": "1154064939263213648",
-    "standingsMsg": "1277357004159062076",
+    "standingsMsg": "1344428520058654760",
     "channel": null,
     "defaultImage": "https://cdn.discordapp.com/attachments/1275971146520727623/1275971197187653764/PL-Blue-banner.png",
     "isInternational": false,
-    "active": true,
+    "active": false,
     "players": 6,
     "order": 0,
     "currentMatchDay": "Day 9",
@@ -633,11 +640,11 @@ export const allLeagues = [
     "value": "1275897770607247451",
     "emoji": ":___ConferenceDivision:1275832776779628605",
     "pingRole": "1154065063360069763",
-    "standingsMsg": "1277363568018329734",
+    "standingsMsg": "1344428932497408010",
     "channel": null,
     "defaultImage": "https://cdn.discordapp.com/attachments/1275971348296110141/1275971411495751741/CD-Green-banner.png",
     "isInternational": false,
-    "active": true,
+    "active": false,
     "players": 6,
     "order": 2,
     "currentMatchDay": "Day 9",
@@ -649,11 +656,11 @@ export const allLeagues = [
     "value": "1275897814794375239",
     "emoji": ":___ConferenceDivision:1275832776779628605",
     "pingRole": "1154065063360069763",
-    "standingsMsg": "1277357670952730624",
+    "standingsMsg": "1344428821721382933",
     "channel": null,
     "defaultImage": "https://cdn.discordapp.com/attachments/1275971616886624389/1275971663955103816/CD-Yellow-banner.png",
     "isInternational": false,
-    "active": true,
+    "active": false,
     "players": 6,
     "order": 15,
     "currentMatchDay": "Day 9",
@@ -665,11 +672,11 @@ export const allLeagues = [
     "value": "1275897694459531395",
     "emoji": ":___PremierLeague:1275832778587377674",
     "pingRole": "1154064939263213648",
-    "standingsMsg": "1277357525355856046",
+    "standingsMsg": "1344428707280060517",
     "channel": null,
     "defaultImage": "https://cdn.discordapp.com/attachments/1275970734832881686/1275970918178361385/PL-Red-banner.png",
     "isInternational": false,
-    "active": true,
+    "active": false,
     "players": 6,
     "order": 31,
     "currentMatchDay": "Day 9",
@@ -688,19 +695,98 @@ export const allLeagues = [
     "active": true,
     "players": 6,
     "order": 4,
-    "currentMatchDay": "Day 5",
+    "currentMatchDay": "Day 4",
     "sorting": "head2head",
     "standingsChannel": "1162009570022006835",
     "knockout": false
+  },
+  {
+    "_id": "67e462e3da17398d9f1e2870",
+    "name": "Türkiye Kupası",
+    "value": "1353407656512978964",
+    "defaultImage": "https://cdn.discordapp.com/attachments/1353405687862136894/1353413567784816723/turkiyekupasi_1.png",
+    "emoji": ":___TurkiyeKupasi:1353406717773352990",
+    "channel": "1353407656512978964",
+    "order": null,
+    "sorting": null,
+    "knockout": true,
+    "active": false,
+    "currentMatchDay": "Final",
+    "standingsChannel": "1353407288223731793",
+    "standingsMsg": "1354780168815644692"
+  },
+  {
+    "_id": "67e4632fda17398d9f1e2871",
+    "name": "EMEA Champions",
+    "value": "1353407464619380877",
+    "defaultImage": "https://cdn.discordapp.com/attachments/1353405110641758229/1353414131708854334/emeachampions.day_4.png",
+    "emoji": ":___EMEAChampions:1353405223829373050",
+    "channel": "1353407464619380877",
+    "order": null,
+    "sorting": null,
+    "knockout": true,
+    "active": false,
+    "currentMatchDay": "Final",
+    "standingsChannel": "1353407288223731793",
+    "standingsMsg": "1354779981900943401"
+  },
+  {
+    "_id": "67e46346da17398d9f1e2872",
+    "name": "GBL Cup",
+    "value": "1353407548891336764",
+    "defaultImage": "https://cdn.discordapp.com/attachments/1229587898744180746/1353414383065108601/gblcup.day_4.png",
+    "emoji": ":___GBL:1091064891034566676",
+    "channel": "1353407548891336764",
+    "order": null,
+    "sorting": null,
+    "knockout": true,
+    "active": false,
+    "currentMatchDay": "Final",
+    "standingsMsg": "1354780064742510794",
+    "standingsChannel": "1353407288223731793"
+  },
+  {
+    "_id": "685598b33b50c6602dc2c408",
+    "name": "Bottom League",
+    "value": "1385405446453592137",
+    "emoji": ":______BottomLeague:1385408012126126211",
+    "active": true,
+    "players": 6
+  },
+  {
+    "_id": "6858740c431f3ec7851fada5",
+    "name": "European Cup (Groups)",
+    "value": "1385405833147453460-g",
+    "channel": "1385405833147453460",
+    "emoji": ":___EuropeanCup:1253547689585541261",
+    "players": 8,
+    "active": true,
+    "standingsChannel": "1385409076795805847"
+  },
+  {
+    "_id": "685874e9431f3ec7851fada6",
+    "name": "Conference Cup (Groups)",
+    "value": "1385405863375667210-g",
+    "channel": "1385405863375667210",
+    "emoji": ":___ConferenceCup:1385400558378029077",
+    "players": 8,
+    "active": true,
+    "standingsChannel": "1385409076795805847"
+  },
+  {
+    "_id": "68587517431f3ec7851fada7",
+    "name": "Conference Cup",
+    "value": "1385405863375667210",
+    "channel": "1385405863375667210",
+    "emoji": ":___ConferenceCup:1385400558378029077",
+    "players": 8,
+    "active": true,
+    "standingsChannel": "1385409076795805847"
   }
 ]export const leagueChoices = [
   {
     "name": "Nations League",
     "value": "1162009301402001418"
-  },
-  {
-    "name": "Club Friendly",
-    "value": "1156513002552573953-c"
   },
   {
     "name": "Masters League - Groups",
@@ -711,59 +797,31 @@ export const allLeagues = [
     "value": "1101999929171394653-g"
   },
   {
-    "name": "International Friendly",
-    "value": "1156513002552573953"
+    "name": "Redemption League - Groups",
+    "value": "1202650816197034025-g"
   },
   {
-    "name": "EL1",
-    "value": "1177013563974500513"
-  },
-  {
-    "name": "EL2",
-    "value": "1227943696067072111"
-  },
-  {
-    "name": "SuperCup",
-    "value": "1171748569540198460"
-  },
-  {
-    "name": "Masters League",
-    "value": "1101999952483328140-k"
-  },
-  {
-    "name": "PG6",
-    "value": "1209539443271270452"
-  },
-  {
-    "name": "PG8",
-    "value": "1209539443271270452-8"
-  },
-  {
-    "name": "Challengers League",
-    "value": "1101999929171394653-k"
-  },
-  {
-    "name": "8v8 Club Friendly",
-    "value": "1156513002552573953-c8"
-  },
-  {
-    "name": "PL Blue",
-    "value": "1275897629418459136"
-  },
-  {
-    "name": "CD Green",
-    "value": "1275897770607247451"
-  },
-  {
-    "name": "CD Yellow",
-    "value": "1275897814794375239"
-  },
-  {
-    "name": "PL Red",
-    "value": "1275897694459531395"
+    "name": "European Cup",
+    "value": "1248423396153495552"
   },
   {
     "name": "Nations League (Groups)",
     "value": "1162009301402001418-k"
+  },
+  {
+    "name": "Bottom League",
+    "value": "1385405446453592137"
+  },
+  {
+    "name": "European Cup (Groups)",
+    "value": "1385405833147453460-g"
+  },
+  {
+    "name": "Conference Cup (Groups)",
+    "value": "1385405863375667210-g"
+  },
+  {
+    "name": "Conference Cup",
+    "value": "1385405863375667210"
   }
 ]

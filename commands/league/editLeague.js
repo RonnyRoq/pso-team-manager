@@ -10,8 +10,37 @@ export const getLeaguesInfo = async ({dbClient, short}) => {
   })
 }
 
+const createLeague = async ({dbClient, token, application_id, options}) => {
+  const {name, channel, emoji='', logo, order, sorting, value} = optionsToObject(options)
+  const content = await dbClient(async ({leagueConfig})=> {
+    let league = await leagueConfig.findOne({value})
+    if(league) {
+      if(channel && channel !== value) {
+        league = await leagueConfig.findOne({value: channel})
+      }
+      return `League ${channel} already exists`
+    }
+    
+    const payload = {
+      name: name,
+      value: value,
+      defaultImage: logo,
+      emoji: emoji.replace('<', '').replace('>', ''),
+      channel: channel || value,
+      order: order,
+      sorting: sorting,
+    }
+    await leagueConfig.insertOne(payload)
+    await refreshAllLeagues(leagueConfig)
+    return `Created:\r${JSON.stringify(payload, undefined, 2)}`
+  })
+  return updateResponse({application_id, token, content})
+}
+
 export const editLeague = async ({dbClient, token, application_id, options}) => {
-  const {name, channel, league, emoji='', logo, order, sorting} = optionsToObject(options)
+  const {name, channel, emoji='', logo, order, sorting, ...rest} = optionsToObject(options)
+  const league = rest['league-all']
+  const standingsMsg = rest['standings-msg']
   const content = await dbClient(async ({leagueConfig})=> {
     const currentLeague = await leagueConfig.findOne({value: league})
     if(!currentLeague) {
@@ -24,6 +53,7 @@ export const editLeague = async ({dbClient, token, application_id, options}) => 
       channel: channel || currentLeague.channel,
       order: order || currentLeague.order,
       sorting: sorting || currentLeague.sorting,
+      standingsMsg: standingsMsg || currentLeague.standingsMsg,
     }
     await leagueConfig.updateOne({value: league}, { $set: payload})
     await refreshAllLeagues(leagueConfig)
@@ -64,7 +94,8 @@ const activateLeague = async (options) => updateLeagueStatus(options, true)
 const disableLeague = async (options) => console.log(options) || updateLeagueStatus(options, false)
 
 const updateLeagueStatus = async ({token, application_id, callerId, options, dbClient}, active) => {
-  const {league} = optionsToObject(options)
+  const objOptions = optionsToObject(options)
+  const league = objOptions['league-inactive'] || objOptions['league']
   const allLeagues = await getAllLeagues()
   if(!allLeagues.find(leagueObj => league === leagueObj.value)) {
     return updateResponse({application_id, token, content: `Can't find the league you've entered: ${league}`})
@@ -87,6 +118,7 @@ const leagueSubCommands = {
   'edit': editLeague,
   'activate': activateLeague,
   'disable': disableLeague,
+  'create': createLeague,
 }
 
 const leagueFuncs = async (commandOptions) => 
@@ -103,7 +135,7 @@ const leagueCmd = {
     description: 'Update a league',
     options: [{
       type: 3,
-      name: 'league',
+      name: 'league-all',
       description: 'League',
       required: true,
       autocomplete: true,
@@ -132,6 +164,10 @@ const leagueCmd = {
       type: 4,
       name: 'order',
       description: 'Which order in the list'
+    },{
+      type: 3,
+      name: 'standings-msg',
+      description: 'Message ID where the standings are posted',
     }]
   },{
     type: 1,
@@ -139,7 +175,7 @@ const leagueCmd = {
     description: 'Activate a league',
     options: [{
       type: 3,
-      name: 'league',
+      name: 'league-inactive',
       description: 'League',
       required: true,
       autocomplete: true,
@@ -154,6 +190,42 @@ const leagueCmd = {
       description: 'League',
       required: true,
       autocomplete: true,
+    }]
+  },{
+    type: 1,
+    name: 'create',
+    description: 'Create a league',
+    options: [{
+      type: 3,
+      name: 'name',
+      description: 'League\'s name',
+      required: true,
+    },{
+      type: 3,
+      name: 'value',
+      description: 'League\'s unique ID - should be the channel for fixtures',
+      required: true,
+    },{
+      type: 3,
+      name: 'channel',
+      description: 'League\'s channel ID for fixtures - Only if different from value (two leagues in one channel)',
+    },{
+      type: 3,
+      name: 'logo',
+      description: 'Logo URL',
+    },{
+      type: 3,
+      name: 'emoji',
+      description: 'League\'s emoji',
+    },{
+      type: 4,
+      name: 'order',
+      description: 'Which order in the list',
+    },{
+      type: 3,
+      name: 'sorting',
+      description: 'How to handle tie breakers',
+      choices: ['goaldiff', 'head2head'].map(value=> ({name:value, value}))
     }]
   }]
 }

@@ -1,7 +1,7 @@
 import { ObjectId, ReturnDocument } from "mongodb";
 import { elimMatchDaysSorted, matchDays, serverChannels, serverRoles } from "../config/psafServerConfig.js";
 import { deleteMessage, followUpResponse, getCurrentSeason, getFlags, getPlayerNick, handleSubCommands, isTopAdminRole, msToTimestamp, optionsToObject, postMessage, postWaiting, publicFollowUpResponse, quickResponse, silentResponse, updatePost, updateResponse, waitingMsg } from "../functions/helpers.js";
-import { DiscordRequest } from "../utils.js";
+import { DiscordRequest, logSystemError } from "../utils.js";
 import { sleep } from "../functions/helpers.js";
 import { parseDate } from "./timestamp.js";
 import { formatDMLineup } from "./lineup/lineup.js";
@@ -272,6 +272,7 @@ export const matchId = async ({interaction_id, token, application_id, options, d
       return silentResponse({interaction_id, token, content: `Match <@&${home}> - <@&${away}> not found`})
     }
     const matchPosts = foundMatches.map(({league, matchday, home, away, dateTimestamp, season, _id})=> ({
+      id: _id,
       content:`Season: ${season} ${allLeagues.find(fixLeague=>fixLeague.value === league)?.name || ''} ${matchday} <@&${home}> - <@&${away}> <t:${dateTimestamp}:F> ${_id}`,
       components: [{
         type: 1,
@@ -293,6 +294,7 @@ export const matchId = async ({interaction_id, token, application_id, options, d
     await silentResponse({interaction_id, token, content: 'Found matches: '});
     for await (const matchPost of matchPosts) {
       await followUpResponse({application_id, token, content: matchPost.content, components: matchPost.components})
+      await followUpResponse({application_id, token, content: matchPost.id})
     }
   })
 }
@@ -360,7 +362,33 @@ export const editInterMatch = async ({application_id, token, options, callerId, 
   return editAMatch({application_id, token, options, callerId, dbClient})
 }
 
-export const internalEndMatch = async ({id, homeScore, awayScore, ff, dbClient, callerId}) => {
+const updateNextMatch = async (updatedMatch, match, winner, matches, season, guild_id, activeTeams, currentLeague) =>{
+  const stageIndex = elimMatchDaysSorted.findIndex(matchday => matchday === updatedMatch.matchday);
+  const matchOrder = (match.order || 0);
+  const setPayload = {};
+  if (matchOrder % 2 === 0) {
+    setPayload.home = winner;
+  } else {
+    setPayload.away = winner;
+  }
+  console.log(setPayload);
+  console.log(match.league, stageIndex, elimMatchDaysSorted[stageIndex + 1], Math.floor(matchOrder / 2), matchOrder);
+  const nextOrder = Math.floor(matchOrder / 2);
+  await matches.updateOne({ season, league: match.league, matchday: elimMatchDaysSorted[stageIndex + 1], order: nextOrder ? nextOrder : null }, { $set: setPayload });
+  const nextMatch = await matches.findOne({ season, league: match.league, matchday: elimMatchDaysSorted[stageIndex + 1], order: nextOrder ? nextOrder : null });
+  console.log('nextMatch');
+  console.log(nextMatch);
+  await logSystemError({ guild_id, message: `Match ${match._id} ended. Next match ${nextMatch?._id} set with ${setPayload.home} - ${setPayload.away}` });
+  if (nextMatch) {
+    const home = activeTeams.find(team => team.id === nextMatch.home);
+    const away = activeTeams.find(team => team.id === nextMatch.away);
+    const response = await updateMatch({ currentLeague, homeTeam: home, awayTeam: away, match: nextMatch });
+    console.log(response);
+  }
+}
+
+
+export const internalEndMatch = async ({id, homeScore, awayScore, guild_id, ff, dbClient, callerId}) => {
   const matchId = new ObjectId(id)
   return dbClient(async ({teams, matches, nationalTeams, leagueConfig}) => {
     const match = await matches.findOne(matchId)
@@ -370,6 +398,7 @@ export const internalEndMatch = async ({id, homeScore, awayScore, ff, dbClient, 
     
     const [homeTeam, awayTeam] = await getMatchTeams(match.home, match.away, match.isInternational, nationalTeams, teams)
     
+    const season = getFastCurrentSeason()
     const activeTeams = await teams.find({}).toArray()
     const currentLeague = await leagueConfig.findOne({value: match.league})
     await matches.updateOne({"_id": matchId}, {$set: {
@@ -384,27 +413,7 @@ export const internalEndMatch = async ({id, homeScore, awayScore, ff, dbClient, 
 
     const winner = homeScore !== awayScore ? (homeScore>awayScore ? match.home: match.away) : undefined
     if(currentLeague.knockout && winner) {
-      const stageIndex = elimMatchDaysSorted.findIndex(matchday=> matchday === updatedMatch.matchday)
-      const matchOrder = (match.order || 0)
-      const setPayload = {}
-      if(matchOrder % 2 === 0){
-        setPayload.home = winner
-      } else {
-        setPayload.away = winner
-      }
-      console.log(setPayload)
-      console.log(match.league, stageIndex, elimMatchDaysSorted[stageIndex+1], Math.floor(matchOrder/2), matchOrder)
-      const nextOrder = Math.floor(matchOrder/2)
-      await matches.updateOne({league: match.league, matchday:elimMatchDaysSorted[stageIndex+1], order:nextOrder ? nextOrder: null}, {$set: setPayload})
-      const nextMatch = await matches.findOne({league: match.league, matchday:elimMatchDaysSorted[stageIndex+1], order:nextOrder ? nextOrder: null})
-      console.log('nextMatch')
-      console.log(nextMatch)
-      if(nextMatch) {
-        const home = activeTeams.find(team=> team.id === nextMatch.home)
-        const away = activeTeams.find(team=> team.id === nextMatch.away)
-        const response = await updateMatch({currentLeague, homeTeam: home, awayTeam: away, match: nextMatch})
-        console.log(response)
-      }
+      await updateNextMatch(updatedMatch, match, winner, matches, season, guild_id, activeTeams, currentLeague);
     }
     const response = await updateMatch({currentLeague, homeTeam, awayTeam, homeScore, awayScore, match:updatedMatch, ff})
     return `Updated \r`+response
@@ -488,27 +497,7 @@ export const internalEndMatchStats = async ({id, matchDetails, guild_id, callerI
     
     const winner = homeScore !== awayScore ? (homeScore>awayScore ? match.home: match.away) : undefined
     if(currentLeague.knockout && winner) {
-      const stageIndex = elimMatchDaysSorted.findIndex(matchday=> matchday === updatedMatch.matchday)
-      const matchOrder = (match.order || 0)
-      const setPayload = {}
-      if(matchOrder % 2 === 0){
-        setPayload.home = winner
-      } else {
-        setPayload.away = winner
-      }
-      console.log(setPayload)
-      console.log(match.league, stageIndex, elimMatchDaysSorted[stageIndex+1], Math.floor(matchOrder/2), matchOrder)
-      const nextOrder = Math.floor(matchOrder/2)
-      await matches.updateOne({season, league: match.league, matchday:elimMatchDaysSorted[stageIndex+1], order:nextOrder ? nextOrder: null}, {$set: setPayload})
-      const nextMatch = await matches.findOne({season, league: match.league, matchday:elimMatchDaysSorted[stageIndex+1], order:nextOrder ? nextOrder: null})
-      console.log('nextMatch')
-      console.log(nextMatch)
-      if(nextMatch) {
-        const home = activeTeams.find(team=> team.id === nextMatch.home)
-        const away = activeTeams.find(team=> team.id === nextMatch.away)
-        const response = await updateMatch({currentLeague, homeTeam: home, awayTeam: away, match: nextMatch})
-        console.log(response)
-      }
+      await updateNextMatch(updatedMatch, match, winner, matches, season, guild_id, activeTeams, currentLeague);
     }
 
     const [post, extra] = await formatMatch(currentLeague, homeTeam, awayTeam, {...updatedMatch, homeScore, awayScore})
@@ -553,7 +542,7 @@ export const resetMatch = async ({token, application_id, options, dbClient}) => 
 export const internalPublishMatch = async ({league, matchday, postping=true, seasonsCollect, teams, matches, nationalTeams, matchDays, leagueConfig}) => {
   const currentLeague = await leagueConfig.findOne({value:league, active: true})
   if(!currentLeague) {
-    return `Cannot find League ${currentLeague}. Please check if the league is active and you entered your choice correctly.`
+    return `Cannot find League ${league}. Please check if the league is active and you entered your choice correctly.`
   }
   const channel = currentLeague.channel || currentLeague.value
   const season = await getCurrentSeason(seasonsCollect)
@@ -603,7 +592,7 @@ export const internalPublishMatch = async ({league, matchday, postping=true, sea
   }
   let endMessageId = null
   if(postping) {
-    const pingRole = currentLeague.pingRole ? (currentLeague.pingRole === 'everyone' ? '@everyone': `<@&${currentLeague.pingRole}>`):'Everyone'
+    const pingRole = currentLeague.pingRole ? (currentLeague.pingRole === 'everyone' ? '@everyone': `<@&${currentLeague.pingRole}>`):'@everyone'
     const endMessage = `[ ${pingRole} ]--[ **${currentLeague.name}** | VOTE YOUR WINNERS! ]`
     const resp = await DiscordRequest(`/channels/${channel}/messages`, {
       method: 'POST',
@@ -760,12 +749,15 @@ export const getRefStatsLeaderboard = async ({season, dbClient}) => {
 
 export const getMatchesOfDay = async ({date='today', finished=false, dbClient, forSite= false, isSchedule = false}) => {
   const parsedDate = parseDate(date)
+  console.log(parsedDate)
   const startOfDay = new Date(parsedDate)
   startOfDay.setUTCHours(0,0,0,0)
   const endOfDay = new Date(parsedDate)
   endOfDay.setUTCHours(23,59,59,999)
+  console.log(startOfDay, endOfDay)
   const startDateTimestamp = msToTimestamp(Date.parse(startOfDay))
   const endDateTimestamp = msToTimestamp(Date.parse(endOfDay))
+  console.log(startDateTimestamp, endDateTimestamp)
   
   return dbClient(async ({teams, matches, nationalTeams, lineups}) => {
     const finishedArg = forSite ? {} : (finished ? {finished: true} : {$or: [{finished:false}, {finished:null}]})
@@ -800,9 +792,10 @@ export const getMatchesOfDay = async ({date='today', finished=false, dbClient, f
         }
       })
     } else {
+      const maxMatches = 25
       const headerLine = {content: `${matchesOfDay.length} match${matchesOfDay.length >1?'es':''} on <t:${startDateTimestamp}:d>.`}
       let response = [{matchToPush: headerLine, streamerMatch: headerLine}]
-      for (const match of matchesOfDay) {
+      for (const match of matchesOfDay.slice(0, maxMatches)) {
         const [homeTeam, awayTeam] = getMatchTeamsSync(match.home, match.away, match.isInternational, allNationalTeams, allTeams)
         const channels = []
         if(homeTeam.channel){

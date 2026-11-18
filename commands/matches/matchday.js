@@ -5,6 +5,7 @@ import { editAMatchInternal, formatMatch, internalCreateMatch, internalPublishMa
 import { shuffleArray } from "../../functions/helpers.js"
 import { getFastCurrentSeason } from "../season.js"
 import { getAllLeagues } from "../../functions/allCache.js"
+import { logSystemError } from "../../utils.js"
 
 const thirtyMinutes = 30*60
 
@@ -197,8 +198,11 @@ export const autoPublish = async ({dbClient}) => {
   return dbClient(async ({seasonsCollect, teams, matches, nationalTeams, leagueConfig, matchDays})=> {
     const activeLeagues = await leagueConfig.find({active: true}).toArray()
     const todayMatchDays = await matchDays.find({startDateTimestamp:{$gte: msToTimestamp(startOfDay.getTime())}, endDateTimestamp: {$lte: msToTimestamp(endOfDay.getTime())}, league: {$in: activeLeagues.map(league=>league.value)}}, {startDateTimestamp: -1}).toArray()
+    await logSystemError("auto publish script")
+    await logSystemError(JSON.stringify(todayMatchDays))
     const leaguesToPost = todayMatchDays.map(matchday=> matchday.league)
     const nextMatchDays = await matchDays.find({posted: {$in: [null, false]}, startDateTimestamp: {$gte: msToTimestamp(endOfDay.getTime())}, league: {$in: leaguesToPost}}, {startDateTimestamp: -1}).toArray()
+    await logSystemError(JSON.stringify(nextMatchDays))
     const nextMatchDayPerLeague = new Map()
     nextMatchDays.forEach(matchDay => {
       if(!nextMatchDayPerLeague.has(matchDay.league)) {
@@ -227,11 +231,9 @@ const arrangeLeagueMatchDays = async ({interaction_id, token, application_id, db
   endOfDay.setHours(20,30,0,0)
   const startDate = Date.parse(startOfDay)
   const endDate = Date.parse(endOfDay)
-  const startDateTimestamp = msToTimestamp(startDate)
-  const endDateTimestamp = msToTimestamp(endDate)
   const season = getFastCurrentSeason()
 
-  const content = await dbClient(async ({matchDays, matches, leagues, teams, nationalTeams, leagueConfig, matchDayConfig})=> {
+  const content = await dbClient(async ({matchDays, matches, teams, nationalTeams, leagueConfig, matchDayConfig})=> {
     const leagueObj = await leagueConfig.findOne({value: league})
     if(!leagueObj) {
       return `Can't find League ${league}`

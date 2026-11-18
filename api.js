@@ -17,6 +17,7 @@ import { buildPlayerSearch } from './commands/search/buildSearchIndexes.js'
 import { globalSearch } from './commands/search/search.js'
 import { patchTeam } from './commands/teams/api.js'
 import { getLeagueConfig } from './commands/league/api.js'
+import { parseDate } from './commands/timestamp.js'
 
 export const getApi = (localdev=false, dbClient={}) =>{
   const api = express() // the API app
@@ -34,6 +35,7 @@ export const getApi = (localdev=false, dbClient={}) =>{
   if(!localdev) {
     console.log('online')
     api.use(async(req, res, next) => {
+      //console.log('api request', req.method, req.url, req.headers)
       //console.log(req.url)
       //console.log(req.query)
       let api_key = req.header("x-api-key")
@@ -226,6 +228,14 @@ export const getApi = (localdev=false, dbClient={}) =>{
     const response = await getTransferList({ position, maxBuyout, dbClient });
     return res.json(response);
   });
+
+  api.get('/timestamp', async (req, res) => {
+    const { date, timezone=0 } = req.query || {}
+    console.log('date', date, timezone)
+    const response = parseDate(date, Number(timezone))
+    return res.json({response})
+  })
+
 
   api.get('/', async function (req, res) {
     return res.send('<p>no thank you</p>')

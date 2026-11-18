@@ -44,9 +44,7 @@ export const updateTeamPictures = async ({interaction_id, token, application_id,
         console.log(message)
               
         const imgResp = await fetch(message.content, {headers})
-        const imgTest = await fetch(message.content)
-        console.log(imgResp)
-        console.log(imgTest)
+        //const imgTest = await fetch(message.content)
         
         if (!imgResp.ok) throw new Error(`unexpected response ${imgResp.statusText}`);
 
@@ -81,7 +79,6 @@ export const getTeamAndPlayers = async({id, dbClient, guild_id}) => {
     team,
     players: teamPlayers.map(player => {
       const dbPlayer = dbPlayers.find(id=> id == player.user.id) || {}
-      console.log(dbPlayer)
       return {
       ...dbPlayer,
       ...player,

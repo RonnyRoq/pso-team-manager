@@ -444,6 +444,7 @@ export const serverChannels = {
   pgCategory: '1237770362264092722',
   clubsCategory: '1186998502010671134',
   seasonStats: '1349510467399323708',
+  matchLogChannelId: '1151131972568092702',
 }
 export const serverRegions = [
   {name: 'Europe'},
@@ -465,9 +466,9 @@ export const regionalLeagues = allLeagueList.filter(league=>['GBL', 'CEL', 'ITL'
 
 export const lineupBlacklist = ['1068608785356169226', '616754792965865495']
 export const lineupRolesBlacklist = ['1072919258629144628', '1128307395668492319', serverRoles.matchBlacklistRole, serverRoles.permanentlyBanned, serverRoles.disabledRole]
-export const wcLineupBlacklist = []
+export const wcLineupBlacklist = ['1072919258629144628', '1128307395668492319', serverRoles.matchBlacklistRole, serverRoles.permanentlyBanned, serverRoles.disabledRole]
 export const lineupRolesWhitelist = serverRoles.steamVerified
-export const wcLineupRolesWhilelist = serverRoles.wcRegisteredRole
+export const wcLineupRolesWhilelist = serverRoles.steamVerified
 
 export const transferBanStatus = {
   transferBan: 'transferban',

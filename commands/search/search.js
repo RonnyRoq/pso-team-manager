@@ -87,7 +87,7 @@ export const globalSearch = async ({dbClient, s}) => {
       getAllCountriesFromNationalities(nationalities),
     ])
     const ids = {
-      players: dbPlayers.filter(player => player.nick.includes(searchString) || player.ingamename.includes(searchString)).map(player=> player.id),
+      players: dbPlayers.filter(player => (player.nick || "").includes(searchString) || (player.ingamename|| "").includes(searchString) || (player.steamId|| "").includes(searchString)).map(player=> player.id),
       teams: allTeams.filter(team => team.name.includes(searchString) || team.shortName.includes(searchString)).map(team=> team.id),
       selections: allNationalTeams.filter(selection => selection.name.includes(searchString) || selection.shortName.includes(searchString)).map(selection=> selection.shortName.toUpperCase()),
       nationalities: allNationalities.filter(nationality => nationality.name.includes(searchString))
@@ -129,7 +129,14 @@ const internalAdminSearch = async ({dbClient, text}) => {
       getAllCountriesFromNationalities(nationalities),
     ])
     const ids = {
-      players: dbPlayers.filter(player => (player.nick||'').includes(searchString) || (player.ingamename||'').includes(searchString) || (player.steam||'').includes(searchString) || (player.steamId||'').includes(searchString) || (player.uniqueId||'').includes(searchString)).map(player=> player.id),
+      players: dbPlayers.filter(player => (
+        (player.nick||'').includes(searchString)
+        || (player.ingamename||'').includes(searchString)
+        || (player.steam||'').includes(searchString)
+        || (player.steamId||'').includes(searchString)
+        || (player.uniqueId||'').includes(searchString)
+        || (player.pastSteams?.length && player.pastSteams.find(pastSteam=> (pastSteam?.steamId || []).includes(searchString) || (pastSteam?.steam || []).includes(searchString)))
+      )).map(player=> player.id),
       teams: allTeams.filter(team => team.name.includes(searchString) || team.shortName.includes(searchString)).map(team=> team.id),
       selections: allNationalTeams.filter(selection => selection.name.includes(searchString) || selection.shortName.includes(searchString)).map(selection=> selection.shortName.toUpperCase()),
       nationalities: allNationalities.filter(nationality => nationality.name.includes(searchString))
@@ -165,7 +172,7 @@ export const adminSearch = async ({interaction_id, token, application_id, dbClie
   let content = 'Search results:\r'
   if(players.length) {
     content+='Player(s):\r'
-    content+=players.map(player=> `<@${player.id}> - ${player.nick} ${player.name} ${player.steam} ${player.steamId} ${player.uniqueId}`).join('\r')
+    content+=players.map(player=> `<@${player.id}> - ${player.nick} ${player.name} ${player.steam} ${player.steamId} ${player.uniqueId} ${player.pastSteams ? 'Past Steams: [ '+player.pastSteams.map(pastSteam => `${pastSteam.steamId} ${pastSteam.steam}`).join(', ')+' ]' : ''}`).join('\r')
   }
   if(teams.length) {
     content+='\rTeams:\r'

@@ -20,8 +20,8 @@ const nationalTeamPlayerRole = '1103327647955685536'
 const staffRoles = ['1081886764366573658', '1072210995927339139', '1072201212356726836']
 
 export const player = async ({options, interaction_id, callerId, guild_id, application_id, member, token, dbClient}) => {
-  const {player} = optionsToObject(options)
-  const playerId = player || callerId
+  const {player, playerid} = optionsToObject(options)
+  const playerId = player || playerid || callerId
   await waitingMsg({interaction_id, token})
   
   const content = await innerPlayer({playerId, guild_id, member, dbClient})
@@ -74,8 +74,7 @@ const showPlayer = (discPlayer={}, dbPlayer, allNationalities, isStaff, allTeams
 const innerPlayer = async ({playerId, guild_id, member, dbClient}) => {
   const inGuild = !!guild_id
   const allPlayers = await getAllPlayers(guild_id)
-  const discPlayer = allPlayers.find(player=>player.user.id === playerId)
-  if(!discPlayer) return `Cannot find <@${playerId}> in PSAF`
+  const discPlayer = allPlayers.find(player=>player.user.id === playerId) || {}
   const name = getPlayerNick(discPlayer)
   return dbClient(async ({players, teams, contracts})=> {
     let response = name
@@ -83,7 +82,7 @@ const innerPlayer = async ({playerId, guild_id, member, dbClient}) => {
     const allTeams = await teams.find({active:true}).toArray()
     const allTeamIds = allTeams.map(({id})=> id)
     const playerContracts = await contracts.find({playerId}).toArray()
-    const team = discPlayer.roles.find(role => allTeamIds.includes(role))
+    const team = discPlayer?.roles?.find(role => allTeamIds.includes(role))
     response = `<@${playerId}> - ${displayTeamName(inGuild, team, allTeams)}\r`
     const allNationalities = await getAllNationalities()
     if(dbPlayer) {
@@ -95,7 +94,7 @@ const innerPlayer = async ({playerId, guild_id, member, dbClient}) => {
       const country2 = allNationalities.find(country => country.name === dbPlayer.nat2)
       const country3 = allNationalities.find(country => country.name === dbPlayer.nat3)
       if(country){
-        response += `${country.flag} ${discPlayer.roles.includes(nationalTeamPlayerRole) ? 'International': ''}${country2? `, ${country2.flag}`: ''}${country3? `, ${country3.flag}`: ''}\r`
+        response += `${country.flag} ${discPlayer?.roles?.includes(nationalTeamPlayerRole) ? 'International': ''}${country2? `, ${country2.flag}`: ''}${country3? `, ${country3.flag}`: ''}\r`
       }
       if(isStaff) {
         response += `Steam: ${dbPlayer.steam || 'Not saved'}\r`
@@ -299,7 +298,7 @@ const editSteamUrl = async ({options=[], callerId, guild_id, member, application
 }
 
 export const swapPlayerNationalities = async ({application_id, token, guild_id, callerId, options, dbClient}) => {
-  const {player, nationality} = options
+  const {player, nationality} = optionsToObject(options)
   const [allPlayers, allNationalities] = await Promise.all([getAllPlayers(guild_id), getAllNationalities()])
   const discPlayer = allPlayers.find(discPlayer=>discPlayer?.user?.id === player)
   if(!discPlayer) {
@@ -329,10 +328,10 @@ export const swapPlayerNationalities = async ({application_id, token, guild_id, 
       return `<@${player}>'s last nationality swap was on <t:${msToTimestamp(dbPlayer.lastNatChange)}:f>, need to wait until <t:${msToTimestamp(dbPlayer.lastNatChange+twoSeasons)}:f> to change again.`
     }
     const newNat1 = requestedNationality
-    const newNat2 = dbPlayer.nat2 === requestedNationality ? nat1 : nat2
-    const newNat3 = dbPlayer.nat3 === requestedNationality ? nat1 : nat3
+    const newNat2 = (dbPlayer.nat2 === nationality ? nat1 : nat2) || null
+    const newNat3 = (dbPlayer.nat3 === nationality ? nat1 : nat3) || null
     const newFlags = `${newNat1? newNat1.flag : ''}${newNat2? newNat2.flag: ''}${newNat3? newNat3.flag: ''}`
-    await players.updateOne({id: player}, {$set: {nat1: newNat1.name, nat2: newNat2.name, nat3: newNat3.name, lastNatChange: now}})
+    await players.updateOne({id: player}, {$set: {nat1: newNat1?.name, nat2: newNat2?.name, nat3: newNat3?.name, lastNatChange: now}})
     const content = `<@${callerId}> swapped ${flags} <@${player}> nationalities to ${newFlags} <@${player}>. New main nationality is ${newNat1.flag} ${nationality}.`
     await postMessage({channel_id:serverChannels.botActivityLogsChannelId, content})
     return content
@@ -429,7 +428,7 @@ export const actionConfirmMigrate = async ({interaction_id, application_id, cust
         players.updateOne({_id}, {$set: {isAlt: true, knownAlts: [otherAlts, {_id: newPlayerResponse.insertedId, id: newDiscPlayer.user.id, swappedOn: now}]}}),
         playerMigrations.insertOne({callerId, oldPlayerId, newPlayerId, at: now}),
         updateDiscordPlayer(guild_id, newPlayerId, {
-          roles: [...new Set([...newDiscPlayer.roles, futureRoles])]
+          roles: [...new Set([...newDiscPlayer.roles, ...futureRoles])]
         }),
         updateDiscordPlayer(guild_id, oldPlayerId, {
           roles: [...new Set([...oldDiscPlayer.roles, serverRoles.disabledRole])]
@@ -455,7 +454,18 @@ export const actionConfirmMigrate = async ({interaction_id, application_id, cust
         delete activeContractData._id
         await contracts.insertOne({...activeContractData, playerId: newPlayerId})
       }
-      const futureRoles = oldDiscPlayer.roles.filter(role=> ![serverRoles.registeredRole, serverRoles.steamVerified].includes(role))
+      let futureRoles = []
+      if(activeContracts.length>0) {
+        futureRoles.push(serverRoles.clubPlayerRole)
+        let clubRole
+        if(activeContracts.length>1) {
+          clubRole = activeContracts.find(contract=>contract.isLoan)?.team
+        } else {
+          clubRole = activeContracts[0]?.team
+        }
+        futureRoles.push(clubRole)
+      }
+      futureRoles = [...futureRoles, ...(oldDiscPlayer ? oldDiscPlayer.roles.filter(role=> ![serverRoles.registeredRole, serverRoles.steamVerified].includes(role)) : [])]
       const activeNationalContract = await nationalContracts.findOne({season, playerId:oldPlayerId})
       if(activeNationalContract) {
         await nationalContracts.deleteOne({season, playerId:newPlayerId})
@@ -467,11 +477,11 @@ export const actionConfirmMigrate = async ({interaction_id, application_id, cust
         players.updateOne({_id}, {$set: {isAlt: true, knownAlts: [otherAlts, {_id: newPlayerResponse.insertedId, id: newDiscPlayer.user.id}]}}),
         playerMigrations.insertOne({callerId, oldPlayerId, newPlayerId, at: now}),
         updateDiscordPlayer(guild_id, newPlayerId, {
-          roles: futureRoles
+          roles: [...new Set(futureRoles)]
         }),
-        updateDiscordPlayer(guild_id, oldPlayerId, {
+        oldDiscPlayer ? updateDiscordPlayer(guild_id, oldPlayerId, {
           roles: [...new Set([...oldDiscPlayer.roles, serverRoles.disabledRole])]
-        })
+        }): Promise.resolve(),
       ])
       return `Account Migrated. <@${oldPlayerId}> is now disabled. <@${newPlayerId}> is now getting the roles/contracts from the old account. Please ensure the new account is steam verified - only the active contracts are transfered.`
     }
@@ -593,6 +603,10 @@ const playerCmd = {
     type: 6,
     name: 'player',
     description: 'Player'
+  },{
+    type: 3,
+    name: 'playerid',
+    description: 'Player ID (if not on the server)',
   }]
 }
 

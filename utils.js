@@ -31,11 +31,12 @@ export const SteamIds = {
   psoGameId: 1583320
 }
 
-export const SteamRequest = (request, params) => {
+export const SteamRequest = async (request, params) => {
   const searchParams = new URLSearchParams(params)
   searchParams.append('key', process.env.STEAM_API_KEY)
   const urlReq = new URL(`${request}?${searchParams.toString()}`)
   console.log(urlReq.href)
+  writeFileSync(process.env.STEAM_LOG, urlReq.href + '\n', {flag: 'a'})
   return fetch(urlReq)
 }
 
@@ -170,7 +171,7 @@ export async function sendErrorLog() {
     if(content){
       await sendSystemHook(`Crash at ${new Date().toISOString()}`, process.env.CRASHESHOOK)
       await sendSystemHook(util.format(content.toString()), process.env.CRASHESHOOK)
-      renameSync(process.env.ERROR_LOG, `${process.env.ERROR_LOG}-${(new Date()).toISOString()}`)
+      renameSync(process.env.ERROR_LOG, `logs/${process.env.ERROR_LOG}-${(new Date()).toISOString()}.log`)
     }
   } else {
     await sendSystemHook('Regular restart', process.env.CRASHESHOOK)
@@ -194,6 +195,21 @@ async function sendSystemHook(content, hook) {
     method: 'POST',
     body: JSON.stringify({content})
   }, true)
+}
+
+export async function postSteamUsageReporting() {
+  console.log("postSteamUsageReporting")
+  if(existsSync(process.env.STEAM_LOG)){
+    const steamReporting = readFileSync(process.env.STEAM_LOG, 'utf8')
+    if(steamReporting){
+      const content = steamReporting.toString()
+      const requests = content.split('\n').filter((line) => line.length > 0)
+      console.log(`Steam usage reporting:\r${requests.length} today`)
+      await sendSystemHook(`Steam usage reporting:\r${requests.length} today`, process.env.STEAMHOOK)
+      const today = new Date().toISOString()
+      renameSync(process.env.STEAM_LOG, `logs/${process.env.STEAM_LOG}-${today}.log`)
+    }
+  }
 }
 
 export async function InstallGlobalCommands(appId, commands) {

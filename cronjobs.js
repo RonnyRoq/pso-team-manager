@@ -2,7 +2,7 @@ import { CronJob } from "cron"
 import { getMatchesOfDay, getMatchesSummary, remindMissedMatches, updateCurrentRefStatsPost } from "./commands/match.js"
 import { innerUpdateTeam } from "./commands/postTeam.js"
 import { notifyMatchStart } from "./commands/matches/notifyMatchStart.js"
-import { DiscordRequest, logSystemError } from "./utils.js"
+import { DiscordRequest, logSystemError, postSteamUsageReporting } from "./utils.js"
 import { serverChannels, serverRoles } from "./config/psafServerConfig.js"
 import { updateLeagueTable } from "./commands/league/leagueTable.js"
 import { autoPublish } from "./commands/matches/matchday.js"
@@ -181,7 +181,7 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
     },*/
   ],[
     'update steam names',
-    '11 11,15,19 * * *',
+    '11 9,16 * * *',
     callCronJob('update steam names',
       async function() {
         await updateSteamNames({dbClient})
@@ -221,6 +221,14 @@ export const initCronJobs = ({dbClient, allActiveTeams, allNationalSelections, a
         console.log('building search indexes')
         await buildPlayerSearch({dbClient})
         console.log('search indexes filled')
+      }
+    )
+  ],[
+    'Post steam usage reporting',
+    '1 13 * * *',
+    callCronJob('Post steam usage reporting',
+      async function() {
+        await postSteamUsageReporting()
       }
     )
   ]]

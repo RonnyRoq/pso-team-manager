@@ -508,7 +508,7 @@ const renewCmd = {
     name: 'seasons',
     description: 'How many seasons',
     min_value: 1,
-    max_value: 10,
+    max_value: 3,
     required: true
   }]
 }

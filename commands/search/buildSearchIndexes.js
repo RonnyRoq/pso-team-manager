@@ -4,21 +4,17 @@ export const buildPlayerSearch = async ({dbClient}) =>
       players.aggregate([
         {
           '$project': {
-            'id': {
-              '$toString': '$id'
-            }, 
+            'id': 1,
             'ingamename': {
               '$toLower': '$ingamename'
             }, 
             'nick': {
               '$toLower': '$nick'
             },
-            'steam': {
-              '$toString': '$steam'
-            },
-            'steamId': {
-              '$toString': '$steamId'
-            }
+            'uniqueId': 1,
+            'steam': 1,
+            'steamId': 1,
+            'pastSteams': 1
           }
         }, {
           '$out': 'searchPlayers'

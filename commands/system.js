@@ -1,5 +1,5 @@
 import { InteractionResponseFlags, InteractionResponseType } from "discord-interactions"
-import { DiscordRequest, SteamRequest, SteamRequestTypes } from "../utils.js"
+import { DiscordRequest, sleep, SteamRequest, SteamRequestTypes } from "../utils.js"
 import { countries } from '../config/countriesConfig.js'
 import { getAllPlayers } from "../functions/playersCache.js"
 import { addPlayerPrefix, batchesFromArray, followUpResponse, getCurrentSeason, getPlayerNick, getRegisteredRole, isManager, optionsToObject, postMessage, quickResponse, removePlayerPrefix, sendDM, silentResponse, updateDiscordPlayer, updateResponse, waitingMsg } from "../functions/helpers.js"
@@ -736,6 +736,56 @@ const runCronJob = async ({options, interaction_id, application_id, token, calle
   }
 }
 
+const recoverMatches = async ({interaction_id, token, application_id, dbClient}) => {
+  await waitingMsg({interaction_id, token})
+  const channel = serverChannels.matchLogChannelId
+  const messages = []
+  let after
+  try {
+    do {
+      const afterRequest = after
+      const messagesResp = await DiscordRequest(`channels/${channel}/messages`, {
+        method: 'GET',
+        query: {
+          limit: 100,
+          after: afterRequest? afterRequest : undefined,
+        }
+      })
+      const messagesBatch = await messagesResp.json()
+      if(messagesBatch.length === 0) {
+        break
+      }
+      const filteredMessages = messagesBatch.filter(message => {
+        return message.author?.id === process.env.APP_ID
+      })
+      messages.push(...filteredMessages)
+      after = messagesBatch[messagesBatch.length - 1].id
+      console.log(afterRequest, after)
+      console.log(messagesBatch[messagesBatch.length - 1].id)
+      console.log(JSON.stringify(messagesBatch[messagesBatch.length - 1].content))
+      if(afterRequest === after) {
+        console.log("Can't fetch more messages, waiting 10 seconds")
+        await sleep(10000)
+      }
+      console.log(`Fetched ${messagesBatch.length} messages, total: ${messages.length}`)
+    } while(messages.length < 500)
+  } catch (error) {
+    console.error('Error fetching messages:', error)
+    return updateResponse({
+      application_id,
+      token,
+      content: `Error fetching messages from channel <#${channel}>: ${error.message}`
+    })
+  }
+  console.log(messages[0].content)
+  console.log(messages[messages.length - 1].content)
+  return updateResponse({
+    application_id,
+    token,
+    content: `Done. Found ${messages.length} messages in channel <#${channel}>. Last message is:\r${messages[messages.length - 1].content}`
+  })
+}
+
 export const systemTeamCmd = {
   name: 'systemteam',
   description: 'Update the team with the details from discord',
@@ -876,4 +926,11 @@ const runCronJobCmd = {
   }]
 }
 
-export default [systemCmd, updateLeaguesCmd, manualSteamVerificationCmd, transferMarketCmd, runCronJobCmd, emojiCmd]
+const recoverMatchesCmd = {
+  name: 'recovermatches',
+  description: 'Recover matches from the discord messages',
+  psaf: true,
+  func: recoverMatches,  
+}
+
+export default [systemCmd, updateLeaguesCmd, manualSteamVerificationCmd, transferMarketCmd, runCronJobCmd, emojiCmd, recoverMatchesCmd]
