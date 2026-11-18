@@ -59,6 +59,13 @@ site/, web/         the two websites
 
 Without TLS certificates the app runs in **local mode**: no cron jobs and no API auth, but it still uses the production database. See [docs/setup.md](docs/setup.md) for local mode, tunnelling Discord to your machine, the other npm scripts, Docker deployment and logging.
 
+## Documentation
+
+- [Setup and deployment](docs/setup.md): configuration, local mode and online mode, scripts, Docker, logs
+- [Architecture](docs/architecture.md): request flow, command routing, permissions, caches, outbound calls
+- [Data model](docs/data-model.md): MongoDB collections, conventions and lifecycles
+- [Scheduled jobs](docs/scheduled-jobs.md): every cron job and what it does
+
 ## License
 
 [MIT](LICENSE)
