@@ -1,104 +1,64 @@
-# Getting Started app for Discord
+# PSO Team Manager
 
-This project contains a basic rock-paper-scissors-style Discord app written in JavaScript, built for the [getting started guide](https://discord.com/developers/docs/getting-started).
+A Discord bot and web backend for running Pro Soccer Online (PSO) leagues, mainly the PSAF server and its World Cup server. It keeps team, player, contract and match data in MongoDB, and staff and managers work with it through slash commands, buttons and a small admin website.
 
-![Demo of app](/assets/getting-started-demo.gif?raw=true)
+## What it does
 
-> ✨ A version of this code is also hosted **[on Glitch 🎏](https://glitch.com/~getting-started-discord)** and **[on Replit 🌀](https://replit.com/github/discord/discord-example-app)**
+- **Teams and players:** registration, Steam ID checks and alt detection, ratings, player pictures, team posts that update on their own, and disbanding teams.
+- **Transfers and contracts:** deals, loans and releases with approval buttons, a transfer list and a looking-for-team (LFT) list, transfer bans, blacklists, fines and bonuses, and contract expiry.
+- **Leagues and seasons:** league setup and groups, league tables, matchdays and season phase progression.
+- **Matches:** daily schedules, lineups, referee and streamer sign-ups, result and stats entry, requests to move a match, and reminders.
+- **National teams:** national selections and voting, including on the World Cup server.
+- **Search and API:** player, team and selection search, and a REST API used by the admin site and partner websites.
 
-## Project structure
-Below is a basic overview of the project structure:
+## How it fits together
 
-```
-├── app.js      -> main entrypoint for app
-├── commands.js -> slash command payloads + helpers
-├── game.js     -> logic specific to RPS
-├── utils.js    -> utility functions and enums
-├── package.json
-├── README.md
-└── .gitignore
-```
+One Node.js process ([`app.js`](app.js)) runs an Express server with:
 
-## Running app locally
+| Path | Purpose |
+|---|---|
+| `/interactions` | Discord interactions endpoint for slash commands, autocomplete, buttons and modals |
+| `/api` | JSON REST API ([`api.js`](api.js)) |
+| `/site` | Server-rendered EJS pages ([`site.js`](site.js), `site/pages/`) |
+| `/web` | Prebuilt React admin app with Discord login ([`web.js`](web.js), `web/`) |
 
-Before you start, you'll need to install [NodeJS](https://nodejs.org/en/download/) and [create a Discord app](https://discord.com/developers/applications) with the proper permissions:
-- `applications.commands`
-- `bot` (with Send Messages enabled)
-
-
-Configuring the app is covered in detail in the [getting started guide](https://discord.com/developers/docs/getting-started).
-
-### Setup project
-
-First clone the project:
-```
-git clone https://github.com/discord/discord-example-app.git
-```
-
-Then navigate to its directory and install dependencies:
-```
-cd discord-example-app
-npm install
-```
-### Get app credentials
-
-Fetch the credentials from your app's settings and add them to a `.env` file (see `.env.sample` for an example). You'll need your app ID (`APP_ID`), bot token (`DISCORD_TOKEN`), and public key (`PUBLIC_KEY`).
-
-Fetching credentials is covered in detail in the [getting started guide](https://discord.com/developers/docs/getting-started).
-
-> 🔑 Environment variables can be added to the `.env` file in Glitch or when developing locally, and in the Secrets tab in Replit (the lock icon on the left).
-
-### Install slash commands
-
-The commands for the example app are set up in `commands.js`. All of the commands in the `ALL_COMMANDS` array at the bottom of `commands.js` will be installed when you run the `register` command configured in `package.json`:
+The same process also runs scheduled jobs ([`cronjobs.js`](cronjobs.js)): posting the day's matches, refreshing team posts, notifying match starts, updating league tables, Steam checks, and more.
 
 ```
-npm run register
+app.js              entry point: Express server, interaction routing, startup
+index.js            production entry: registers commands, then starts app.js
+commands.js         registers slash commands with Discord (npm run register)
+commandsRegister.js list of command modules that declare their own handler
+commands/           one module per feature (league, matches, player, transfers, ...)
+functions/          shared helpers, MongoDB access, in-memory caches
+config/             server channel and role IDs, countries, league choices
+site/, web/         the two websites
 ```
 
-### Run the app
+## Quick start
 
-After your credentials are added, go ahead and run the app:
+1. Install Node.js 18.17 or later, then install dependencies:
 
-```
-node app.js
-```
+   ```bash
+   npm install
+   ```
 
-> ⚙️ A package [like `nodemon`](https://github.com/remy/nodemon), which watches for local changes and restarts your app, may be helpful while locally developing.
+2. Copy `.env.example` to `.env` and fill in the Discord, MongoDB and API values.
 
-If you aren't following the [getting started guide](https://discord.com/developers/docs/getting-started), you can move the contents of `examples/app.js` (the finished `app.js` file) to the top-level `app.js`.
+3. Register the slash commands with Discord:
 
-### Set up interactivity
+   ```bash
+   npm run register
+   ```
 
-The project needs a public endpoint where Discord can send requests. To develop and test locally, you can use something like [`ngrok`](https://ngrok.com/) to tunnel HTTP traffic.
+4. Start the bot:
 
-Install ngrok if you haven't already, then start listening on port `3000`:
+   ```bash
+   npm start
+   ```
 
-```
-ngrok http 3000
-```
+Without TLS certificates the app runs in **local mode**: no cron jobs and no API auth, but it still uses the production database. See [docs/setup.md](docs/setup.md) for local mode, tunnelling Discord to your machine, the other npm scripts, Docker deployment and logging.
 
-You should see your connection open:
+## License
 
-```
-Tunnel Status                 online
-Version                       2.0/2.0
-Web Interface                 http://127.0.0.1:4040
-Forwarding                    http://1234-someurl.ngrok.io -> localhost:3000
-Forwarding                    https://1234-someurl.ngrok.io -> localhost:3000
-
-Connections                  ttl     opn     rt1     rt5     p50     p90
-                              0       0       0.00    0.00    0.00    0.00
-```
-
-Copy the forwarding address that starts with `https`, in this case `https://1234-someurl.ngrok.io`, then go to your [app's settings](https://discord.com/developers/applications).
-
-On the **General Information** tab, there will be an **Interactions Endpoint URL**. Paste your ngrok address there, and append `/interactions` to it (`https://1234-someurl.ngrok.io/interactions` in the example).
-
-Click **Save Changes**, and your app should be ready to run 🚀
-
-## Other resources
-- Read **[the documentation](https://discord.com/developers/docs/intro)** for in-depth information about API features.
-- Browse the `examples/` folder in this project for smaller, feature-specific code examples
-- Join the **[Discord Developers server](https://discord.gg/discord-developers)** to ask questions about the API, attend events hosted by the Discord API team, and interact with other devs.
-- Check out **[community resources](https://discord.com/developers/docs/topics/community-resources#community-resources)** for language-specific tools maintained by community members.
+[MIT](LICENSE)
