@@ -8,6 +8,7 @@ export const getPlayers = async ({dbClient, getParams}) => {
     query = {...query, $or: [{nat1: nationality, nat2: nationality, nat3: nationality}]}
   }
   const discPlayers = await getAllPlayers(process.env.GUILD_ID)
+  console. log('getPlayers')
   console.log({...query})
   return dbClient(async({players, teams, contracts})=> {
     const [dbPlayers, allActiveTeams] = await Promise.all([

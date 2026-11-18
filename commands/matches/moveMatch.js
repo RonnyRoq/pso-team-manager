@@ -237,6 +237,7 @@ export const listMatchMoves = async ({interaction_id, token, application_id, mem
     const moveRequestFilter = {destinationTeam: {$in: teamIds}}
     console.log(moveRequestFilter)
     const matchesToMove = await moveRequest.find(moveRequestFilter).toArray()
+    console.log(matchesToMove)
     const matchesRequest = {$or: matchesToMove.map(({id})=> ({_id: new ObjectId(id)}))}
     console.log(matchesRequest)
     const teamMatches = await (matchesToMove.length === 0 ? Promise.resolve([]) : matches.find(matchesRequest).toArray())
@@ -253,8 +254,13 @@ export const listMatchMoves = async ({interaction_id, token, application_id, mem
   await updateResponse({application_id, token, content})
   for await (const matchToMove of matchesToMove) {
     const match = teamMatches.find(({_id})=> (_id.toString() === matchToMove.id))
+    if(!match) {
+      console.log(`Match ${matchToMove.id} not found in the team matches`)
+      continue
+    }
     let homeTeam, awayTeam
-    if(match.isInternational) {
+    console.log(match)
+    if(match?.isInternational) {
       homeTeam = allNationalSelections.find(({shortname})=> shortname === match.home)
       awayTeam = allNationalSelections.find(({shortname})=> shortname === match.away)
     } else {

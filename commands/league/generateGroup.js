@@ -26,6 +26,10 @@ const generateGroup = async ({application_id, token, dbClient, options}) => {
     const groupEntries = Object.entries(teamsPerGroup)
     console.log(JSON.stringify(groupEntries))
     const groupMatchDays = groupEntries.filter(([,groupTeams])=> groupTeams.length>0 ).map(([group, groupTeams]) => {
+      // works for even number of teams
+      if(groupTeams.length % 2 !== 0) {
+        groupTeams.push({team: serverRoles.disabledRole, group})
+      }
       let matchDays = []
       const matchDayCount = groupTeams.length-1
       let [, ...teamsRotation] = groupTeams.map((leagueTeam)=> leagueTeam.team)
@@ -35,7 +39,8 @@ const generateGroup = async ({application_id, token, dbClient, options}) => {
         for(let i = 0; i < groupTeams.length/2 ; i++) {
           matchIndexes.push([currentTeamIndexes[i], currentTeamIndexes[currentTeamIndexes.length-1-i], group === 'none' ? '' : group])
         }
-        matchDays.push(matchIndexes)
+        matchDays.push(matchIndexes.filter(match=> match[0] !== serverRoles.disabledRole && match[1] !== serverRoles.disabledRole))
+        // Rotate teams for next matchday
         teamsRotation.unshift(...teamsRotation.splice(-1, 1))
       }
       shuffleArray(matchDays)

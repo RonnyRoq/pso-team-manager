@@ -32,6 +32,9 @@ const preDealChecks = async({guild_id, player, member, contracts, teams, confirm
   }
   const discPlayer = await discPlayerResp.json()
   const sourceTeam = await teams.findOne({active: true, $or: discPlayer.roles.map((id)=>({id}))})
+  if(!sourceTeam) {
+    console.log(discPlayer.roles)
+  }
   if(sourceTeam.transferBan) {
     return {message: `You cannot recruit <@${player}> as <@&${sourceTeam.id}> is banned from doing transfers.`}
   }

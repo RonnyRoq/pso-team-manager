@@ -1,7 +1,7 @@
 import { serverChannels, serverRoles } from "../config/psafServerConfig.js"
 import { getPlayerNick, isManager, optionsToObject, postMessage, removePlayerPrefix, sleep, updateResponse, waitingMsg } from "../functions/helpers.js"
 import { getAllPlayers } from "../functions/playersCache.js"
-import { DiscordRequest } from "../utils.js"
+import { DiscordRequest, logSystemError } from "../utils.js"
 import { endLoan } from "./transfers.js"
 
 const logWebhook = process.env.WEBHOOK
@@ -49,6 +49,7 @@ export const replaySeasonPhaseProgression = async ({interaction_id, token, guild
     let allExpiringContracts = []
     let allTeams
     if(newSeason) {
+      //const fullExpiringContracts = await contracts.find({endedAt: {$gt:1749660568000, $lt:1749660569000}, isLoan: {$ne: true}, isManager: null}).toArray()
       const fullExpiringContracts = await contracts.find({until: {$lte : seasonObj.season}, endedAt: null, isLoan: {$ne: true}, isManager: null}).toArray()
       console.log(fullExpiringContracts.length)
       allTeams = await teams.find({}).toArray()
@@ -187,7 +188,7 @@ export const progressCurrentSeasonPhase = async ({interaction_id, token, guild_i
         playersNotFoundCount+= batchSize-managerContracts.length-contractsToRemove.length
         await contracts.updateMany({playerId: {$in: managerContracts.map(({playerId})=>playerId)}}, {$set: {until: seasonObj.season+1}})
         console.log("managers updated")
-        await contracts.updateMany({playerId: {$in: contractIds}}, {$set: {endedAt: Date.now()}})
+        await contracts.updateMany({playerId: {$in: contractIds}, endedAt:null, isLoan: {$ne: true}}, {$set: {endedAt: Date.now()}})
         console.log("contracts ended")
         i+=batchSize
       } while(fullExpiringContracts.length > 0 && i < 3000)
@@ -208,6 +209,7 @@ export const progressCurrentSeasonPhase = async ({interaction_id, token, guild_i
   }).sort((a, b)=> a.team - b.team)
   console.log(teamPlayers.length)
   console.log(teamPlayers.map(player=>player.nick))
+  let updatedPlayers = []
   for await (const player of teamPlayers) {
     if(player.user && !isManager(player)) {
       const playerName = getPlayerNick(player)
@@ -216,16 +218,23 @@ export const progressCurrentSeasonPhase = async ({interaction_id, token, guild_i
         nick: updatedPlayerName,
         roles: player.roles.filter(playerRole=> ![player.team, serverRoles.clubManagerRole, serverRoles.pgManagerRole, serverRoles.clubPlayerRole].includes(playerRole))
       }
-      await DiscordRequest(`guilds/${guild_id}/members/${player.playerId}`, {
-        method: 'PATCH',
-        body: payload
-      })
+      try {
+        await DiscordRequest(`guilds/${guild_id}/members/${player.playerId}`, {
+          method: 'PATCH',
+          body: payload
+        })
+        updatedPlayers.push(player)
+      }
+      catch (e) {
+        console.log(e)
+        await logSystemError(`Can't update player ${playerName} <@${player.playerId}>`, e)
+      }
       await sleep(500)
     }
   }
   const log = [
     `# Contracts expired\rThe following players are now free agents:`,
-    ...teamPlayers.map(discPlayer => `<@${discPlayer.playerId}>`),
+    ...updatedPlayers.map(discPlayer => `<@${discPlayer.playerId}>`),
     `*from <@${callerId}>*`
   ]
   let response = ""

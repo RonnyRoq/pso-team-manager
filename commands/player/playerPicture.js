@@ -1,13 +1,13 @@
 import path from 'path';
 import download from "image-downloader"
 import {fileURLToPath} from 'url'
-import { followUpResponse, getPost, optionsToObject, postMessage, silentResponse, updatePost, updateResponse, waitingMsg } from "../../functions/helpers.js"
+import { getPost, optionsToObject, postMessage, silentResponse, updatePost, updateResponse, waitingMsg } from "../../functions/helpers.js"
 import { serverChannels } from "../../config/psafServerConfig.js"
 import { getAllNationalities } from '../../functions/allCache.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-export const postPlayerPicture = async({options=[], callerId, resolved, interaction_id, application_id, guild_id, token, dbClient}) => {
+export const postPlayerPicture = async({options=[], callerId, resolved, interaction_id, guild_id, token, dbClient}) => {
   const {picture} = optionsToObject(options)
   const player = callerId
   if(!picture) {
@@ -26,6 +26,17 @@ export const postPlayerPicture = async({options=[], callerId, resolved, interact
           }
           const postResp = await postMessage({channel_id: serverChannels.picsChannelId, content: `<@${callerId}> submitted:\r`+image})
           const postMsg = await postResp.json()
+          const postToDb = await fetch(`https://api-v2.psafdb.com/judgepicture`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': process.env.PSAF_API_KEY
+            },
+            body: JSON.stringify({
+              apikey: process.env.PSAFDB_API_KEY,
+              imageurl: image,
+            })
+          })
           const confirmationResp = await postMessage({
             channel_id: serverChannels.confirmationPictures,
             content: `<@${callerId}> submitted this picture: https://discord.com/channels/${guild_id}/${postMsg.channel_id}/${postMsg.id} \r${image}${dbPlayer.profilePicture ? `\rPrevious pic: https://pso.shinmugen.net/${dbPlayer.profilePicture}`: ''}`,

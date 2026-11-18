@@ -170,6 +170,12 @@ function start() {
         if(optionChanged?.name === "league") {
           return autoCompleteLeague(optionChanged, dbClient, res)
         }
+        if(optionChanged?.name === "league-all") {
+          return autoCompleteLeague(optionChanged, dbClient, res, 'all')
+        }
+        if(optionChanged?.name === "league-inactive") {
+          return autoCompleteLeague(optionChanged, dbClient, res, 'inactive')
+        }
         if(optionChanged) {
           return autoCompleteNation(optionChanged, dbClient, res)  
         }
@@ -712,6 +718,7 @@ function start() {
 }
 
 process.on('uncaughtException', async function (err) {
+  console.log('Uncaught Exception thrown')
   console.log(err)
   console.log(util.format(err))
   logSystemCrash(util.format(err))

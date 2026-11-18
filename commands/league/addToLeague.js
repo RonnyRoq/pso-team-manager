@@ -54,6 +54,20 @@ export const removeFromLeague = async ({application_id, token, options, dbClient
   return updateResponse({application_id, token, content})
 }
 
+const purgeLeague = async ({application_id, token, options, dbClient}) => {
+  const {league} = optionsToObject(options)
+  const allLeagues = await getAllLeagues()
+  const leagueObj = allLeagues.find(leagueEntry => leagueEntry.value === league)
+  if(!leagueObj)
+    return updateResponse({application_id, token, content: `Cannot find League ${league}`
+  })
+  const content = await dbClient(async ({leagues})=> {
+    await leagues.deleteMany({leagueId: league})
+    return `${leagueObj.name} has been purged of all teams.`
+  })
+  return updateResponse({application_id, token, content})
+}
+
 export const replaceTeamInLeague = async ({interaction_id, application_id, member, token, options, dbClient}) => {
   if(!member.roles.find(role => isTopAdminRole(role))){
     return silentResponse({interaction_id, token, content: 'Reserved to presidents/engineers'})
@@ -103,6 +117,7 @@ const leagueTeam = async (commandOptions) =>
 const leagueTeamSubCommands = {
   'add': addToLeague,
   'remove': removeFromLeague,
+  'purge': purgeLeague,
 }
 
 const leagueTeamCmd = {
@@ -222,6 +237,17 @@ const leagueTeamCmd = {
         name: 'position',
         description: 'Which position (elim cups only)',
       }]
+    }]
+  },{
+    name: "purge",
+    description: "Remove all teams from a league",
+    type: 1,
+    options: [{
+      type: 3,
+      name: 'league',
+      description: 'League',
+      required: true,
+      autocomplete: true,
     }]
   }]
 }

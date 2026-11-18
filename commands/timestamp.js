@@ -1,5 +1,5 @@
 import { InteractionResponseType } from "discord-interactions";
-import { optionToTimezoneStr, msToTimestamp, optionsToObject } from "../functions/helpers.js"
+import { msToTimestamp, optionsToObject } from "../functions/helpers.js"
 import { DiscordRequest } from "../utils.js"
 import * as chrono from 'chrono-node';
 
@@ -19,9 +19,21 @@ export const timestamp = ({interaction_id, token, options}) => {
   })
 }
 
+const optionToTimezoneStr = (option = 0) => {
+  switch (option) {
+    case 1:
+      return "CEST";
+    case 2:
+      return "EEST";
+    default:
+      return "BST";
+  }
+}
+
 export const parseDate = (date, timezone) => {
   const strTimezone = optionToTimezoneStr(timezone)
-  return chrono.parseDate(date, { instance: new Date(), timezone: strTimezone }, {
+  console.log(`Parsing date ${date} with timezone ${strTimezone}`)
+  const res = chrono.en.GB.parseDate(date, { instant: new Date(), timezone: strTimezone }, {
     forwardDate: true,
     timezones: {
       "UK": {
@@ -29,9 +41,17 @@ export const parseDate = (date, timezone) => {
         timezoneOffsetNonDst: 0,
         dstStart: (year) => chrono.getLastWeekdayOfMonth(year, chrono.Month.MARCH, chrono.Weekday.SUNDAY, 2),
         dstEnd: (year) => chrono.getLastWeekdayOfMonth(year, chrono.Month.OCTOBER, chrono.Weekday.SUNDAY, 3),
-      }
+      }/*,
+      "EUR": {
+        timezoneOffsetDuringDst: 120,
+        timezoneOffsetNonDst: 60,
+        dstStart: (year) => chrono.getLastWeekdayOfMonth(year, chrono.Month.MARCH, chrono.Weekday.SUNDAY, 2),
+        dstEnd: (year) => chrono.getLastWeekdayOfMonth(year, chrono.Month.OCTOBER, chrono.Weekday.SUNDAY, 3),
+      }*/
     }
   })
+  console.log(res)
+  return res
 }
 
 export const timestampCmd = {
