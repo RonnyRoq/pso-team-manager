@@ -39,7 +39,7 @@ Code: [`web.js`](../web.js), auth in [`functions/siteUtils.js`](../functions/sit
 | Path | Behaviour |
 |---|---|
 | `/web/static/*` | JS and CSS bundles |
-| `/web/api/*` | Proxy to `/api/*`. Adds `x-api-key: PSAF_API_KEY`, the `sec-fetch-*` headers, and the logged-in user's `userId` and `name`. Forwards the method and, for `PUT` and `POST`, the JSON body. |
+| `/web/api/*` | Proxy to `/api/*`. Adds `x-api-key: PSAF_API_KEY` and the logged-in user's `userId` and `name`. Forwards the method and, for `PUT` and `POST`, the JSON body. |
 | `/web/*`, `/web/leagues`, `/web/teams`, `/web/team/*`, `/web/league/*` | Serve `web/index.html`, and the React router takes over |
 
 ### Login (online mode)
@@ -49,8 +49,6 @@ Code: [`web.js`](../web.js), auth in [`functions/siteUtils.js`](../functions/sit
 3. Admins are sent back to the page they asked for. Everyone else gets "Unauthorised".
 
 Sessions last 24 hours, use `SESS_SC` as the secret, and are stored in the `siteSessions` collection.
-
-> **Security note:** after the first login, requests are checked with `if (!isAdmin(req))`. `isAdmin` is an `async` function, so it returns a Promise, which is always truthy, and the check never fails. **Any PSAF server member who has logged in once gets the admin app and the `/web/api` proxy on their next request.** That includes the write routes (`PUT /team/:id`, `/editleague`, `/teamstatus`). To fix it, make `isAdmin` synchronous or `await` it in `web.js`. The OAuth `state` value is also generated but never checked.
 
 ### Local mode
 
