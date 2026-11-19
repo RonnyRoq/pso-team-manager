@@ -38,12 +38,13 @@ export const getApi = (localdev=false, dbClient={}) =>{
       //console.log('api request', req.method, req.url, req.headers)
       //console.log(req.url)
       //console.log(req.query)
-      let api_key = req.header("x-api-key")
-      if(process.env.PSAF_API_KEY === api_key) {
+      const api_key = req.header("x-api-key")
+      // Only a known API key gets in. The /web/api proxy adds PSAF_API_KEY for logged-in admins.
+      if(!api_key) {
+        return res.status(403).send({ error: { code: 403, message: "Nope." } });
+      } else if(process.env.PSAF_API_KEY === api_key) {
         next()
       } else if(process.env.BRYLOS_API_KEY === api_key) {
-        next()
-      } else if(req.header('sec-fetch-mode') === 'cors' && req.header('sec-fetch-site') === 'same-origin' ) {
         next()
       } else {
         return res.status(403).send({ error: { code: 403, message: "Nope." } });

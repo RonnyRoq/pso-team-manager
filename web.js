@@ -53,9 +53,7 @@ export const getWeb = (localdev=false, uri='') =>{
       'x-api-key': process.env.PSAF_API_KEY,
       accept: 'application/json',
       'Content-Type': 'application/json',
-      'sec-fetch-mode': 'cors',
       referer: req.headers.referer,
-      'sec-fetch-site': 'same-origin',
     }
     if(hasSession(req)) {
       headers.userId = req.session.userId

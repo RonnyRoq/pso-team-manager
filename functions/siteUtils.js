@@ -12,10 +12,26 @@ const oauth = new DiscordOauth2({
 
 export const hasSession = (req) => req?.session?.userId
 
+const startDiscordAuth = (req, res) => {
+  const state = crypto.randomBytes(16).toString("hex")
+  req.session.oauthState = state
+  const url = oauth.generateAuthUrl({
+    scope,
+    state,
+  });
+  console.log('saving before auth', req.session.from)
+  // Wait for the session (with the state) to be stored before leaving for Discord
+  return req.session.save(() => res.redirect(url))
+}
+
 export const authUser = async (req, res, next) => {
   if(req.query.code) {
-    console.log('code', req.query.code)
-    //console.log(req.session)
+    const expectedState = req.session.oauthState
+    delete req.session.oauthState
+    if(!expectedState || req.query.state !== expectedState) {
+      console.log('OAuth state mismatch, restarting login')
+      return startDiscordAuth(req, res)
+    }
     const authResp = await oauth.tokenRequest({
       clientId: process.env.APP_ID,
       code: req.query.code,
@@ -51,13 +67,7 @@ export const authUser = async (req, res, next) => {
     }
   } else {
     req.session.from = req.url.toString()
-    const url = oauth.generateAuthUrl({
-      scope,
-      state: crypto.randomBytes(16).toString("hex"), // Be aware that randomBytes is sync if no callback is provided
-    });
-    console.log('saving before auth', req.session.from)
-    req.session.save()
-    return res.redirect(url)
+    return startDiscordAuth(req, res)
   }
 }
 
@@ -81,4 +91,4 @@ export const isStaff = async (req) => {
   const guildMember = await getGuildMember(req)
   return isMemberStaff(guildMember)
 }
-export const isAdmin = async (req) => !!req.session.isAdmin
+export const isAdmin = (req) => !!req?.session?.isAdmin
