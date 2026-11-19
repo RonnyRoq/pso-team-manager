@@ -1,0 +1,122 @@
+// Builds the slash-command lists that commands.js registers with Discord.
+// Kept separate so scripts (e.g. scripts/generate-command-docs.js) can read
+// the lists without registering anything.
+import { nowCmd } from './commands/now.js';
+import { timestampCmd } from './commands/timestamp.js';
+import { helpCmd } from './commands/help.js';
+import { blacklistTeamCmd, expireThingsCmd, fixNamesCmd, managerContractsCmd, systemTeamCmd } from './commands/system.js';
+import { dealCmd, loanCmd } from './commands/confirmations/deal.js';
+import { postAllTeamsCmd, postTeamCmd, updateTeamPostCmd } from './commands/postTeam.js';
+import { showBlacklistCmd } from './commands/blacklist.js';
+import { expireContractsCmd, showExpiringContractsCmd, showNoContractsCmd } from './commands/contracts.js';
+import { disbandTeamCmd } from './commands/disbandTeam.js';
+import { getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd } from './commands/season.js';
+import { testDMMatchCmd } from './commands/matches/notifyMatchStart.js';
+import { addSteamIdCmd, manualDoubleSteamCmd, setNameCmd } from './commands/player/steamid.js';
+import { setRatingCmd } from './commands/player/rating.js';
+import { listMovesCmd, moveMatchCmd } from './commands/matches/moveMatch.js';
+import { arrangeDayScheduleCmd } from './commands/matches/arrangeDaySchedule.js';
+import { addUniqueIdCmd } from './commands/player/uniqueId.js';
+import commandsRegister from './commandsRegister.js';
+
+const mapToCmd = (map) => {
+  const globalCommands = []
+  const psafCommands = []
+  const wcCommands = []
+  map.forEach(fullCmd => {
+    // eslint-disable-next-line no-unused-vars
+    const {func, psaf, wc, app, ...command} = fullCmd
+    if (psaf) {
+      psafCommands.push(command)
+    }
+    if(wc) {
+      wcCommands.push(command)
+    }
+    if(app) {
+      globalCommands.push(command)
+    }
+  })
+  return {
+    globalCommands,
+    psafCommands,
+    wcCommands
+  }
+}
+
+const FINE =  {
+  name: 'fine',
+  description: 'Remove money from a team\'s budget',
+  type: 1,
+  options: [{
+    type: 8,
+    name: 'team',
+    description: 'Team to fine',
+    required: true
+  },{
+    type: 4,
+    name: 'amount',
+    description: 'Amount (Place 0 if warning)',
+    required: true,
+    min_value: 0,
+  }, {
+    type: 3,
+    name: 'reason',
+    description: 'Reason'
+  }]
+}
+
+const BONUS = {
+  name: 'bonus',
+  description: 'Add money to a team\'s budget',
+  type: 1,
+  options: [{
+    type: 8,
+    name: 'team',
+    description: 'Team to receive',
+    required: true
+  },{
+    type: 4,
+    name: 'amount',
+    description: 'Amount (Place 0 for message only)',
+    required: true,
+    min_value: 0,
+  }, {
+    type: 3,
+    name: 'reason',
+    description: 'Reason'
+  }]
+}
+
+export const emojisCmd = {
+  name: 'emojis',
+  description: 'List all the emojis',
+  type: 1
+}
+
+const ALL_COMMANDS = [nowCmd, timestampCmd, helpCmd];
+
+
+const GUILD_COMMANDS = [
+  dealCmd, loanCmd, 
+  FINE, BONUS, addUniqueIdCmd,
+  showBlacklistCmd, showNoContractsCmd,
+  disbandTeamCmd, expireContractsCmd, addSteamIdCmd, setRatingCmd, setNameCmd,
+  getCurrentSeasonPhaseCmd, progressCurrentSeasonPhaseCmd, testDMMatchCmd, moveMatchCmd, listMovesCmd,
+  systemTeamCmd, postTeamCmd, postAllTeamsCmd, updateTeamPostCmd, blacklistTeamCmd, showExpiringContractsCmd, expireThingsCmd,
+  manualDoubleSteamCmd, arrangeDayScheduleCmd, managerContractsCmd, fixNamesCmd,
+]
+
+const WC_GUILD_COMMANDS = []
+
+// Returns the payloads registered with Discord:
+// - globalCommands: registered globally (any server or DM)
+// - guildCommands: registered on the PSAF server (GUILD_ID)
+// - wcGuildCommands: registered on the World Cup server (WC_GUILD_ID)
+export const getCommandLists = () => {
+  const {globalCommands, psafCommands, wcCommands} = mapToCmd(commandsRegister())
+  return {
+    globalCommands: [...ALL_COMMANDS, ...globalCommands],
+    guildCommands: [...GUILD_COMMANDS, ...psafCommands],
+    wcGuildCommands: [...WC_GUILD_COMMANDS, ...wcCommands],
+  }
+}

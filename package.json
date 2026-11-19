@@ -13,7 +13,8 @@
     "dl-config": "node downloadConfig.js",
     "local": "node localCommands.js",
     "dev": "nodemon app.js --inspect",
-    "site": "nodemon sitetest.js"
+    "site": "nodemon sitetest.js",
+    "docs:commands": "node scripts/generate-command-docs.js"
   },
   "author": "Ronny Rocks",
   "license": "MIT",

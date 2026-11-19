@@ -1,0 +1,130 @@
+// Generates docs/commands.md from the slash-command payloads registered by
+// commands.js. Run with: npm run docs:commands
+//
+// It only reads command definitions: nothing is sent to Discord and nothing
+// connects to MongoDB.
+import { writeFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
+
+// Command modules log while loading; keep the script's own output clean.
+const log = console.log
+console.log = () => {}
+const { getCommandLists } = await import('../commandLists.js')
+const { default: commandsRegister } = await import('../commandsRegister.js')
+console.log = log
+
+const COMMAND_TYPES = { 1: 'Slash command', 2: 'User context menu', 3: 'Message context menu' }
+const OPTION_TYPES = {
+  1: 'subcommand', 2: 'subcommand group', 3: 'string', 4: 'integer', 5: 'boolean',
+  6: 'user', 7: 'channel', 8: 'role', 9: 'mentionable', 10: 'number', 11: 'attachment',
+}
+
+const handlerNames = new Map(commandsRegister().map(({ name, func }) => [name, func?.name]))
+
+const escapeCell = (text = '') => String(text).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ')
+
+const describeOption = (option) => {
+  const details = []
+  if (option.autocomplete) details.push('autocomplete')
+  if (option.choices?.length) {
+    const shown = option.choices.slice(0, 6).map(({ name }) => `\`${name}\``).join(', ')
+    details.push(`choices: ${shown}${option.choices.length > 6 ? `, … (${option.choices.length})` : ''}`)
+  }
+  if (option.min_value !== undefined) details.push(`min ${option.min_value}`)
+  if (option.max_value !== undefined) details.push(`max ${option.max_value}`)
+  if (option.min_length !== undefined) details.push(`min length ${option.min_length}`)
+  if (option.max_length !== undefined) details.push(`max length ${option.max_length}`)
+  return `| \`${option.name}\` | ${OPTION_TYPES[option.type] || option.type} | ${option.required ? 'yes' : ''} | ${escapeCell(option.description)}${details.length ? ` (${details.join('; ')})` : ''} |`
+}
+
+const optionsTable = (options) => [
+  '| Option | Type | Required | Description |',
+  '|---|---|---|---|',
+  ...options.map(describeOption),
+].join('\n')
+
+const renderOptions = (options = [], prefix) => {
+  const subcommands = options.filter(({ type }) => type === 1 || type === 2)
+  const plain = options.filter(({ type }) => type !== 1 && type !== 2)
+  const parts = []
+  if (plain.length) parts.push(optionsTable(plain))
+  for (const sub of subcommands) {
+    const fullName = `${prefix} ${sub.name}`
+    if (sub.type === 2) {
+      parts.push(`**\`${fullName}\`** (group): ${escapeCell(sub.description)}`)
+      parts.push(renderOptions(sub.options, fullName))
+    } else {
+      parts.push(`**\`${fullName}\`**: ${escapeCell(sub.description)}`)
+      if (sub.options?.length) parts.push(optionsTable(sub.options))
+    }
+  }
+  return parts.filter(Boolean).join('\n\n')
+}
+
+const renderCommand = (command) => {
+  const isSlash = (command.type ?? 1) === 1
+  const title = isSlash ? `/${command.name}` : command.name
+  const lines = [`### \`${title}\``, '']
+  if (command.description) lines.push(escapeCell(command.description), '')
+  const meta = []
+  if (!isSlash) meta.push(COMMAND_TYPES[command.type] || `Type ${command.type}`)
+  const handler = handlerNames.get(command.name)
+  meta.push(handler ? `Handler: \`${handler}\` (via commandsRegister)` : 'Handler: routed in `app.js`')
+  if (command.default_member_permissions !== undefined) meta.push(`Default permissions: \`${command.default_member_permissions}\``)
+  if (command.dm_permission === false) meta.push('Not available in DMs')
+  lines.push(meta.join(' · '), '')
+  const options = renderOptions(command.options, `/${command.name}`)
+  if (options) lines.push(options, '')
+  return lines.join('\n')
+}
+
+const byName = (a, b) => a.name.localeCompare(b.name)
+
+// GitHub heading anchors: lowercase, drop punctuation except - and _, spaces
+// to -, and a -1, -2, ... suffix when the same heading appears again. Sections
+// must be rendered in document order for the suffixes to line up.
+const usedAnchors = new Map()
+const anchorFor = (command) => {
+  const isSlash = (command.type ?? 1) === 1
+  const title = isSlash ? `/${command.name}` : command.name
+  const base = title.toLowerCase().replace(/[^a-z0-9 _-]/g, '').replace(/ /g, '-')
+  const count = usedAnchors.get(base) || 0
+  usedAnchors.set(base, count + 1)
+  return count ? `${base}-${count}` : base
+}
+
+const renderSection = (title, intro, commands) => {
+  const sorted = [...commands].sort(byName)
+  return [
+    `## ${title} (${commands.length})`,
+    '',
+    intro,
+    '',
+    '| Command | Description |',
+    '|---|---|',
+    ...sorted.map((command) =>
+      `| [\`${command.name}\`](#${anchorFor(command)}) | ${escapeCell(command.description || COMMAND_TYPES[command.type])} |`),
+    '',
+    ...sorted.map(renderCommand),
+  ].join('\n')
+}
+
+const { globalCommands, guildCommands, wcGuildCommands } = getCommandLists()
+
+const markdown = `# Slash commands
+
+<!-- Generated by scripts/generate-command-docs.js. Do not edit by hand: run \`npm run docs:commands\`. -->
+
+Every command the bot registers with Discord, taken from the same lists [\`commands.js\`](../commands.js) sends (see [commandLists.js](../commandLists.js)).
+
+Most commands check the caller's roles inside the handler (see [architecture.md](architecture.md#permissions)), so a command showing up in Discord doesn't mean everyone can use it. "Routed in \`app.js\`" means the command uses the older definition style and is dispatched by name in \`app.js\`.
+
+${renderSection('Global commands', 'Registered globally, so they work in any server the bot is in.', globalCommands)}
+${renderSection('PSAF server commands', 'Registered on the PSAF server (`GUILD_ID`).', guildCommands)}
+${renderSection('World Cup server commands', 'Registered on the World Cup server (`WC_GUILD_ID`).', wcGuildCommands)}`
+
+const outFile = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'commands.md')
+writeFileSync(outFile, markdown.trimEnd() + '\n')
+log(`Wrote ${outFile}: ${globalCommands.length} global, ${guildCommands.length} PSAF, ${wcGuildCommands.length} World Cup commands`)
+process.exit(0)
