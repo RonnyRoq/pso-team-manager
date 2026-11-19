@@ -70,7 +70,7 @@ The React admin app served at `/web` is committed as a prebuilt bundle in `web/`
 npm run register
 ```
 
-This runs [`commands.js`](../commands.js), which sends the full command list to Discord:
+This runs [`commands.js`](../commands.js), which sends the command lists built by [`commandLists.js`](../commandLists.js) to Discord:
 
 - Global commands (`now`, `timestamp`, `help`, and every command flagged `app`).
 - PSAF server commands (the `GUILD_COMMANDS` list, and every command flagged `psaf`) to `GUILD_ID`.
@@ -83,6 +83,7 @@ This runs [`commands.js`](../commands.js), which sends the full command list to 
 | Script | What it does |
 |---|---|
 | `npm run dl-config` | Reads the `LeagueConfig` collection and regenerates [`config/leagueData.js`](../config/leagueData.js). The first 24 active leagues become the `league` choices in slash commands. Re-run it, then `npm run register`, after adding or activating a league. |
+| `npm run docs:commands` | Regenerates [`docs/commands.md`](commands.md) from the command lists. It doesn't contact Discord or the database. Run it after adding or changing a slash command. |
 | `npm run local` | Runs [`localCommands.js`](../localCommands.js), a scratch script for one-off database maintenance. Read it before running it: it writes to the production database. |
 
 ## Deploying with Docker

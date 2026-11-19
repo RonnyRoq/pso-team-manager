@@ -63,7 +63,7 @@ Handlers don't answer through the Express `res` object, except for `PING` and au
 | | Older way | Newer way (use this) |
 |---|---|---|
 | Definition | `xxxCmd` object exported from a command module | Object with `name`, `description`, `options`, `func` and the scope flags `psaf`, `wc`, `app` |
-| Registration | Listed by hand in `GUILD_COMMANDS` / `ALL_COMMANDS` in `commands.js` | The module's default export is added to [`commandsRegister.js`](../commandsRegister.js) |
+| Registration | Listed by hand in `GUILD_COMMANDS` / `ALL_COMMANDS` in [`commandLists.js`](../commandLists.js) | The module's default export is added to [`commandsRegister.js`](../commandsRegister.js) |
 | Dispatch | `if (name === …)` in `app.js` | Automatic, through the `psaf`, `wc` and `app` maps |
 
 `app.js` also has an `if (commandsRegister[name])` check. It never matches, because `commandsRegister` is a function, not a map.
@@ -123,8 +123,10 @@ While a cache is being filled it holds an empty array, and other callers poll ev
 app.js              Express app, interaction router, startup and crash handling
 index.js            production entry: commands.js, then app.js
 commands.js         slash-command registration script
+commandLists.js     builds the global, PSAF and World Cup command lists
 commandsRegister.js modules that use the newer command definition
 cronjobs.js         scheduled jobs
+scripts/            maintenance scripts (command docs generator)
 api.js, site.js, web.js   web routers
 commands/           feature modules; each exports handlers and command definitions
   confirmations/    deals, loans and approval buttons

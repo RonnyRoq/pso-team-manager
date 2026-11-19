@@ -28,6 +28,7 @@ The same process also runs scheduled jobs ([`cronjobs.js`](cronjobs.js)): postin
 app.js              entry point: Express server, interaction routing, startup
 index.js            production entry: registers commands, then starts app.js
 commands.js         registers slash commands with Discord (npm run register)
+commandLists.js     builds the command lists that commands.js registers
 commandsRegister.js list of command modules that declare their own handler
 commands/           one module per feature (league, matches, player, transfers, ...)
 functions/          shared helpers, MongoDB access, in-memory caches
@@ -65,6 +66,10 @@ Without TLS certificates the app runs in **local mode**: no cron jobs and no API
 - [Architecture](docs/architecture.md): request flow, command routing, permissions, caches, outbound calls
 - [Data model](docs/data-model.md): MongoDB collections, conventions and lifecycles
 - [Scheduled jobs](docs/scheduled-jobs.md): every cron job and what it does
+- [Slash commands](docs/commands.md): every registered command and its options (generated, `npm run docs:commands`)
+- [Buttons, modals and autocomplete](docs/interactions.md): component IDs and how they're routed
+- [REST API](docs/api.md): `/api` endpoints, parameters and authentication
+- [Web front ends](docs/web.md): the `/site` EJS pages and the `/web` React admin app
 
 ## License
 
