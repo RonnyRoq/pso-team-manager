@@ -10,7 +10,9 @@ import { authUser, hasSession, isAdmin } from './functions/siteUtils.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const getWeb = (localdev=false, uri='') =>{
+// apiOrigin: where the /web/api proxy reaches this same server's /api, e.g. http://127.0.0.1:8080.
+// It is fixed at startup so the API key is never sent to a host taken from the request.
+export const getWeb = (localdev=false, uri='', dbClient={}, apiOrigin='http://127.0.0.1:8080') =>{
   const web = express() // the site app
   web.set('view engine', 'html');
   web.set('views', __dirname + '/web');
@@ -66,7 +68,7 @@ export const getWeb = (localdev=false, uri='') =>{
     if(req.method === 'PUT' || req.method === 'POST') {
       options.body = JSON.stringify(req.body)
     }
-    const response = await fetch(`${localdev ? 'http://':'https://'}${req.headers.host}${href}`, options)
+    const response = await fetch(`${apiOrigin}${href}`, options)
     const json = await response.json()
     return res.json(json)
   })

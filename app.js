@@ -128,7 +128,8 @@ function start() {
   //app.use(pinoHttp)
   app.use('/site', getSite(!online, uri, dbClient))
   app.use('/api', getApi(!online, dbClient))
-  app.use('/web', getWeb(!online, uri, dbClient))
+  // The /web/api proxy calls /api over loopback on the plain HTTP port (listening in both modes)
+  app.use('/web', getWeb(!online, uri, dbClient, `http://127.0.0.1:${PORT}`))
   /**
    * Interactions endpoint URL where Discord will send HTTP requests
    */
