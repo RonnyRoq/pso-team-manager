@@ -7,13 +7,13 @@
 | Mode | Rule |
 |---|---|
 | Local mode | No checks |
-| Online mode | One of these must hold: an `x-api-key` header equal to `PSAF_API_KEY` or `BRYLOS_API_KEY`, **or** the headers `sec-fetch-mode: cors` and `sec-fetch-site: same-origin`. Otherwise the response is `403 {"error":{"code":403,"message":"Nope."}}`. |
+| Online mode | An `x-api-key` header equal to `PSAF_API_KEY` or `BRYLOS_API_KEY` is required. A missing or wrong key gets `403 {"error":{"code":403,"message":"Nope."}}`. |
 
-> **Security note:** browsers set the `sec-fetch-*` headers, but any other client can set them too. A request with those two headers gets through without an API key, and that includes the write routes below. Treat the API as public until this is changed.
+The `/web` admin app doesn't hold a key itself: its `/web/api` proxy adds `PSAF_API_KEY` for logged-in admins (see [web.md](web.md)).
 
 Before Mongo is connected at startup, every request gets an empty `500`.
 
-Write routes don't check who the caller is beyond the rules above. `PUT /team/:id` reads an optional `userid` header, but only to name the user in the activity log.
+Anyone with either key can use every route, including the write routes. `PUT /team/:id` reads an optional `userid` header, but only to name the user in the activity log.
 
 ## Conventions
 

@@ -83,7 +83,7 @@ Role and channel IDs are hard-coded in [`config/psafServerConfig.js`](../config/
 
 ## Web surfaces
 
-- **`/api`** ([`api.js`](../api.js)): a JSON API. In online mode it requires `x-api-key` set to `PSAF_API_KEY` or `BRYLOS_API_KEY`, or a same-origin browser request. The route handlers reuse the functions from `commands/`.
+- **`/api`** ([`api.js`](../api.js)): a JSON API. In online mode it requires `x-api-key` set to `PSAF_API_KEY` or `BRYLOS_API_KEY`. The route handlers reuse the functions from `commands/`.
 - **`/site`** ([`site.js`](../site.js)): EJS pages styled with Tailwind (matches, teams, a single match).
 - **`/web`** ([`web.js`](../web.js)): serves the prebuilt React app from `web/`. Login uses Discord OAuth2 ([`functions/siteUtils.js`](../functions/siteUtils.js), with the redirect URI hard-coded to the production domain). Sessions are stored in Mongo (`siteSessions`). `/web/api/*` forwards to `/api` with the API key, for logged-in admins only.
 
