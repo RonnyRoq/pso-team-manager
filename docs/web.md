@@ -39,7 +39,7 @@ Code: [`web.js`](../web.js), auth in [`functions/siteUtils.js`](../functions/sit
 | Path | Behaviour |
 |---|---|
 | `/web/static/*` | JS and CSS bundles |
-| `/web/api/*` | Proxy to `/api/*`. Adds `x-api-key: PSAF_API_KEY` and the logged-in user's `userId` and `name`. Forwards the method and, for `PUT` and `POST`, the JSON body. |
+| `/web/api/*` | Proxy to this server's own `/api/*` over loopback (`http://127.0.0.1:<port>`, set at startup, never taken from the request). Adds `x-api-key: PSAF_API_KEY` and the logged-in user's `userId` and `name`. Forwards the method and, for `PUT` and `POST`, the JSON body. |
 | `/web/*`, `/web/leagues`, `/web/teams`, `/web/team/*`, `/web/league/*` | Serve `web/index.html`, and the React router takes over |
 
 ### Login (online mode)
@@ -54,4 +54,4 @@ Sessions last 24 hours, use `SESS_SC` as the secret, and are stored in the `site
 
 ### Local mode
 
-In local mode `/web` has no sessions and no login, and the proxy calls `http://<host>/api/...`. Run the bot locally (`npm start`) and open `http://localhost:<LOCALPORT>/web/`.
+In local mode `/web` has no sessions and no login. Run the bot locally (`npm start`) and open `http://localhost:<LOCALPORT>/web/`.
