@@ -39,18 +39,18 @@ Code: [`web.js`](../web.js), auth in [`functions/siteUtils.js`](../functions/sit
 | Path | Behaviour |
 |---|---|
 | `/web/static/*` | JS and CSS bundles |
-| `/web/api/*` | Proxy to `/api/*`. Adds `x-api-key: PSAF_API_KEY`, the `sec-fetch-*` headers, and the logged-in user's `userId` and `name`. Forwards the method and, for `PUT` and `POST`, the JSON body. |
+| `/web/api/*` | Proxy to `/api/*`. Adds `x-api-key: PSAF_API_KEY` and the logged-in user's `userId` and `name`. Forwards the method and, for `PUT` and `POST`, the JSON body. |
 | `/web/*`, `/web/leagues`, `/web/teams`, `/web/team/*`, `/web/league/*` | Serve `web/index.html`, and the React router takes over |
 
 ### Login (online mode)
 
-1. A request without a session (`req.session.userId` not set) is redirected to Discord OAuth2 with the scopes `identify`, `guilds` and `guilds.members.read`. The URL it came from is saved in the session.
-2. Discord redirects back to **`https://pso.shinmugen.net/web/`**. This redirect URI is hard-coded in `functions/siteUtils.js` and must also be listed in the Discord application's OAuth2 settings. The code is exchanged for a token, the user's PSAF server membership is fetched, and the session stores `userId`, `name` and `isAdmin` (President, Engineer or Admin role).
+1. A request without a session (`req.session.userId` not set) is redirected to Discord OAuth2 with the scopes `identify`, `guilds` and `guilds.members.read`. The URL it came from and a random `state` value are saved in the session first.
+2. Discord redirects back to **`https://pso.shinmugen.net/web/`**. This redirect URI is hard-coded in `functions/siteUtils.js` and must also be listed in the Discord application's OAuth2 settings. If the returned `state` doesn't match the saved one, login starts over. Otherwise the code is exchanged for a token, the user's PSAF server membership is fetched, and the session stores `userId`, `name` and `isAdmin` (President, Engineer or Admin role).
 3. Admins are sent back to the page they asked for. Everyone else gets "Unauthorised".
 
-Sessions last 24 hours, use `SESS_SC` as the secret, and are stored in the `siteSessions` collection.
+Every later request to a page or to `/web/api/*` checks `isAdmin` in the session (`isAdmin(req)` in `functions/siteUtils.js`). A logged-in member without an admin role gets "Unauthorised".
 
-> **Security note:** after the first login, requests are checked with `if (!isAdmin(req))`. `isAdmin` is an `async` function, so it returns a Promise, which is always truthy, and the check never fails. **Any PSAF server member who has logged in once gets the admin app and the `/web/api` proxy on their next request.** That includes the write routes (`PUT /team/:id`, `/editleague`, `/teamstatus`). To fix it, make `isAdmin` synchronous or `await` it in `web.js`. The OAuth `state` value is also generated but never checked.
+Sessions last 24 hours, use `SESS_SC` as the secret, and are stored in the `siteSessions` collection. Roles are read once, at login, so a change of role takes effect when the session expires or the user logs in again.
 
 ### Local mode
 

@@ -22,7 +22,7 @@ Copy [`.env.example`](../.env.example) to `.env` and fill it in. Each variable i
 |---|---|---|
 | Chosen when | `CERTKEY` or `CERT` is missing or points to a file that doesn't exist | Both files exist |
 | Servers | HTTP on `LOCALPORT` (default 8080) | HTTP on `PORT` and HTTPS on `PORTHTTPS` |
-| `/api` auth | None | Requires `x-api-key` set to `PSAF_API_KEY` or `BRYLOS_API_KEY`, or a same-origin browser request |
+| `/api` auth | None | Requires `x-api-key` set to `PSAF_API_KEY` or `BRYLOS_API_KEY` |
 | `/site` and `/web` sessions and login | Off | Sessions stored in Mongo and Discord OAuth2 login |
 | Cron jobs | **Not started** | Started |
 | Crash report on startup | No | Yes. A leftover `ERROR_LOG` is posted to `CRASHESHOOK` |
